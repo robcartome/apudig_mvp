@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Movimientos — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Movimientos</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Movimientos</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a href="{% url 'inventory:entry_create' %}" class="btn btn-success btn-sm">
+        <i class="ti ti-arrow-down me-1"></i>Entrada
+      </a>
+      <a href="{% url 'inventory:exit_create' %}" class="btn btn-danger btn-sm">
+        <i class="ti ti-arrow-up me-1"></i>Salida
+      </a>
+      <a href="{% url 'inventory:transfer_create' %}" class="btn btn-warning btn-sm">
+        <i class="ti ti-arrows-exchange me-1"></i>Transferencia
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center gap-3 flex-wrap">
+    {% include "partials/search_bar.html" with placeholder="Buscar por número, referencia o motivo..." %}
+    <form method="get" class="ms-auto">
+      {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+      <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:160px">
+        <option value="">Todos los tipos</option>
+        {% for code, label in type_choices %}
+        <option value="{{ code }}" {% if movement_type == code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Fecha</th>
+          <th>Almacén</th>
+          <th>N° / Referencia</th>
+          <th>Contraparte</th>
+          <th class="text-center">Ítems</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in page_obj %}
+        <tr>
+          <td>
+            {% if obj.type == "ENTRY" %}<span class="badge bg-success-lt">Entrada</span>
+            {% elif obj.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
+            {% elif obj.type == "TRANSFER" %}<span class="badge bg-warning-lt">Transferencia</span>
+            {% else %}<span class="badge bg-secondary-lt">Ajuste</span>{% endif %}
+          </td>
+          <td class="text-muted small">{{ obj.date|date:"d/m/Y H:i" }}</td>
+          <td class="text-muted small">
+            {% if obj.type == "TRANSFER" %}
+              {{ obj.warehouse_origin.name|default:"?" }} → {{ obj.warehouse_dest.name|default:"?" }}
+            {% else %}
+              {{ obj.warehouse.name|default:"—" }}
+            {% endif %}
+          </td>
+          <td class="small">
+            {% if obj.number %}{{ obj.number }}{% endif %}
+            {% if obj.reference_doc %}<span class="text-muted">/ {{ obj.reference_doc }}</span>{% endif %}
+          </td>
+          <td class="small text-muted">
+            {% if obj.supplier %}{{ obj.supplier.name }}
+            {% elif obj.customer %}{{ obj.customer.legal_name }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center text-muted small">{{ obj.details.count }}</td>
+          <td>
+            <a href="{% url 'inventory:movement_detail' obj.pk %}" class="btn btn-sm btn-outline-secondary">
+              <i class="ti ti-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            No hay movimientos{% if query %} que coincidan con "{{ query }}"{% endif %}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">{% include "partials/pagination.html" %}</div>
+</div>
+{% endblock %}

@@ -3,7 +3,7 @@ inventory/selectors.py — Consultas de lectura de inventario.
 """
 from django.db.models import Q
 
-from .models import Brand, Category, Product, StockByWarehouse, Unit, Warehouse
+from .models import Brand, Category, Movement, Product, StockByWarehouse, Unit, Warehouse
 
 
 # ── Maestros ──────────────────────────────────────────────────────────────────
@@ -91,4 +91,48 @@ def get_stock_by_warehouse(store_id: str):
         .filter(warehouse__store_id=store_id)
         .order_by("warehouse__name", "product__name")
     )
+
+def get_movements_for_store(store_id: str, movement_type: str | None = None):
+    qs = (
+        Movement.objects
+        .select_related("warehouse", "warehouse_origin", "warehouse_dest",
+                        "supplier", "customer", "created_by")
+        .filter(store_id=store_id)
+    )
+    if movement_type:
+        qs = qs.filter(type=movement_type)
+    return qs.order_by("-date")
+
+
+def search_movements(store_id: str, query: str, movement_type: str | None = None):
+    qs = get_movements_for_store(store_id, movement_type=movement_type)
+    if query:
+        qs = qs.filter(
+            Q(number__icontains=query)
+            | Q(reason__icontains=query)
+            | Q(reference_doc__icontains=query)
+        )
+    return qs
+
+
+def get_movement_detail(pk):
+    return (
+        Movement.objects
+        .prefetch_related("details__product__unit")
+        .select_related("warehouse", "warehouse_origin", "warehouse_dest",
+                        "supplier", "customer", "carrier", "document_type", "created_by")
+        .get(pk=pk)
+    )
+
+
+def get_stock_for_product(product_id, store_id: str):
+    """Retorna la cantidad total en stock para un producto en una sucursal."""
+    from django.db.models import Sum
+    result = (
+        StockByWarehouse.objects
+        .filter(product_id=product_id, warehouse__store_id=store_id)
+        .aggregate(total=Sum("quantity"))
+    )
+    from decimal import Decimal
+    return result["total"] or Decimal("0")
 

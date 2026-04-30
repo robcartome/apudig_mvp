@@ -63,10 +63,12 @@
                      href="{% url 'inventory:warehouse_list' %}">Almacenes</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link text-muted" href="#">Movimientos <span class="badge bg-secondary-lt ms-1 small">Pronto</span></a>
+                  <a class="nav-link {% if 'movement' in request.resolver_match.url_name|default:'' or 'entry' in request.resolver_match.url_name|default:'' or 'exit' in request.resolver_match.url_name|default:'' or 'transfer' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:movement_list' %}">Movimientos</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link text-muted" href="#">Stock <span class="badge bg-secondary-lt ms-1 small">Pronto</span></a>
+                  <a class="nav-link {% if 'stock' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:stock_report' %}">Stock</a>
                 </li>
               </ul>
             </div>
@@ -105,8 +107,18 @@
             </a>
             <div class="collapse {% if '/partners/' in request.path %}show{% endif %}" id="sidebar-partners">
               <ul class="navbar-nav ps-lg-3">
-                <li class="nav-item"><a class="nav-link" href="#">Clientes</a></li>
-                <li class="nav-item"><a class="nav-link" href="#">Proveedores</a></li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'customer' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'partners:customer_list' %}">Clientes</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'supplier' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'partners:supplier_list' %}">Proveedores</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'carrier' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'partners:carrier_list' %}">Transportistas</a>
+                </li>
               </ul>
             </div>
           </li>

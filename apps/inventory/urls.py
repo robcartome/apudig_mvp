@@ -3,7 +3,11 @@ from django.urls import path
 from .views import (
     brand_create, brand_delete, brand_list, brand_update,
     category_create, category_delete, category_list, category_update,
+    entry_create, exit_create,
+    movement_detail, movement_list,
     product_create, product_delete, product_list, product_update,
+    stock_report,
+    transfer_create,
     unit_create, unit_delete, unit_list, unit_update,
     warehouse_create, warehouse_delete, warehouse_list, warehouse_update,
 )
@@ -11,6 +15,16 @@ from .views import (
 app_name = "inventory"
 
 urlpatterns = [
+    # Stock
+    path("stock/", stock_report, name="stock_report"),
+
+    # Movements
+    path("movimientos/", movement_list, name="movement_list"),
+    path("movimientos/<uuid:pk>/", movement_detail, name="movement_detail"),
+    path("movimientos/entrada/", entry_create, name="entry_create"),
+    path("movimientos/salida/", exit_create, name="exit_create"),
+    path("movimientos/transferencia/", transfer_create, name="transfer_create"),
+
     # Categories
     path("categorias/", category_list, name="category_list"),
     path("categorias/nueva/", category_create, name="category_create"),

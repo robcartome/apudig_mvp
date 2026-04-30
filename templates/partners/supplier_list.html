@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Proveedores — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Proveedores</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Proveedores</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'partners:supplier_create' %}" class="btn btn-primary">
+        <i class="ti ti-plus me-1"></i>Nuevo proveedor
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center gap-3 flex-wrap">
+    {% include "partials/search_bar.html" with placeholder="Buscar por nombre o RUC..." %}
+    <a href="?{% if query %}q={{ query }}&{% endif %}inactive={% if show_inactive %}{% else %}1{% endif %}"
+       class="btn btn-sm {% if show_inactive %}btn-warning{% else %}btn-outline-secondary{% endif %} ms-auto">
+      <i class="ti ti-eye me-1"></i>{% if show_inactive %}Ocultar inactivos{% else %}Mostrar inactivos{% endif %}
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>RUC/Doc.</th>
+          <th>Nombre</th>
+          <th>Contacto</th>
+          <th>Teléfono</th>
+          <th>Email</th>
+          <th class="text-center">Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in page_obj %}
+        <tr>
+          <td class="text-muted small fw-semibold">{{ obj.document_number }}</td>
+          <td class="fw-semibold">{{ obj.name }}</td>
+          <td class="text-muted">{{ obj.contact_name|default:"—" }}</td>
+          <td class="text-muted small">{{ obj.phone|default:"—" }}</td>
+          <td class="text-muted small">{{ obj.email|default:"—" }}</td>
+          <td class="text-center">
+            {% if obj.active %}<span class="badge bg-success-lt">Activo</span>
+            {% else %}<span class="badge bg-secondary-lt">Inactivo</span>{% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'partners:supplier_update' obj.pk %}" class="btn btn-sm btn-outline-primary me-1">
+              <i class="ti ti-edit"></i>
+            </a>
+            <a href="{% url 'partners:supplier_delete' obj.pk %}" class="btn btn-sm btn-outline-danger">
+              <i class="ti ti-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            No hay proveedores{% if query %} que coincidan con "{{ query }}"{% endif %}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">{% include "partials/pagination.html" %}</div>
+</div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ movement }} — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Movimiento: {{ movement.get_type_display }}</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'inventory:movement_list' %}">Movimientos</a></li>
+      <li class="breadcrumb-item active">{{ movement.get_type_display }}</li>
+    </ol>
+  </nav>
+</div>
+
+<div class="row">
+  <div class="col-md-5 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Cabecera</h3></div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Tipo</dt>
+          <dd class="col-7">
+            {% if movement.type == "ENTRY" %}<span class="badge bg-success-lt">Entrada</span>
+            {% elif movement.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
+            {% elif movement.type == "TRANSFER" %}<span class="badge bg-warning-lt">Transferencia</span>
+            {% else %}<span class="badge bg-secondary-lt">Ajuste</span>{% endif %}
+          </dd>
+          <dt class="col-5 text-muted">Fecha</dt>
+          <dd class="col-7">{{ movement.date|date:"d/m/Y H:i" }}</dd>
+          {% if movement.warehouse %}
+          <dt class="col-5 text-muted">Almacén</dt>
+          <dd class="col-7">{{ movement.warehouse.name }}</dd>
+          {% endif %}
+          {% if movement.warehouse_origin %}
+          <dt class="col-5 text-muted">Origen</dt>
+          <dd class="col-7">{{ movement.warehouse_origin.name }}</dd>
+          <dt class="col-5 text-muted">Destino</dt>
+          <dd class="col-7">{{ movement.warehouse_dest.name }}</dd>
+          {% endif %}
+          {% if movement.supplier %}
+          <dt class="col-5 text-muted">Proveedor</dt>
+          <dd class="col-7">{{ movement.supplier.name }}</dd>
+          {% endif %}
+          {% if movement.customer %}
+          <dt class="col-5 text-muted">Cliente</dt>
+          <dd class="col-7">{{ movement.customer.legal_name }}</dd>
+          {% endif %}
+          {% if movement.carrier %}
+          <dt class="col-5 text-muted">Transportista</dt>
+          <dd class="col-7">{{ movement.carrier.business_name }}</dd>
+          {% endif %}
+          {% if movement.reference_doc %}
+          <dt class="col-5 text-muted">Ref. doc.</dt>
+          <dd class="col-7">{{ movement.reference_doc }}</dd>
+          {% endif %}
+          {% if movement.reason %}
+          <dt class="col-5 text-muted">Motivo</dt>
+          <dd class="col-7">{{ movement.reason }}</dd>
+          {% endif %}
+          <dt class="col-5 text-muted">Registrado por</dt>
+          <dd class="col-7">{{ movement.created_by|default:"—" }}</dd>
+          <dt class="col-5 text-muted">Creado</dt>
+          <dd class="col-7">{{ movement.created_at|date:"d/m/Y H:i" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Ítems</h3></div>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table mb-0">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Producto</th>
+              <th class="text-end">Cant.</th>
+              <th>Unidad</th>
+              <th class="text-end">P. Unit.</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in movement.details.all %}
+            <tr>
+              <td class="text-muted small">{{ d.product.sku }}</td>
+              <td>{{ d.product.name }}</td>
+              <td class="text-end fw-semibold">{{ d.quantity|floatformat:3 }}</td>
+              <td class="text-muted small">{{ d.product.unit }}</td>
+              <td class="text-end text-muted small">{{ d.unit_price|floatformat:2 }}</td>
+              <td class="text-end fw-semibold">{{ d.quantity|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-2">
+  <a href="{% url 'inventory:movement_list' %}" class="btn btn-outline-secondary">
+    <i class="ti ti-arrow-left me-1"></i>Volver a movimientos
+  </a>
+</div>
+{% endblock %}

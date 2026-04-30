@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}{{ customer }} — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">{{ customer.legal_name }}</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'partners:customer_list' %}">Clientes</a></li>
+          <li class="breadcrumb-item active">{{ customer.legal_name }}</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a href="{% url 'partners:customer_update' customer.pk %}" class="btn btn-primary">
+        <i class="ti ti-edit me-1"></i>Editar
+      </a>
+      <a href="{% url 'partners:customer_delete' customer.pk %}" class="btn btn-outline-danger">
+        <i class="ti ti-trash me-1"></i>Eliminar
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+
+  <!-- Datos básicos -->
+  <div class="col-md-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Datos generales</h3></div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted">Documento</dt>
+          <dd class="col-sm-7">{{ customer.document_type }}: {{ customer.document_number }}</dd>
+          <dt class="col-sm-5 text-muted">Razón social</dt>
+          <dd class="col-sm-7 fw-semibold">{{ customer.legal_name }}</dd>
+          {% if customer.trade_name %}
+          <dt class="col-sm-5 text-muted">Nombre comercial</dt>
+          <dd class="col-sm-7">{{ customer.trade_name }}</dd>
+          {% endif %}
+          <dt class="col-sm-5 text-muted">Dirección</dt>
+          <dd class="col-sm-7">{{ customer.address|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted">Teléfono</dt>
+          <dd class="col-sm-7">{{ customer.phone|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted">Email</dt>
+          <dd class="col-sm-7">{{ customer.email|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted">Estado</dt>
+          <dd class="col-sm-7">
+            {% if customer.active %}<span class="badge bg-success-lt">Activo</span>
+            {% else %}<span class="badge bg-secondary-lt">Inactivo</span>{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Perfil comercial -->
+  <div class="col-md-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">Perfil comercial</h3></div>
+      <div class="card-body">
+        {% if profile %}
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted">Estado tributario</dt>
+          <dd class="col-sm-7">{{ profile.taxpayer_status|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted">Condición</dt>
+          <dd class="col-sm-7">{{ profile.taxpayer_condition|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted">Días de crédito</dt>
+          <dd class="col-sm-7">{{ profile.payment_term_days }}</dd>
+          <dt class="col-sm-5 text-muted">Lista de precios</dt>
+          <dd class="col-sm-7">{{ profile.price_list|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted">Ret. agent</dt>
+          <dd class="col-sm-7">{% if profile.is_retention_agent %}<span class="badge bg-warning-lt">Sí</span>{% else %}No{% endif %}</dd>
+          {% if profile.notes %}
+          <dt class="col-sm-5 text-muted">Notas</dt>
+          <dd class="col-sm-7">{{ profile.notes }}</dd>
+          {% endif %}
+        </dl>
+        {% else %}
+        <p class="text-muted mb-0">Sin perfil comercial registrado.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Contactos -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Contactos</h3>
+        <div class="card-options">
+          <a href="{% url 'partners:contact_create' customer.pk %}" class="btn btn-sm btn-outline-primary">
+            <i class="ti ti-plus me-1"></i>Agregar contacto
+          </a>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Cargo</th>
+              <th>Teléfono</th>
+              <th>Email</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in contacts %}
+            <tr>
+              <td class="fw-semibold">{{ c.name }}</td>
+              <td class="text-muted">{{ c.position|default:"—" }}</td>
+              <td class="text-muted small">{{ c.phone|default:"—" }}</td>
+              <td class="text-muted small">{{ c.email|default:"—" }}</td>
+              <td class="text-end">
+                <form method="post" action="{% url 'partners:contact_delete' c.pk %}"
+                      onsubmit="return confirm('¿Eliminar contacto?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="ti ti-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-3">Sin contactos registrados.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
