@@ -17,8 +17,14 @@ INSTALLED_APPS = [
     "apps.core.apps.CoreConfig",
     "apps.companies.apps.CompaniesConfig",
     "apps.users.apps.UsersConfig",
+    "apps.partners.apps.PartnersConfig",
+    "apps.inventory.apps.InventoryConfig",
+    "apps.sales.apps.SalesConfig",
+    "apps.billing.apps.BillingConfig",
     "apps.web.apps.WebConfig",
 ]
+
+AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
