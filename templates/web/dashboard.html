@@ -1,15 +1,163 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard — APUDIG{% endblock %}
+
+{% block page_title %}
+<h2 class="page-title">Dashboard</h2>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-  <h2>Dashboard MVP</h2>
-  <p class="muted">Base inicial lista para migración por fases.</p>
-  <ul>
-    <li>Empresa activa ID: {{ active_company_id }}</li>
-    <li>Sucursal activa ID: {{ active_store_id|default:'(sin sucursal)' }}</li>
-  </ul>
-  <div class="actions">
-    <a class="btn" href="{% url 'select_company' %}">Cambiar empresa/sucursal</a>
+<!-- Header de bienvenida -->
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">
+        Bienvenido, {{ user.name|default:user.email }}
+      </h2>
+      {% if active_company %}
+      <div class="page-subtitle text-muted">
+        <i class="ti ti-building me-1"></i>
+        {{ active_company.name }}{% if active_store %} &mdash; {{ active_store.name }}{% endif %}
+      </div>
+      {% else %}
+      <div class="page-subtitle">
+        <a href="{% url 'select_company' %}" class="text-warning">
+          <i class="ti ti-alert-triangle me-1"></i>Sin empresa activa — seleccionar
+        </a>
+      </div>
+      {% endif %}
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'select_company' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="ti ti-switch me-1"></i>Cambiar empresa
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Módulos del sistema -->
+<div class="row row-deck row-cards">
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+          <span class="bg-blue-lt avatar me-3">
+            <i class="ti ti-package text-blue fs-3"></i>
+          </span>
+          <div>
+            <div class="fw-bold">Inventario</div>
+            <div class="text-muted small">Productos · Almacenes · Stock</div>
+          </div>
+        </div>
+        <div class="text-muted small">
+          Gestión de productos, movimientos de entrada, salida y transferencias entre almacenes.
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+          <span class="bg-green-lt avatar me-3">
+            <i class="ti ti-receipt text-green fs-3"></i>
+          </span>
+          <div>
+            <div class="fw-bold">Ventas</div>
+            <div class="text-muted small">Cotizaciones · Órdenes · Comprobantes</div>
+          </div>
+        </div>
+        <div class="text-muted small">
+          Ciclo comercial completo desde cotización hasta emisión de comprobante electrónico.
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+          <span class="bg-orange-lt avatar me-3">
+            <i class="ti ti-users text-orange fs-3"></i>
+          </span>
+          <div>
+            <div class="fw-bold">Socios</div>
+            <div class="text-muted small">Clientes · Proveedores</div>
+          </div>
+        </div>
+        <div class="text-muted small">
+          Registro y búsqueda de clientes y proveedores con datos de contacto y condiciones comerciales.
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+          <span class="bg-purple-lt avatar me-3">
+            <i class="ti ti-adjustments text-purple fs-3"></i>
+          </span>
+          <div>
+            <div class="fw-bold">Maestros</div>
+            <div class="text-muted small">Categorías · Marcas · Series</div>
+          </div>
+        </div>
+        <div class="text-muted small">
+          Configuración de catálogos base: categorías, unidades, series documentarias y tipos.
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /row módulos -->
+
+<!-- Info de sesión -->
+<div class="row mt-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title"><i class="ti ti-info-circle me-2 text-muted"></i>Sesión actual</h3>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm card-table mb-0">
+          <tbody>
+            <tr>
+              <td class="text-muted fw-semibold" style="width:35%">Empresa</td>
+              <td>{{ active_company.name|default:"—" }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted fw-semibold">Sucursal</td>
+              <td>{{ active_store.name|default:"(sin sucursal)" }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted fw-semibold">Usuario</td>
+              <td>{{ user.name|default:user.email }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted fw-semibold">Rol</td>
+              <td>{% if user.is_staff %}Administrador{% else %}Usuario{% endif %}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
+

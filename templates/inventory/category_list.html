@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Categorías — APUDIG{% endblock %}
+
+{% block page_title %}
+<h2 class="page-title">Categorías</h2>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Maestros</li>
+          <li class="breadcrumb-item active">Categorías</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'inventory:category_create' %}" class="btn btn-primary">
+        <i class="ti ti-plus me-1"></i>Nueva categoría
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    {% include "partials/search_bar.html" with placeholder="Buscar por código o nombre..." %}
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th class="text-center">Estado</th>
+          <th class="text-center">Productos</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in page_obj %}
+        <tr>
+          <td class="fw-semibold">{{ obj.code }}</td>
+          <td>{{ obj.name }}</td>
+          <td class="text-center">
+            {% if obj.active %}
+            <span class="badge bg-success-lt">Activa</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">Inactiva</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-muted">{{ obj.products.count }}</td>
+          <td class="text-end">
+            <a href="{% url 'inventory:category_update' obj.pk %}"
+               class="btn btn-sm btn-outline-primary me-1">
+              <i class="ti ti-edit"></i>
+            </a>
+            <a href="{% url 'inventory:category_delete' obj.pk %}"
+               class="btn btn-sm btn-outline-danger">
+              <i class="ti ti-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">
+            No hay categorías{% if query %} que coincidan con "{{ query }}"{% endif %}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">
+    {% include "partials/pagination.html" %}
+  </div>
+</div>
+{% endblock %}

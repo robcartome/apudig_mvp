@@ -1,30 +1,266 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}APUDIG MVP{% endblock %}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; }
-    header { background: #1f2937; color: #fff; padding: 12px 20px; }
-    main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
-    .card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-    .actions { display: flex; gap: 8px; margin-top: 12px; }
-    button, .btn { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; cursor: pointer; text-decoration: none; color: #111827; }
-    .primary { background: #111827; color: #fff; border-color: #111827; }
-    input, select { width: 100%; padding: 8px; margin-top: 6px; margin-bottom: 12px; border: 1px solid #d1d5db; border-radius: 6px; }
-    .muted { color: #6b7280; }
-  </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="robots" content="noindex,nofollow"/>
+  <title>{% block title %}APUDIG{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" rel="stylesheet"/>
+  {% block extra_css %}{% endblock %}
 </head>
-<body>
-<header>
-  <strong>APUDIG MVP</strong>
-  {% if user.is_authenticated %}
-    <span style="float:right;">{{ user.username }} · <a href="{% url 'logout' %}" style="color:#fff;">Salir</a></span>
-  {% endif %}
-</header>
-<main>
-  {% block content %}{% endblock %}
-</main>
+<body class="antialiased">
+<div class="wrapper">
+
+  <!-- ======================================================= SIDEBAR -->
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+    <div class="container-fluid">
+      <button class="navbar-toggler" type="button"
+              data-bs-toggle="collapse" data-bs-target="#navbar-menu"
+              aria-controls="navbar-menu" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <h1 class="navbar-brand navbar-brand-autodark">
+        <a href="{% url 'dashboard' %}">
+          <span class="fw-bold fs-3">APUDIG</span>
+        </a>
+      </h1>
+
+      <div class="collapse navbar-collapse" id="navbar-menu">
+        <ul class="navbar-nav pt-lg-3">
+
+          <!-- Dashboard -->
+          <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+               href="{% url 'dashboard' %}">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-home fs-2"></i>
+              </span>
+              <span class="nav-link-title">Dashboard</span>
+            </a>
+          </li>
+
+          <!-- Inventario -->
+          <li class="nav-item">
+            <a class="nav-link {% if '/inventory/' in request.path %}active{% endif %}"
+               href="#sidebar-inventory" data-bs-toggle="collapse"
+               aria-expanded="{% if '/inventory/' in request.path %}true{% else %}false{% endif %}">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-package fs-2"></i>
+              </span>
+              <span class="nav-link-title">Inventario</span>
+              <span class="nav-link-arrow"></span>
+            </a>
+            <div class="collapse {% if '/inventory/' in request.path %}show{% endif %}" id="sidebar-inventory">
+              <ul class="navbar-nav ps-lg-3">
+                <li class="nav-item">
+                  <a class="nav-link {% if 'product' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:product_list' %}">Productos</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'warehouse' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:warehouse_list' %}">Almacenes</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link text-muted" href="#">Movimientos <span class="badge bg-secondary-lt ms-1 small">Pronto</span></a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link text-muted" href="#">Stock <span class="badge bg-secondary-lt ms-1 small">Pronto</span></a>
+                </li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Ventas -->
+          <li class="nav-item">
+            <a class="nav-link {% if '/sales/' in request.path %}active{% endif %}"
+               href="#sidebar-sales" data-bs-toggle="collapse"
+               aria-expanded="{% if '/sales/' in request.path %}true{% else %}false{% endif %}">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-receipt fs-2"></i>
+              </span>
+              <span class="nav-link-title">Ventas</span>
+              <span class="nav-link-arrow"></span>
+            </a>
+            <div class="collapse {% if '/sales/' in request.path %}show{% endif %}" id="sidebar-sales">
+              <ul class="navbar-nav ps-lg-3">
+                <li class="nav-item"><a class="nav-link" href="#">Cotizaciones</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Órdenes de Venta</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Comprobantes</a></li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Socios -->
+          <li class="nav-item">
+            <a class="nav-link {% if '/partners/' in request.path %}active{% endif %}"
+               href="#sidebar-partners" data-bs-toggle="collapse"
+               aria-expanded="{% if '/partners/' in request.path %}true{% else %}false{% endif %}">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-users fs-2"></i>
+              </span>
+              <span class="nav-link-title">Socios</span>
+              <span class="nav-link-arrow"></span>
+            </a>
+            <div class="collapse {% if '/partners/' in request.path %}show{% endif %}" id="sidebar-partners">
+              <ul class="navbar-nav ps-lg-3">
+                <li class="nav-item"><a class="nav-link" href="#">Clientes</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Proveedores</a></li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Maestros -->
+          <li class="nav-item">
+            <a class="nav-link" href="#sidebar-masters" data-bs-toggle="collapse" aria-expanded="false">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-adjustments fs-2"></i>
+              </span>
+              <span class="nav-link-title">Maestros</span>
+              <span class="nav-link-arrow"></span>
+            </a>
+            <div class="collapse" id="sidebar-masters">
+              <ul class="navbar-nav ps-lg-3">
+                <li class="nav-item">
+                  <a class="nav-link {% if 'category' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:category_list' %}">Categorías</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'brand' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:brand_list' %}">Marcas</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'unit' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:unit_list' %}">Unidades</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link text-muted" href="#">Series <span class="badge bg-secondary-lt ms-1 small">Pronto</span></a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link text-muted" href="#">Tipos doc. <span class="badge bg-secondary-lt ms-1 small">Pronto</span></a>
+                </li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Administración (solo staff) -->
+          {% if user.is_staff %}
+          <li class="nav-item">
+            <a class="nav-link" href="#sidebar-admin" data-bs-toggle="collapse" aria-expanded="false">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-settings fs-2"></i>
+              </span>
+              <span class="nav-link-title">Administración</span>
+              <span class="nav-link-arrow"></span>
+            </a>
+            <div class="collapse" id="sidebar-admin">
+              <ul class="navbar-nav ps-lg-3">
+                <li class="nav-item"><a class="nav-link" href="#">Usuarios</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Empresas</a></li>
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'admin:index' %}">Admin Django</a>
+                </li>
+              </ul>
+            </div>
+          </li>
+          {% endif %}
+
+        </ul>
+      </div><!-- /collapse -->
+    </div>
+  </aside>
+  <!-- ================================================ FIN SIDEBAR -->
+
+  <!-- ================================================ PAGE WRAPPER -->
+  <div class="page-wrapper">
+
+    <!-- Topbar -->
+    <header class="navbar navbar-expand-md d-none d-lg-flex d-print-none">
+      <div class="container-xl">
+        <div class="me-auto">
+          {% block page_title %}{% endblock %}
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <!-- Empresa / Sucursal activa -->
+          {% if active_company %}
+          <a href="{% url 'select_company' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="ti ti-building me-1"></i>
+            {{ active_company.name }}
+            {% if active_store %}
+            <span class="text-muted ms-1">/ {{ active_store.name }}</span>
+            {% endif %}
+          </a>
+          {% endif %}
+
+          <!-- Menú de usuario -->
+          <div class="nav-item dropdown">
+            <a href="#" class="nav-link d-flex align-items-center lh-1 p-0 gap-2"
+               data-bs-toggle="dropdown" aria-label="Menú de usuario">
+              <span class="avatar avatar-sm">
+                <i class="ti ti-user"></i>
+              </span>
+              <div class="d-none d-xl-block">
+                <div class="fw-semibold small">{{ user.name|default:user.email }}</div>
+                <div class="text-secondary" style="font-size:0.7rem;">
+                  {% if user.is_staff %}Administrador{% else %}Usuario{% endif %}
+                </div>
+              </div>
+              <i class="ti ti-chevron-down fs-5 text-muted"></i>
+            </a>
+            <div class="dropdown-menu dropdown-menu-end">
+              <a href="{% url 'select_company' %}" class="dropdown-item">
+                <i class="ti ti-building me-2 text-muted"></i>Cambiar empresa/sucursal
+              </a>
+              <div class="dropdown-divider"></div>
+              <a href="{% url 'logout' %}" class="dropdown-item text-danger">
+                <i class="ti ti-logout me-2"></i>Cerrar sesión
+              </a>
+            </div>
+          </div>
+        </div><!-- /d-flex -->
+      </div>
+    </header>
+
+    <!-- Flash messages -->
+    {% if messages %}
+    <div class="container-xl pt-3">
+      {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible" role="alert">
+        {{ message }}
+        <a class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Body -->
+    <div class="page-body">
+      <div class="container-xl">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer footer-transparent d-print-none">
+      <div class="container-xl">
+        <div class="row text-center align-items-center">
+          <div class="col-12 col-lg-auto">
+            <ul class="list-inline list-inline-dots mb-0">
+              <li class="list-inline-item text-secondary small">
+                APUDIG &copy; {% now "Y" %}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+  </div><!-- /page-wrapper -->
+</div><!-- /wrapper -->
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

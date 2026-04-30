@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+      <li class="breadcrumb-item"><a href="{% url cancel_url %}">Productos</a></li>
+      <li class="breadcrumb-item active">{{ title }}</li>
+    </ol>
+  </nav>
+</div>
+
+<form method="post" novalidate>
+{% csrf_token %}
+<div class="row">
+
+  <!-- Columna principal -->
+  <div class="col-md-8">
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Información general</h3></div>
+      <div class="card-body">
+
+        <div class="mb-3">
+          <label class="form-label required">Nombre</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label required">SKU</label>
+            {{ form.sku }}
+            {% if form.sku.errors %}<div class="text-danger small mt-1">{{ form.sku.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Código de barras</label>
+            {{ form.barcode }}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Descripción</label>
+          {{ form.description }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Modelo</label>
+          {{ form.model }}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Precios</h3></div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label required">Precio de compra (S/)</label>
+            {{ form.price_purchase }}
+            {% if form.price_purchase.errors %}<div class="text-danger small mt-1">{{ form.price_purchase.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label required">Precio de venta (S/)</label>
+            {{ form.price_sale }}
+            {% if form.price_sale.errors %}<div class="text-danger small mt-1">{{ form.price_sale.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columna lateral -->
+  <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Clasificación</h3></div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label required">Unidad</label>
+          {{ form.unit }}
+          {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Categoría</label>
+          {{ form.category }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Marca</label>
+          {{ form.brand }}
+        </div>
+        <div class="mb-0">
+          <label class="form-check">
+            {{ form.active }}<span class="form-check-label">Producto activo</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="ti ti-device-floppy me-1"></i>Guardar
+      </button>
+      <a href="{% url cancel_url %}" class="btn btn-outline-secondary">
+        <i class="ti ti-x me-1"></i>Cancelar
+      </a>
+    </div>
+  </div>
+
+</div>
+</form>
+{% endblock %}

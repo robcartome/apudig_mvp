@@ -1,7 +1,6 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 
-from .models import Company, Store
 from .services import get_user_accessible_companies, set_active_session
 
 
@@ -11,19 +10,9 @@ def select_company(request):
 
     if request.method == "POST":
         access_id = request.POST.get("access_id")
-        selected = get_object_or_404(accesses, id=access_id)
-        set_active_session(request, selected)
-        return redirect("dashboard")
+        selected = next((a for a in accesses if a.id == access_id), None)
+        if selected:
+            set_active_session(request, selected)
+            return redirect("dashboard")
 
-    default_company = Company.objects.filter(id=request.session.get("active_company_id")).first()
-    default_store = Store.objects.filter(id=request.session.get("active_store_id")).first()
-
-    return render(
-        request,
-        "web/select_company.html",
-        {
-            "accesses": accesses,
-            "default_company": default_company,
-            "default_store": default_store,
-        },
-    )
+    return render(request, "web/select_company.html", {"accesses": accesses})

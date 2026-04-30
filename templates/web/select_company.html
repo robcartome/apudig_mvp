@@ -1,26 +1,63 @@
-{% extends 'base.html' %}
-{% block title %}Seleccionar empresa{% endblock %}
-{% block content %}
-<div class="card">
-  <h2>Selecciona empresa/sucursal</h2>
-  {% if default_company %}
-    <p class="muted">Actual: {{ default_company }}{% if default_store %} / {{ default_store.name }}{% endif %}</p>
-  {% endif %}
+{% extends 'base_auth.html' %}
+{% block title %}Seleccionar empresa — APUDIG{% endblock %}
 
-  <form method="post">
-    {% csrf_token %}
-    <label>Acceso disponible</label>
-    <select name="access_id" required>
-      <option value="">-- elegir --</option>
-      {% for access in accesses %}
-        <option value="{{ access.id }}">
-          {{ access.company.name }}{% if access.store %} / {{ access.store.name }}{% endif %}
-        </option>
-      {% endfor %}
-    </select>
-    <div class="actions">
-      <button class="primary" type="submit">Continuar</button>
+{% block content %}
+<div class="container container-tight py-4">
+  <div class="text-center mb-4">
+    <h1 class="fw-bold text-primary">APUDIG</h1>
+    <p class="text-muted">Selecciona la empresa y sucursal para continuar</p>
+  </div>
+
+  <div class="card card-md">
+    <div class="card-body">
+      <h2 class="h2 text-center mb-4">Empresa activa</h2>
+
+      {% if active_company %}
+      <div class="alert alert-info mb-3">
+        <i class="ti ti-building me-2"></i>
+        Actual: <strong>{{ active_company.name }}{% if active_store %} / {{ active_store.name }}{% endif %}</strong>
+      </div>
+      {% endif %}
+
+      {% if not accesses %}
+      <div class="alert alert-warning">
+        <i class="ti ti-alert-triangle me-2"></i>
+        No tienes acceso asignado a ninguna empresa o sucursal.
+        Contacta a tu administrador.
+      </div>
+      {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label required">Empresa / Sucursal</label>
+          <select name="access_id" class="form-select" required>
+            <option value="">— seleccionar —</option>
+            {% for access in accesses %}
+            <option value="{{ access.id }}">
+              {{ access.company_name }}{% if access.store_name %} / {{ access.store_name }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="d-grid">
+          <button type="submit" class="btn btn-primary">
+            <i class="ti ti-check me-1"></i>Continuar
+          </button>
+        </div>
+      </form>
+      {% endif %}
+
+      <div class="text-center mt-3">
+        <a href="{% url 'logout' %}" class="text-muted small">
+          <i class="ti ti-logout me-1"></i>Cerrar sesión
+        </a>
+      </div>
     </div>
-  </form>
+  </div>
+
+  <div class="text-center text-muted mt-3 small">
+    APUDIG &copy; {% now "Y" %}
+  </div>
 </div>
 {% endblock %}
+

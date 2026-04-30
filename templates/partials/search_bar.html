@@ -1,0 +1,19 @@
+{% comment %}
+partials/search_bar.html
+Uso: {% include "partials/search_bar.html" with placeholder="Buscar categoría..." %}
+{% endcomment %}
+<form method="get" class="d-flex gap-2">
+  <div class="input-group">
+    <input type="search" name="q" value="{{ query|default:'' }}"
+           class="form-control" placeholder="{{ placeholder|default:'Buscar...' }}"
+           autocomplete="off">
+    <button class="btn btn-primary" type="submit">
+      <i class="ti ti-search"></i>
+    </button>
+    {% if query %}
+    <a href="{{ request.path }}" class="btn btn-outline-secondary">
+      <i class="ti ti-x"></i>
+    </a>
+    {% endif %}
+  </div>
+</form>

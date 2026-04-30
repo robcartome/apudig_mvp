@@ -11,12 +11,4 @@ def home(request):
 def dashboard(request):
     if not request.active_company_id:
         return redirect("select_company")
-
-    return render(
-        request,
-        "web/dashboard.html",
-        {
-            "active_company_id": request.active_company_id,
-            "active_store_id": request.active_store_id,
-        },
-    )
+    return render(request, "web/dashboard.html")
