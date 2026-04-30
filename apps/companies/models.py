@@ -12,7 +12,6 @@ class Company(TimeStampedModel):
     ruc = models.CharField(max_length=15, unique=True)
     is_active = models.BooleanField(default=True)
 
-    # branding agregado inline (simplificado)
     app_logo_url = models.CharField(max_length=1000, blank=True)
     pdf_logo_url = models.CharField(max_length=1000, blank=True)
     primary_color = models.CharField(max_length=20, blank=True)
@@ -56,3 +55,23 @@ class UserCompanyAccess(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.user} -> {self.company}"
+
+
+class CompanyDocumentSettings(TimeStampedModel):
+    """company_document_settings - configuración de formato y plantilla PDF por tipo de documento."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="document_settings")
+    document_type = models.CharField(max_length=30)          # '01', '03', 'COT', etc.
+    format = models.CharField(max_length=20, default="A4")   # 'A4', 'TICKET', etc.
+    template_name = models.CharField(max_length=100, blank=True)
+    logo_url_override = models.CharField(max_length=1000, blank=True)
+    footer_text = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "company_document_settings"
+        unique_together = ("company", "document_type")
+
+    def __str__(self) -> str:
+        return f"{self.company} / {self.document_type}"
+
