@@ -1,0 +1,1 @@
+# inventory/tests package

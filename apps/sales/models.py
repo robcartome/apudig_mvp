@@ -95,7 +95,7 @@ class DocumentSeries(TimeStampedModel):
 
     class Meta:
         db_table = "document_series"
-        unique_together = ("company", "voucher_type", "series")
+        unique_together = ("company", "store", "voucher_type", "series")
 
     def __str__(self) -> str:
         return f"{self.series} ({self.voucher_type})"

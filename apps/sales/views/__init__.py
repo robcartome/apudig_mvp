@@ -1,0 +1,1 @@
+# sales/views package

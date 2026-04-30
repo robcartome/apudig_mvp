@@ -1,12 +1,18 @@
 from django.contrib import admin
 
-from .models import Company, CompanyDocumentSettings, Store, UserCompanyAccess
+from .models import Company, CompanyBranding, CompanyDocumentSettings, Store, UserCompanyAccess
 
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "ruc", "is_active")
     search_fields = ("name", "ruc")
+
+
+@admin.register(CompanyBranding)
+class CompanyBrandingAdmin(admin.ModelAdmin):
+    list_display = ("company", "primary_color", "secondary_color")
+    search_fields = ("company__name",)
 
 
 @admin.register(Store)

@@ -12,17 +12,31 @@ class Company(TimeStampedModel):
     ruc = models.CharField(max_length=15, unique=True)
     is_active = models.BooleanField(default=True)
 
-    app_logo_url = models.CharField(max_length=1000, blank=True)
-    pdf_logo_url = models.CharField(max_length=1000, blank=True)
-    primary_color = models.CharField(max_length=20, blank=True)
-    secondary_color = models.CharField(max_length=20, blank=True)
-
     class Meta:
         db_table = "companies"
         ordering = ["name"]
 
     def __str__(self) -> str:
         return self.name
+
+
+class CompanyBranding(TimeStampedModel):
+    """company_branding — identidad visual, relación 1:1 con Company."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.OneToOneField(
+        Company, on_delete=models.CASCADE, related_name="branding"
+    )
+    app_logo_url = models.CharField(max_length=1000, blank=True)
+    pdf_logo_url = models.CharField(max_length=1000, blank=True)
+    primary_color = models.CharField(max_length=20, blank=True)
+    secondary_color = models.CharField(max_length=20, blank=True)
+
+    class Meta:
+        db_table = "company_branding"
+
+    def __str__(self) -> str:
+        return f"Branding – {self.company}"
 
 
 class Store(TimeStampedModel):

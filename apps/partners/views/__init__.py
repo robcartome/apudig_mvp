@@ -1,0 +1,1 @@
+# partners/views package
