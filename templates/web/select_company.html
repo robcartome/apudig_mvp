@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Seleccionar empresa{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Selecciona empresa/sucursal</h2>
+  {% if default_company %}
+    <p class="muted">Actual: {{ default_company }}{% if default_store %} / {{ default_store.name }}{% endif %}</p>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <label>Acceso disponible</label>
+    <select name="access_id" required>
+      <option value="">-- elegir --</option>
+      {% for access in accesses %}
+        <option value="{{ access.id }}">
+          {{ access.company.name }}{% if access.store %} / {{ access.store.name }}{% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <div class="actions">
+      <button class="primary" type="submit">Continuar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

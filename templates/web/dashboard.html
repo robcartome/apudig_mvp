@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Dashboard MVP</h2>
+  <p class="muted">Base inicial lista para migración por fases.</p>
+  <ul>
+    <li>Empresa activa ID: {{ active_company_id }}</li>
+    <li>Sucursal activa ID: {{ active_store_id|default:'(sin sucursal)' }}</li>
+  </ul>
+  <div class="actions">
+    <a class="btn" href="{% url 'select_company' %}">Cambiar empresa/sucursal</a>
+  </div>
+</div>
+{% endblock %}
