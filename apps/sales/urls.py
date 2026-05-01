@@ -24,6 +24,15 @@ from .views import (
     order_list,
     order_pdf,
     order_update,
+    voucher_cancel,
+    voucher_create,
+    voucher_credit,
+    voucher_detail,
+    voucher_from_ord,
+    voucher_issue,
+    voucher_list,
+    voucher_pdf,
+    voucher_void,
 )
 
 app_name = "sales"
@@ -56,4 +65,14 @@ urlpatterns = [
     path("ordenes/<uuid:pk>/confirmar/", order_confirm, name="order_confirm"),
     path("ordenes/<uuid:pk>/cancelar/", order_cancel, name="order_cancel"),
     path("ordenes/<uuid:pk>/pdf/", order_pdf, name="order_pdf"),
+    path("ordenes/<uuid:pk>/emitir/", voucher_from_ord, name="voucher_from_ord"),
+    # Comprobantes
+    path("comprobantes/", voucher_list, name="voucher_list"),
+    path("comprobantes/nuevo/", voucher_create, name="voucher_create"),
+    path("comprobantes/<uuid:pk>/", voucher_detail, name="voucher_detail"),
+    path("comprobantes/<uuid:pk>/emitir/", voucher_issue, name="voucher_issue"),
+    path("comprobantes/<uuid:pk>/anular/", voucher_void, name="voucher_void"),
+    path("comprobantes/<uuid:pk>/cancelar/", voucher_cancel, name="voucher_cancel"),
+    path("comprobantes/<uuid:pk>/nota-credito/", voucher_credit, name="voucher_credit"),
+    path("comprobantes/<uuid:pk>/pdf/", voucher_pdf, name="voucher_pdf"),
 ]

@@ -5,7 +5,6 @@ from django.db.models import Q
 
 from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SaleOrder, Voucher
 
-
 def get_quotations_for_store(store_id: str, status: str | None = None):
     qs = (
         SalesQuotation.objects
@@ -103,3 +102,47 @@ def get_series_for_store(company_id: str, store_id: str, voucher_type: str | Non
 
 def get_active_document_types():
     return BusinessDocumentType.objects.filter(active=True).order_by("code")
+
+
+def get_vouchers_for_store(store_id: str, status: str | None = None):
+    qs = (
+        Voucher.objects
+        .select_related("customer", "series")
+        .filter(store_id=store_id)
+        .order_by("-issue_date", "-created_at")
+    )
+    if status:
+        qs = qs.filter(status=status)
+    return qs
+
+
+def search_vouchers(store_id: str, query: str | None = None, status: str | None = None):
+    qs = (
+        Voucher.objects
+        .select_related("customer", "series")
+        .filter(store_id=store_id)
+        .order_by("-issue_date", "-created_at")
+    )
+    if status:
+        qs = qs.filter(status=status)
+    if query:
+        qs = qs.filter(
+            Q(customer_legal_name__icontains=query)
+            | Q(customer_document_number__icontains=query)
+            | Q(series_code__icontains=query)
+            | Q(number__icontains=query)
+        )
+    return qs
+
+
+def get_voucher_detail(pk):
+    """Retorna Voucher con líneas y producto prefetcheados."""
+    return (
+        Voucher.objects
+        .select_related(
+            "customer", "series", "store", "created_by",
+            "sale_order", "reference_voucher",
+        )
+        .prefetch_related("lines__product__unit")
+        .get(pk=pk)
+    )

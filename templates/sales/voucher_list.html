@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Comprobantes — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Comprobantes</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Comprobantes</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'sales:voucher_create' %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-plus me-1"></i>Nuevo comprobante
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+               placeholder="Buscar por cliente, RUC o número…">
+      </div>
+      <div class="col-md-2">
+        <select name="voucher_type" class="form-select form-select-sm">
+          <option value="">Todos los tipos</option>
+          <option value="01" {% if voucher_type == "01" %}selected{% endif %}>Factura</option>
+          <option value="03" {% if voucher_type == "03" %}selected{% endif %}>Boleta</option>
+          <option value="07" {% if voucher_type == "07" %}selected{% endif %}>Nota Crédito</option>
+          <option value="08" {% if voucher_type == "08" %}selected{% endif %}>Nota Débito</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Todos los estados</option>
+          {% for code, label in status_choices %}
+          <option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
+        <a href="{% url 'sales:voucher_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Comprobante</th>
+          <th>Tipo</th>
+          <th>Cliente</th>
+          <th>Emisión</th>
+          <th>Estado</th>
+          <th class="text-end">Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in page_obj %}
+        <tr>
+          <td class="fw-semibold">
+            <a href="{% url 'sales:voucher_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
+          </td>
+          <td class="text-muted small">
+            {% if v.voucher_type == "01" %}Factura
+            {% elif v.voucher_type == "03" %}Boleta
+            {% elif v.voucher_type == "07" %}Nota de Crédito
+            {% elif v.voucher_type == "08" %}Nota de Débito
+            {% else %}{{ v.voucher_type }}{% endif %}
+          </td>
+          <td>
+            <div>{{ v.customer_legal_name }}</div>
+            <div class="text-muted small">{{ v.customer_document_number }}</div>
+          </td>
+          <td class="text-muted small">{{ v.issue_date|date:"d/m/Y" }}</td>
+          <td>
+            {% if v.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
+            {% elif v.status == "ISSUED" %}<span class="badge bg-success-lt">Emitido</span>
+            {% elif v.status == "VOIDED" %}<span class="badge bg-danger-lt">Anulado</span>
+            {% elif v.status == "CANCELLED" %}<span class="badge bg-muted-lt">Cancelado</span>
+            {% else %}<span class="badge bg-muted-lt">{{ v.status }}</span>{% endif %}
+          </td>
+          <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
+          <td class="text-end">
+            <a href="{% url 'sales:voucher_detail' v.pk %}" class="btn btn-sm btn-ghost-secondary">
+              <i class="ti ti-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">No se encontraron comprobantes.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer d-flex align-items-center">
+    <p class="m-0 text-muted">
+      Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} comprobantes
+    </p>
+    <ul class="pagination m-0 ms-auto">
+      {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&voucher_type={{ voucher_type }}">ant</a></li>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&voucher_type={{ voucher_type }}">sig</a></li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

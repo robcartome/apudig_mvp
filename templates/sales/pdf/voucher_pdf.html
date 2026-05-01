@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ voucher.series_code }}-{{ voucher.number|default:"Borrador" }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #333; margin: 0; padding: 16px; }
+    @page { size: A4; margin: 1.5cm; }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 0; }
+    }
+
+    .no-print { text-align: center; margin-bottom: 16px; }
+    .no-print button { padding: 8px 20px; font-size: 13px; cursor: pointer; }
+
+    .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 2px solid #333; padding-bottom: 12px; }
+    .company-info h1 { font-size: 16px; margin: 0 0 4px; }
+    .company-info p { margin: 2px 0; }
+    .doc-box { border: 2px solid #333; padding: 10px 16px; text-align: center; min-width: 180px; }
+    .doc-box .doc-type { font-size: 13px; font-weight: bold; text-transform: uppercase; }
+    .doc-box .doc-num { font-size: 18px; font-weight: bold; margin-top: 6px; letter-spacing: 1px; }
+
+    .section { margin-bottom: 12px; }
+    .section-title { font-weight: bold; text-transform: uppercase; font-size: 10px; color: #666; margin-bottom: 4px; border-bottom: 1px solid #ccc; }
+    .info-row { display: flex; gap: 4px; }
+    .info-label { font-weight: bold; white-space: nowrap; min-width: 110px; }
+
+    table.lines { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    table.lines th { background: #f5f5f5; font-size: 10px; text-transform: uppercase; padding: 5px 6px; border: 1px solid #ddd; }
+    table.lines td { padding: 5px 6px; border: 1px solid #ddd; vertical-align: top; }
+    table.lines .text-right { text-align: right; }
+    table.lines tfoot td { font-weight: bold; background: #f9f9f9; }
+    table.lines tfoot tr:last-child td { font-size: 13px; background: #eef; }
+
+    .totals-box { width: 280px; margin-left: auto; border: 1px solid #ddd; }
+    .totals-box tr td { padding: 4px 10px; }
+    .totals-box tr:last-child td { font-weight: bold; background: #eef; font-size: 13px; }
+
+    .notes { background: #fafafa; border: 1px solid #ddd; padding: 8px; font-size: 10px; margin-top: 8px; }
+    .footer { margin-top: 24px; font-size: 10px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  &nbsp;
+  <a href="{% url 'sales:voucher_detail' voucher.pk %}">← Volver</a>
+</div>
+
+<div class="doc-header">
+  <div class="company-info">
+    {% if company %}
+    <h1>{{ company.name }}</h1>
+    <p>RUC: {{ company.ruc }}</p>
+    {% if company.address %}<p>{{ company.address }}</p>{% endif %}
+    {% if company.phone %}<p>Tel: {{ company.phone }}</p>{% endif %}
+    {% if company.email %}<p>{{ company.email }}</p>{% endif %}
+    {% else %}
+    <h1>EMPRESA</h1>
+    {% endif %}
+  </div>
+  <div class="doc-box">
+    <div class="doc-type">
+      {% if voucher.voucher_type == "01" %}FACTURA ELECTRÓNICA
+      {% elif voucher.voucher_type == "03" %}BOLETA DE VENTA
+      {% elif voucher.voucher_type == "07" %}NOTA DE CRÉDITO
+      {% elif voucher.voucher_type == "08" %}NOTA DE DÉBITO
+      {% else %}COMPROBANTE{% endif %}
+    </div>
+    <div class="doc-num">{{ voucher.series_code }}-{{ voucher.number|default:"BORRADOR" }}</div>
+    <div style="margin-top:6px;font-size:10px;">{{ voucher.issue_date|date:"d/m/Y" }}</div>
+    <div style="margin-top:4px;font-size:10px;font-weight:bold;">
+      {% if voucher.status == "ISSUED" %}EMITIDO
+      {% elif voucher.status == "DRAFT" %}BORRADOR
+      {% elif voucher.status == "VOIDED" %}ANULADO
+      {% else %}{{ voucher.status }}{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Cliente</div>
+  <div class="info-row"><span class="info-label">Razón Social:</span><span>{{ voucher.customer_legal_name }}</span></div>
+  <div class="info-row"><span class="info-label">{{ voucher.customer_document_type }}:</span><span>{{ voucher.customer_document_number }}</span></div>
+  {% if voucher.customer_address %}
+  <div class="info-row"><span class="info-label">Dirección:</span><span>{{ voucher.customer_address }}</span></div>
+  {% endif %}
+</div>
+
+{% if voucher.reference_series %}
+<div class="section">
+  <div class="section-title">Referencia</div>
+  <div class="info-row"><span class="info-label">Comprobante:</span><span>{{ voucher.reference_series }}-{{ voucher.reference_number }}</span></div>
+  {% if voucher.note_reason_description %}
+  <div class="info-row"><span class="info-label">Motivo:</span><span>{{ voucher.note_reason_code }} — {{ voucher.note_reason_description }}</span></div>
+  {% endif %}
+</div>
+{% endif %}
+
+<table class="lines">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Código</th>
+      <th>Descripción</th>
+      <th>Unidad</th>
+      <th class="text-right">Cant.</th>
+      <th class="text-right">P. Unit.</th>
+      <th class="text-right">Desc.</th>
+      <th class="text-right">Val. Venta</th>
+      <th class="text-right">IGV</th>
+      <th class="text-right">Precio</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for line in voucher.lines.all %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ line.product.sku }}</td>
+      <td>
+        {{ line.product.name }}
+        {% if line.description %}<br><small>{{ line.description }}</small>{% endif %}
+      </td>
+      <td>{{ line.unit_code }}</td>
+      <td class="text-right">{{ line.quantity|floatformat:2 }}</td>
+      <td class="text-right">{{ line.unit_price|floatformat:4 }}</td>
+      <td class="text-right">{{ line.discount_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ line.subtotal|floatformat:2 }}</td>
+      <td class="text-right">{{ line.igv_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ line.total|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<table class="totals-box">
+  <tbody>
+    <tr>
+      <td>Op. Gravadas</td>
+      <td class="text-right">{{ voucher.currency }} {{ voucher.taxable_amount|floatformat:2 }}</td>
+    </tr>
+    {% if voucher.exempt_amount %}
+    <tr>
+      <td>Op. Exoneradas</td>
+      <td class="text-right">{{ voucher.currency }} {{ voucher.exempt_amount|floatformat:2 }}</td>
+    </tr>
+    {% endif %}
+    {% if voucher.unaffected_amount %}
+    <tr>
+      <td>Op. Inafectas</td>
+      <td class="text-right">{{ voucher.currency }} {{ voucher.unaffected_amount|floatformat:2 }}</td>
+    </tr>
+    {% endif %}
+    {% if voucher.total_discount %}
+    <tr>
+      <td>Dctos. globales</td>
+      <td class="text-right">- {{ voucher.currency }} {{ voucher.total_discount|floatformat:2 }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td>IGV (18%)</td>
+      <td class="text-right">{{ voucher.currency }} {{ voucher.igv_total|floatformat:2 }}</td>
+    </tr>
+    <tr>
+      <td>TOTAL A PAGAR</td>
+      <td class="text-right">{{ voucher.currency }} {{ voucher.total|floatformat:2 }}</td>
+    </tr>
+  </tbody>
+</table>
+
+{% if voucher.notes %}
+<div class="notes"><strong>Notas:</strong> {{ voucher.notes }}</div>
+{% endif %}
+
+<div class="footer">Documento generado por APUDIG — {{ voucher.issue_date|date:"d/m/Y" }}</div>
+
+</body>
+</html>

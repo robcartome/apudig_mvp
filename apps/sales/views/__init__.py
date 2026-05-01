@@ -27,6 +27,17 @@ from .orders import (
     order_pdf,
     order_update,
 )
+from .vouchers import (
+    voucher_cancel,
+    voucher_create,
+    voucher_credit,
+    voucher_detail,
+    voucher_from_ord,
+    voucher_issue,
+    voucher_list,
+    voucher_pdf,
+    voucher_void,
+)
 from .pdf import quotation_pdf
 
 __all__ = [
@@ -40,5 +51,8 @@ __all__ = [
     # Orders
     "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
     "order_confirm", "order_cancel", "order_pdf",
+    # Vouchers
+    "voucher_list", "voucher_create", "voucher_from_ord", "voucher_detail",
+    "voucher_issue", "voucher_void", "voucher_cancel", "voucher_credit", "voucher_pdf",
 ]
 

@@ -89,7 +89,7 @@
               <ul class="navbar-nav ps-lg-3">
                 <li class="nav-item"><a class="nav-link {% if 'cotizaciones' in request.path %}active{% endif %}" href="{% url 'sales:quotation_list' %}">Cotizaciones</a></li>
                 <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name|slice:':6' == 'order_' %}active{% endif %}" href="{% url 'sales:order_list' %}">Órdenes de Venta</a></li>
-                <li class="nav-item"><a class="nav-link" href="#">Comprobantes</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'sales:voucher_list' %}">Comprobantes</a></li>
                 <li class="nav-item"><a class="nav-link {% if 'series' in request.path %}active{% endif %}" href="{% url 'sales:series_list' %}">Series documentales</a></li>
                 <li class="nav-item"><a class="nav-link {% if 'tipos-documento' in request.path %}active{% endif %}" href="{% url 'sales:doctype_list' %}">Tipos de documento</a></li>
               </ul>
