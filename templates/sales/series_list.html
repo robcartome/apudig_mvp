@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Series documentales — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Series documentales</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Series documentales</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'sales:series_create' %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-plus me-1"></i>Nueva serie
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card">
+  <div class="card-header">
+    <form method="get" class="ms-auto">
+      <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:200px">
+        <option value="">Todos los tipos</option>
+        {% for code, label in type_choices %}
+        <option value="{{ code }}" {% if voucher_type == code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Serie</th>
+          <th>Tipo</th>
+          <th>Sucursal</th>
+          <th class="text-end">Correlativo actual</th>
+          <th class="text-center">Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in page_obj %}
+        <tr>
+          <td class="fw-semibold">{{ obj.series }}</td>
+          <td class="text-muted small">{{ obj.get_voucher_type_display }}</td>
+          <td class="text-muted small">{{ obj.store.name|default:"(todas las sucursales)" }}</td>
+          <td class="text-end text-muted small">{{ obj.current_number }}</td>
+          <td class="text-center">
+            {% if obj.active %}
+            <span class="badge bg-success-lt">Activa</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">Inactiva</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'sales:series_update' obj.pk %}" class="btn btn-sm btn-outline-secondary me-1">
+              <i class="ti ti-edit"></i>
+            </a>
+            <form method="post" action="{% url 'sales:series_toggle' obj.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm {% if obj.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                      title="{% if obj.active %}Desactivar{% else %}Activar{% endif %}">
+                <i class="ti ti-{% if obj.active %}toggle-right{% else %}toggle-left{% endif %}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">No hay series configuradas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">{% include "partials/pagination.html" %}</div>
+</div>
+{% endblock %}

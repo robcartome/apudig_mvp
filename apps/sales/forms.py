@@ -1,29 +1,184 @@
 """
 sales/forms.py — Formularios del módulo de ventas.
 """
+from decimal import Decimal
+
 from django import forms
 
-from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SalesQuotationLine
+from apps.companies.models import Store
+from apps.inventory.models import Product
+from apps.partners.models import CoreCustomer
+
+from .models import (
+    BusinessDocumentType,
+    DocumentSeries,
+    SalesQuotation,
+    SalesQuotationLine,
+    TAX_TYPE_CHOICES,
+    VOUCHER_TYPE_CHOICES,
+    DOC_CATEGORY_CHOICES,
+)
+
+# ── Widget constants ──────────────────────────────────────────────────────────
+
+_text = {"class": "form-control"}
+_select = {"class": "form-select"}
+_check = {"class": "form-check-input"}
+_date = {"class": "form-control", "type": "date"}
+_textarea = {"class": "form-control", "rows": 3}
 
 
 class DocumentSeriesForm(forms.ModelForm):
+    """Formulario para crear/editar una serie documental."""
+
+    def __init__(self, *args, company_id=None, store_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if company_id:
+            self.fields["store"].queryset = Store.objects.filter(
+                company_id=company_id, active=True
+            ).order_by("name")
+        self.fields["voucher_type"].widget.attrs.update(_select)
+        self.fields["series"].widget.attrs.update(_text)
+        self.fields["store"].widget.attrs.update(_select)
+        self.fields["active"].widget.attrs.update(_check)
+
     class Meta:
         model = DocumentSeries
-        fields = ("company", "store", "voucher_type", "series", "active")
+        fields = ("store", "voucher_type", "series", "active")
+
+    def clean_series(self):
+        return self.cleaned_data["series"].upper().strip()
 
 
-class QuotationHeaderForm(forms.ModelForm):
+class BusinessDocumentTypeForm(forms.ModelForm):
+    """Formulario para tipos de documento comercial."""
+
     class Meta:
-        model = SalesQuotation
+        model = BusinessDocumentType
         fields = (
-            "store",
-            "customer",
-            "issue_date",
-            "valid_until",
-            "currency",
-            "notes",
+            "code",
+            "name",
+            "category",
+            "is_sunat",
+            "sunat_code",
+            "affects_stock",
+            "affects_accounting",
+            "active",
         )
         widgets = {
-            "issue_date": forms.DateInput(attrs={"type": "date"}),
-            "valid_until": forms.DateInput(attrs={"type": "date"}),
+            "code": forms.TextInput(attrs=_text),
+            "name": forms.TextInput(attrs=_text),
+            "category": forms.Select(attrs=_select),
+            "sunat_code": forms.TextInput(attrs=_text),
+            "is_sunat": forms.CheckboxInput(attrs=_check),
+            "affects_stock": forms.CheckboxInput(attrs=_check),
+            "affects_accounting": forms.CheckboxInput(attrs=_check),
+            "active": forms.CheckboxInput(attrs=_check),
         }
+
+    def clean_code(self):
+        return self.cleaned_data["code"].upper().strip()
+
+
+# ── Cotizaciones ──────────────────────────────────────────────────────────────
+
+class QuotationHeaderForm(forms.ModelForm):
+    """Cabecera de cotización — campos editables (sin totales ni número de serie)."""
+
+    def __init__(self, *args, company_id=None, store_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
+        self.fields["customer"].widget.attrs.update(_select)
+        if company_id and store_id:
+            self.fields["series"].queryset = DocumentSeries.objects.filter(
+                company_id=company_id,
+                store_id=store_id,
+                voucher_type="COT",
+                active=True,
+            )
+        self.fields["series"].widget.attrs.update(_select)
+        self.fields["store"].widget.attrs.update(_select)
+        self.fields["currency"].widget.attrs.update(_select)
+        self.fields["notes"].widget.attrs.update(_textarea)
+        self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
+        self.fields["valid_until"].widget.attrs.update({"class": "form-control", "type": "date"})
+
+    class Meta:
+        model = SalesQuotation
+        fields = ("store", "customer", "series", "issue_date", "valid_until", "currency", "notes", "internal_reference")
+        widgets = {
+            "internal_reference": forms.TextInput(attrs=_text),
+            "currency": forms.Select(
+                choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+                attrs=_select,
+            ),
+        }
+
+
+class QuotationLineForm(forms.Form):
+    """Línea individual de cotización (usado en formset)."""
+
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),  # noqa: E501
+        empty_label="— Seleccionar producto —",
+        widget=forms.Select(attrs=_select),
+        error_messages={"required": "Seleccione un producto."},
+    )
+    description = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.TextInput(attrs=_text),
+    )
+    quantity = forms.DecimalField(
+        min_value=Decimal("0.0001"),
+        max_digits=14,
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.0001", "min": "0.0001"}),
+    )
+    unit_price = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=14,
+        decimal_places=6,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0"}),
+    )
+    discount_amount = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=14,
+        decimal_places=2,
+        required=False,
+        initial=Decimal("0"),
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
+    )
+    tax_type = forms.ChoiceField(
+        choices=TAX_TYPE_CHOICES,
+        initial="10",
+        widget=forms.Select(attrs=_select),
+    )
+    igv_rate = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=5,
+        decimal_places=2,
+        initial=Decimal("18"),
+        required=False,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
+    )
+    memo = forms.CharField(
+        max_length=1000,
+        required=False,
+        widget=forms.TextInput(attrs=_text),
+    )
+
+    def clean_discount_amount(self):
+        return self.cleaned_data.get("discount_amount") or Decimal("0")
+
+    def clean_igv_rate(self):
+        return self.cleaned_data.get("igv_rate") or Decimal("18")
+
+
+QuotationLineFormSet = forms.formset_factory(
+    QuotationLineForm,
+    extra=1,
+    min_num=1,
+    validate_min=True,
+    can_delete=True,
+)

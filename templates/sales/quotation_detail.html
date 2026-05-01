@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Cotización {{ quotation.series_code }}-{{ quotation.number|stringformat:"08d" }} — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Cotización {{ quotation.series_code }}-{{ quotation.number|stringformat:"08d" }}</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'sales:quotation_list' %}">Cotizaciones</a></li>
+          <li class="breadcrumb-item active">{{ quotation.series_code }}-{{ quotation.number|stringformat:"08d" }}</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a href="{% url 'sales:quotation_pdf' quotation.pk %}" class="btn btn-sm btn-outline-secondary" target="_blank">
+        <i class="ti ti-printer me-1"></i>PDF
+      </a>
+      {% if quotation.status == "DRAFT" %}
+      <a href="{% url 'sales:quotation_update' quotation.pk %}" class="btn btn-sm btn-outline-primary">
+        <i class="ti ti-edit me-1"></i>Editar
+      </a>
+      <form method="post" action="{% url 'sales:quotation_approve' quotation.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-success">
+          <i class="ti ti-check me-1"></i>Aprobar
+        </button>
+      </form>
+      <form method="post" action="{% url 'sales:quotation_cancel' quotation.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-danger"
+                onclick="return confirm('¿Cancelar esta cotización?')">
+          <i class="ti ti-ban me-1"></i>Cancelar
+        </button>
+      </form>
+      {% elif quotation.status == "SENT" %}
+      <form method="post" action="{% url 'sales:quotation_approve' quotation.pk %}" class="d-inline">
+        {% csrf_token %}<button type="submit" class="btn btn-sm btn-success">Aprobar</button>
+      </form>
+      <form method="post" action="{% url 'sales:quotation_reject' quotation.pk %}" class="d-inline">
+        {% csrf_token %}<button type="submit" class="btn btn-sm btn-danger">Rechazar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="row">
+  {# Cabecera #}
+  <div class="col-md-8 mb-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-6 mb-2">
+            <div class="text-muted small">Estado</div>
+            {% if quotation.status == "DRAFT" %}<span class="badge bg-secondary-lt fs-5">Borrador</span>
+            {% elif quotation.status == "APPROVED" %}<span class="badge bg-success-lt fs-5">Aprobado</span>
+            {% elif quotation.status == "REJECTED" %}<span class="badge bg-danger-lt fs-5">Rechazado</span>
+            {% elif quotation.status == "CANCELLED" %}<span class="badge bg-muted-lt fs-5">Cancelado</span>
+            {% else %}<span class="badge bg-azure-lt fs-5">{{ quotation.get_status_display }}</span>{% endif %}
+          </div>
+          <div class="col-6 mb-2">
+            <div class="text-muted small">Moneda</div>
+            <div>{{ quotation.currency }}</div>
+          </div>
+          <div class="col-6 mb-2">
+            <div class="text-muted small">Emisión</div>
+            <div>{{ quotation.issue_date|date:"d/m/Y" }}</div>
+          </div>
+          <div class="col-6 mb-2">
+            <div class="text-muted small">Válido hasta</div>
+            <div>{{ quotation.valid_until|date:"d/m/Y"|default:"—" }}</div>
+          </div>
+          <div class="col-12 mb-2">
+            <div class="text-muted small">Referencia interna</div>
+            <div>{{ quotation.internal_reference|default:"—" }}</div>
+          </div>
+          {% if quotation.notes %}
+          <div class="col-12">
+            <div class="text-muted small">Notas</div>
+            <div class="text-wrap">{{ quotation.notes }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Cliente #}
+  <div class="col-md-4 mb-3">
+    <div class="card h-100">
+      <div class="card-header"><h4 class="card-title">Cliente</h4></div>
+      <div class="card-body">
+        <div class="fw-semibold">{{ quotation.customer_legal_name }}</div>
+        <div class="text-muted small">{{ quotation.customer_document_type }}: {{ quotation.customer_document_number }}</div>
+        {% if quotation.customer_address %}
+        <div class="text-muted small mt-1">{{ quotation.customer_address }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Líneas #}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Líneas</h3></div>
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Producto</th>
+          <th>Descripción</th>
+          <th class="text-end">Cantidad</th>
+          <th class="text-end">P. Unit.</th>
+          <th class="text-end">Desc.</th>
+          <th class="text-end">Subtotal</th>
+          <th class="text-end">IGV</th>
+          <th class="text-end">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in quotation.lines.all %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td>
+            <div class="fw-semibold">{{ line.product.name }}</div>
+            <div class="text-muted small">{{ line.product.unit.code|default:"" }}</div>
+          </td>
+          <td class="text-muted small">{{ line.description|default:"—" }}</td>
+          <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
+          <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
+          <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>
+          <td class="text-end">{{ line.subtotal|floatformat:2 }}</td>
+          <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>
+          <td class="text-end fw-semibold">{{ line.total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-semibold">
+        <tr>
+          <td colspan="6" class="text-end">Subtotal:</td>
+          <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.subtotal|floatformat:2 }}</td>
+        </tr>
+        <tr>
+          <td colspan="6" class="text-end">IGV (18%):</td>
+          <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.igv_total|floatformat:2 }}</td>
+        </tr>
+        <tr class="fs-5">
+          <td colspan="6" class="text-end">TOTAL:</td>
+          <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.total|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

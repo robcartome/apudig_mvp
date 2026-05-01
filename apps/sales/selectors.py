@@ -1,6 +1,8 @@
 """
 sales/selectors.py — Consultas de lectura del módulo de ventas.
 """
+from django.db.models import Q
+
 from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SaleOrder, Voucher
 
 
@@ -14,6 +16,37 @@ def get_quotations_for_store(store_id: str, status: str | None = None):
     if status:
         qs = qs.filter(status=status)
     return qs
+
+
+def search_quotations(store_id: str, query: str | None = None, status: str | None = None):
+    """
+    Búsqueda de cotizaciones por texto (nombre cliente, nº cotización) y/o estado.
+    """
+    qs = (
+        SalesQuotation.objects
+        .select_related("customer", "series")
+        .filter(store_id=store_id)
+        .order_by("-created_at")
+    )
+    if status:
+        qs = qs.filter(status=status)
+    if query:
+        qs = qs.filter(
+            Q(customer_legal_name__icontains=query)
+            | Q(customer_document_number__icontains=query)
+            | Q(series_code__icontains=query)
+        )
+    return qs
+
+
+def get_quotation_detail(pk):
+    """Retorna SalesQuotation con líneas y producto prefetcheados."""
+    return (
+        SalesQuotation.objects
+        .select_related("customer", "series", "store", "created_by")
+        .prefetch_related("lines__product__unit")
+        .get(pk=pk)
+    )
 
 
 def get_sale_orders_for_store(store_id: str, status: str | None = None):

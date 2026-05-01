@@ -87,9 +87,11 @@
             </a>
             <div class="collapse {% if '/sales/' in request.path %}show{% endif %}" id="sidebar-sales">
               <ul class="navbar-nav ps-lg-3">
-                <li class="nav-item"><a class="nav-link" href="#">Cotizaciones</a></li>
+                <li class="nav-item"><a class="nav-link {% if 'cotizaciones' in request.path %}active{% endif %}" href="{% url 'sales:quotation_list' %}">Cotizaciones</a></li>
                 <li class="nav-item"><a class="nav-link" href="#">Órdenes de Venta</a></li>
                 <li class="nav-item"><a class="nav-link" href="#">Comprobantes</a></li>
+                <li class="nav-item"><a class="nav-link {% if 'series' in request.path %}active{% endif %}" href="{% url 'sales:series_list' %}">Series documentales</a></li>
+                <li class="nav-item"><a class="nav-link {% if 'tipos-documento' in request.path %}active{% endif %}" href="{% url 'sales:doctype_list' %}">Tipos de documento</a></li>
               </ul>
             </div>
           </li>

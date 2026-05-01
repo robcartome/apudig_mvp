@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Tipos de documento — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Tipos de documento</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Tipos de documento</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'sales:doctype_create' %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-plus me-1"></i>Nuevo tipo
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Categoría</th>
+          <th class="text-center">SUNAT</th>
+          <th class="text-center">Afecta stock</th>
+          <th class="text-center">Afecta contab.</th>
+          <th class="text-center">Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in page_obj %}
+        <tr>
+          <td class="fw-semibold">{{ obj.code }}</td>
+          <td>{{ obj.name }}</td>
+          <td class="text-muted small">{{ obj.get_category_display }}</td>
+          <td class="text-center">
+            {% if obj.is_sunat %}
+            <span class="badge bg-blue-lt">{{ obj.sunat_code }}</span>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if obj.affects_stock %}<i class="ti ti-check text-success"></i>{% else %}<i class="ti ti-minus text-muted"></i>{% endif %}
+          </td>
+          <td class="text-center">
+            {% if obj.affects_accounting %}<i class="ti ti-check text-success"></i>{% else %}<i class="ti ti-minus text-muted"></i>{% endif %}
+          </td>
+          <td class="text-center">
+            {% if obj.active %}<span class="badge bg-success-lt">Activo</span>
+            {% else %}<span class="badge bg-secondary-lt">Inactivo</span>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'sales:doctype_update' obj.pk %}" class="btn btn-sm btn-outline-secondary">
+              <i class="ti ti-edit"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">No hay tipos de documento configurados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">{% include "partials/pagination.html" %}</div>
+</div>
+{% endblock %}
