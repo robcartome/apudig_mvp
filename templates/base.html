@@ -70,6 +70,10 @@
                   <a class="nav-link {% if 'stock' in request.resolver_match.url_name|default:'' %}active{% endif %}"
                      href="{% url 'inventory:stock_report' %}">Stock</a>
                 </li>
+                <li class="nav-item">
+                  <a class="nav-link {% if 'pricelist' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                     href="{% url 'inventory:pricelist_list' %}">Listas de precio</a>
+                </li>
               </ul>
             </div>
           </li>

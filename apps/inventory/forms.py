@@ -4,7 +4,7 @@ from django import forms
 
 from apps.partners.models import Carrier, CoreCustomer, DocumentType, Supplier
 
-from .models import Brand, Category, Movement, MovementDetail, Product, Unit, Warehouse
+from .models import Brand, Category, Movement, MovementDetail, PriceList, Product, ProductPrice, Unit, Warehouse
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -204,3 +204,40 @@ MovementDetailFormSet = forms.formset_factory(
     MovementDetailForm, extra=1, min_num=1, validate_min=True
 )
 
+
+# ── Listas de precio ──────────────────────────────────────────────────────────────────
+
+class PriceListForm(forms.ModelForm):
+    class Meta:
+        model = PriceList
+        fields = ("name", "description", "active")
+        widgets = {
+            "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Lista minorista"}),
+            "description": forms.TextInput(attrs={**_text, "placeholder": "Descripción (opcional)"}),
+            "active": forms.CheckboxInput(attrs=_check),
+        }
+
+
+class ProductPriceForm(forms.Form):
+    """Usado en el formset de precios dentro del detalle de lista."""
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),
+        empty_label="— Seleccionar producto —",
+        widget=forms.Select(attrs=_select),
+    )
+    amount = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=10,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
+    )
+    currency = forms.ChoiceField(
+        choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+        initial="PEN",
+        widget=forms.Select(attrs=_select),
+    )
+
+
+ProductPriceFormSet = forms.formset_factory(
+    ProductPriceForm, extra=1, min_num=0, validate_min=False, can_delete=True
+)

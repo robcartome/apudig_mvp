@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from .models import Movement, MovementDetail, StockByWarehouse, Warehouse
+from .models import Movement, MovementDetail, PriceList, ProductPrice, StockByWarehouse, Warehouse
 
 
 @transaction.atomic
@@ -109,3 +109,33 @@ def _update_stock_bulk(lines: list[dict], warehouse_id: str, delta: int) -> None
         )
         stock.quantity += Decimal(str(line["quantity"])) * delta
         stock.save(update_fields=["quantity"])
+
+
+# ── Listas de precio ──────────────────────────────────────────────────────────
+
+def set_product_price(pricelist_id, product_id, amount, currency: str = "PEN") -> ProductPrice:
+    """Crea o actualiza el precio de un producto en una lista de precios."""
+    obj, _ = ProductPrice.objects.update_or_create(
+        price_list_id=pricelist_id,
+        product_id=product_id,
+        defaults={"amount": amount, "currency": currency, "active": True},
+    )
+    return obj
+
+
+def delete_product_price(pricelist_id, product_id) -> None:
+    """Elimina el precio de un producto en una lista de precios (si existe)."""
+    ProductPrice.objects.filter(
+        price_list_id=pricelist_id, product_id=product_id
+    ).delete()
+
+
+@transaction.atomic
+def create_price_list(name: str, description: str = "", active: bool = True) -> PriceList:
+    return PriceList.objects.create(name=name, description=description, active=active)
+
+
+def toggle_price_list(pricelist: PriceList) -> PriceList:
+    pricelist.active = not pricelist.active
+    pricelist.save(update_fields=["active"])
+    return pricelist

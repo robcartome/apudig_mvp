@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}{{ pl.name }} — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">{{ pl.name }}</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'inventory:pricelist_list' %}">Listas de Precio</a></li>
+          <li class="breadcrumb-item active">{{ pl.name }}</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a href="{% url 'inventory:pricelist_update' pl.pk %}" class="btn btn-outline-primary btn-sm">
+        <i class="ti ti-edit me-1"></i>Editar
+      </a>
+      <form method="post" action="{% url 'inventory:pricelist_toggle' pl.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-secondary btn-sm">
+          {% if pl.active %}
+          <i class="ti ti-toggle-right me-1 text-success"></i>Activa
+          {% else %}
+          <i class="ti ti-toggle-left me-1 text-muted"></i>Inactiva
+          {% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+{# ── Info ── #}
+<div class="card mb-3">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-3 text-muted">Nombre</dt>
+      <dd class="col-9">{{ pl.name }}</dd>
+      {% if pl.description %}
+      <dt class="col-3 text-muted">Descripción</dt>
+      <dd class="col-9">{{ pl.description }}</dd>
+      {% endif %}
+      <dt class="col-3 text-muted">Estado</dt>
+      <dd class="col-9">
+        {% if pl.active %}<span class="badge bg-success-lt">Activa</span>
+        {% else %}<span class="badge bg-secondary-lt">Inactiva</span>{% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{# ── Precios actuales ── #}
+<div class="card mb-3">
+  <div class="card-header">
+    <h3 class="card-title">Precios asignados</h3>
+    <span class="card-subtitle text-muted ms-2">{{ pl.product_prices.count }} producto(s)</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter card-table">
+      <thead class="table-light">
+        <tr>
+          <th>Producto</th>
+          <th>SKU</th>
+          <th>Unidad</th>
+          <th class="text-end">Precio</th>
+          <th>Moneda</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pp in pl.product_prices.all %}
+        <tr>
+          <td>{{ pp.product.name }}</td>
+          <td class="text-muted small">{{ pp.product.sku }}</td>
+          <td class="text-muted small">{{ pp.product.unit.code }}</td>
+          <td class="text-end fw-semibold">{{ pp.amount|floatformat:2 }}</td>
+          <td class="text-muted small">{{ pp.currency }}</td>
+          <td class="text-end">
+            <form method="post" action="{% url 'inventory:pricelist_del_price' pl.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="product_id" value="{{ pp.product.pk }}">
+              <button type="submit" class="btn btn-sm btn-ghost-danger"
+                      onclick="return confirm('¿Eliminar precio de {{ pp.product.name }}?')">
+                <i class="ti ti-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-3">No hay precios asignados aún.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Agregar precios en bulk ── #}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Agregar / actualizar precios</h3>
+  </div>
+  <div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ formset.management_form }}
+
+      <div class="table-responsive">
+        <table class="table table-sm" id="prices-table">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width:220px">Producto</th>
+              <th style="width:120px">Precio</th>
+              <th style="width:110px">Moneda</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="prices-body">
+            {% for pf in formset %}
+            <tr class="price-row">
+              <td>
+                {{ pf.product }}
+                {% if pf.product.errors %}<div class="text-danger small">{{ pf.product.errors.0 }}</div>{% endif %}
+              </td>
+              <td>{{ pf.amount }}</td>
+              <td>{{ pf.currency }}</td>
+              <td>
+                {% if pf.DELETE %}<label class="d-none">{{ pf.DELETE }}</label>{% endif %}
+                <button type="button" class="btn btn-sm btn-ghost-danger remove-row">
+                  <i class="ti ti-trash"></i>
+                </button>
+                {{ pf.id }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="button" id="add-price" class="btn btn-sm btn-outline-primary">
+          <i class="ti ti-plus me-1"></i>Agregar fila
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="ti ti-device-floppy me-1"></i>Guardar precios
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('add-price').addEventListener('click', function () {
+  const tbody = document.getElementById('prices-body');
+  const rows = tbody.querySelectorAll('.price-row');
+  const totalForms = document.getElementById('id_prices-TOTAL_FORMS');
+  const idx = parseInt(totalForms.value);
+
+  const template = rows[rows.length - 1].cloneNode(true);
+  template.querySelectorAll('input, select, textarea').forEach(el => {
+    el.name = el.name.replace(/-\d+-/, `-${idx}-`);
+    el.id = el.id.replace(/-\d+-/, `-${idx}-`);
+    if (el.type !== 'hidden') el.value = '';
+    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+  });
+  tbody.appendChild(template);
+  totalForms.value = idx + 1;
+
+  template.querySelector('.remove-row')?.addEventListener('click', removeRow);
+});
+
+document.querySelectorAll('.remove-row').forEach(btn => btn.addEventListener('click', removeRow));
+
+function removeRow(e) {
+  const row = e.currentTarget.closest('tr');
+  const deleteInput = row.querySelector('input[type=checkbox][name$="-DELETE"]');
+  if (deleteInput) {
+    deleteInput.checked = true;
+    row.style.opacity = '0.3';
+  } else {
+    row.remove();
+  }
+}
+</script>
+{% endblock %}

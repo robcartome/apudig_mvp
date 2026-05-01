@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Listas de Precio — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Listas de Precio</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Listas de Precio</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'inventory:pricelist_create' %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-plus me-1"></i>Nueva lista
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+               placeholder="Buscar por nombre o descripción…">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
+        <a href="{% url 'inventory:pricelist_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Descripción</th>
+          <th class="text-center">Estado</th>
+          <th class="text-center"># Productos</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pl in page_obj %}
+        <tr>
+          <td class="fw-semibold">
+            <a href="{% url 'inventory:pricelist_detail' pl.pk %}">{{ pl.name }}</a>
+          </td>
+          <td class="text-muted small">{{ pl.description }}</td>
+          <td class="text-center">
+            {% if pl.active %}
+            <span class="badge bg-success-lt">Activa</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">Inactiva</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-muted">{{ pl.product_prices.count }}</td>
+          <td class="text-end">
+            <a href="{% url 'inventory:pricelist_detail' pl.pk %}"
+               class="btn btn-sm btn-ghost-secondary me-1" title="Ver detalle">
+              <i class="ti ti-eye"></i>
+            </a>
+            <a href="{% url 'inventory:pricelist_update' pl.pk %}"
+               class="btn btn-sm btn-outline-primary me-1" title="Editar">
+              <i class="ti ti-edit"></i>
+            </a>
+            <form method="post" action="{% url 'inventory:pricelist_toggle' pl.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary" title="Toggle activo">
+                {% if pl.active %}<i class="ti ti-toggle-right text-success"></i>
+                {% else %}<i class="ti ti-toggle-left text-muted"></i>{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">No se encontraron listas de precio.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer d-flex align-items-center">
+    <p class="m-0 text-muted">
+      Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} listas
+    </p>
+    <ul class="pagination m-0 ms-auto">
+      {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}">ant</a></li>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}">sig</a></li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -14,6 +14,14 @@ from .operations import (
     stock_report,
     transfer_create,
 )
+from .pricelists import (
+    pricelist_create,
+    pricelist_del_price,
+    pricelist_detail,
+    pricelist_list,
+    pricelist_toggle,
+    pricelist_update,
+)
 
 __all__ = [
     "brand_create", "brand_delete", "brand_list", "brand_update",
@@ -24,4 +32,6 @@ __all__ = [
     "stock_report",
     "movement_list", "movement_detail",
     "entry_create", "exit_create", "transfer_create",
+    "pricelist_list", "pricelist_create", "pricelist_detail", "pricelist_update",
+    "pricelist_toggle", "pricelist_del_price",
 ]

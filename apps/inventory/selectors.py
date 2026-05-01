@@ -3,7 +3,7 @@ inventory/selectors.py — Consultas de lectura de inventario.
 """
 from django.db.models import Q
 
-from .models import Brand, Category, Movement, Product, StockByWarehouse, Unit, Warehouse
+from .models import Brand, Category, Movement, PriceList, Product, ProductPrice, StockByWarehouse, Unit, Warehouse
 
 
 # ── Maestros ──────────────────────────────────────────────────────────────────
@@ -79,6 +79,40 @@ def search_products(query: str, active_only: bool = False):
             Q(name__icontains=query) | Q(sku__icontains=query) | Q(barcode__icontains=query)
         )
     return qs
+
+
+# ── Listas de precio ─────────────────────────────────────────────────────────
+
+def get_price_lists(active_only: bool = False):
+    qs = PriceList.objects.all()
+    if active_only:
+        qs = qs.filter(active=True)
+    return qs.order_by("name")
+
+
+def search_price_lists(query: str, active_only: bool = False):
+    qs = get_price_lists(active_only=active_only)
+    if query:
+        qs = qs.filter(Q(name__icontains=query) | Q(description__icontains=query))
+    return qs
+
+
+def get_pricelist_detail(pk):
+    """PriceList con sus precios prefetchados (product + unit)."""
+    return PriceList.objects.prefetch_related(
+        "product_prices__product__unit",
+        "product_prices__product__category",
+    ).get(pk=pk)
+
+
+def get_product_price(pricelist_id, product_id):
+    """Retorna ProductPrice o None."""
+    try:
+        return ProductPrice.objects.select_related("product", "price_list").get(
+            price_list_id=pricelist_id, product_id=product_id
+        )
+    except ProductPrice.DoesNotExist:
+        return None
 
 
 # ── Stock ─────────────────────────────────────────────────────────────────────

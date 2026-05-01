@@ -1,18 +1,33 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
-from .services import get_user_accessible_companies, set_active_session
+from .models import Company, Store, UserCompanyAccess
 
 
 @login_required
 def select_company(request):
-    accesses = get_user_accessible_companies(request.user)
+    accesses = (
+        UserCompanyAccess.objects.select_related("company", "store")
+        .filter(user=request.user)
+        .order_by("-is_default", "company__name")
+    )
 
     if request.method == "POST":
         access_id = request.POST.get("access_id")
-        selected = next((a for a in accesses if a.id == access_id), None)
-        if selected:
-            set_active_session(request, selected)
-            return redirect("dashboard")
+        selected = get_object_or_404(accesses, id=access_id)
+        request.session["active_company_id"] = str(selected.company_id)
+        request.session["active_store_id"] = str(selected.store_id) if selected.store_id else None
+        return redirect("dashboard")
 
-    return render(request, "web/select_company.html", {"accesses": accesses})
+    default_company = Company.objects.filter(id=request.session.get("active_company_id")).first()
+    default_store = Store.objects.filter(id=request.session.get("active_store_id")).first()
+
+    return render(
+        request,
+        "web/select_company.html",
+        {
+            "accesses": accesses,
+            "default_company": default_company,
+            "default_store": default_store,
+        },
+    )

@@ -5,6 +5,8 @@ from .views import (
     category_create, category_delete, category_list, category_update,
     entry_create, exit_create,
     movement_detail, movement_list,
+    pricelist_create, pricelist_del_price, pricelist_detail,
+    pricelist_list, pricelist_toggle, pricelist_update,
     product_create, product_delete, product_list, product_update,
     stock_report,
     transfer_create,
@@ -54,4 +56,12 @@ urlpatterns = [
     path("productos/nuevo/", product_create, name="product_create"),
     path("productos/<uuid:pk>/editar/", product_update, name="product_update"),
     path("productos/<uuid:pk>/eliminar/", product_delete, name="product_delete"),
+
+    # Price lists
+    path("listas-precio/", pricelist_list, name="pricelist_list"),
+    path("listas-precio/nueva/", pricelist_create, name="pricelist_create"),
+    path("listas-precio/<uuid:pk>/", pricelist_detail, name="pricelist_detail"),
+    path("listas-precio/<uuid:pk>/editar/", pricelist_update, name="pricelist_update"),
+    path("listas-precio/<uuid:pk>/toggle/", pricelist_toggle, name="pricelist_toggle"),
+    path("listas-precio/<uuid:pk>/precio/eliminar/", pricelist_del_price, name="pricelist_del_price"),
 ]
