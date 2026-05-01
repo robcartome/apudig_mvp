@@ -17,6 +17,16 @@ from .quotations import (
     quotation_reject,
     quotation_update,
 )
+from .orders import (
+    order_cancel,
+    order_confirm,
+    order_create,
+    order_detail,
+    order_from_quot,
+    order_list,
+    order_pdf,
+    order_update,
+)
 from .pdf import quotation_pdf
 
 __all__ = [
@@ -27,5 +37,8 @@ __all__ = [
     "quotation_list", "quotation_create", "quotation_detail", "quotation_update",
     "quotation_approve", "quotation_reject", "quotation_cancel",
     "quotation_pdf",
+    # Orders
+    "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
+    "order_confirm", "order_cancel", "order_pdf",
 ]
 

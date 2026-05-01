@@ -16,6 +16,14 @@ from .views import (
     quotation_pdf,
     quotation_reject,
     quotation_update,
+    order_cancel,
+    order_confirm,
+    order_create,
+    order_detail,
+    order_from_quot,
+    order_list,
+    order_pdf,
+    order_update,
 )
 
 app_name = "sales"
@@ -39,4 +47,13 @@ urlpatterns = [
     path("cotizaciones/<uuid:pk>/rechazar/", quotation_reject, name="quotation_reject"),
     path("cotizaciones/<uuid:pk>/cancelar/", quotation_cancel, name="quotation_cancel"),
     path("cotizaciones/<uuid:pk>/pdf/", quotation_pdf, name="quotation_pdf"),
+    path("cotizaciones/<uuid:pk>/crear-orden/", order_from_quot, name="order_from_quot"),
+    # Órdenes de venta
+    path("ordenes/", order_list, name="order_list"),
+    path("ordenes/nueva/", order_create, name="order_create"),
+    path("ordenes/<uuid:pk>/", order_detail, name="order_detail"),
+    path("ordenes/<uuid:pk>/editar/", order_update, name="order_update"),
+    path("ordenes/<uuid:pk>/confirmar/", order_confirm, name="order_confirm"),
+    path("ordenes/<uuid:pk>/cancelar/", order_cancel, name="order_cancel"),
+    path("ordenes/<uuid:pk>/pdf/", order_pdf, name="order_pdf"),
 ]

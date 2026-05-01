@@ -52,13 +52,42 @@ def get_quotation_detail(pk):
 def get_sale_orders_for_store(store_id: str, status: str | None = None):
     qs = (
         SaleOrder.objects
-        .select_related("customer", "document_type")
+        .select_related("customer", "document_type", "series")
         .filter(store_id=store_id)
         .order_by("-created_at")
     )
     if status:
         qs = qs.filter(status=status)
     return qs
+
+
+def search_orders(store_id: str, query: str | None = None, status: str | None = None):
+    qs = (
+        SaleOrder.objects
+        .select_related("customer", "document_type", "series")
+        .filter(store_id=store_id)
+        .order_by("-created_at")
+    )
+    if status:
+        qs = qs.filter(status=status)
+    if query:
+        qs = qs.filter(
+            Q(customer_legal_name__icontains=query)
+            | Q(customer_document_number__icontains=query)
+            | Q(series_code__icontains=query)
+            | Q(number__icontains=query)
+        )
+    return qs
+
+
+def get_order_detail(pk):
+    """Retorna SaleOrder con líneas y producto prefetcheados."""
+    return (
+        SaleOrder.objects
+        .select_related("customer", "document_type", "series", "store", "created_by", "quotation")
+        .prefetch_related("lines__product__unit")
+        .get(pk=pk)
+    )
 
 
 def get_series_for_store(company_id: str, store_id: str, voucher_type: str | None = None):

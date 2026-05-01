@@ -14,6 +14,7 @@ from .models import (
     DocumentSeries,
     SalesQuotation,
     SalesQuotationLine,
+    SaleOrder,
     TAX_TYPE_CHOICES,
     VOUCHER_TYPE_CHOICES,
     DOC_CATEGORY_CHOICES,
@@ -177,6 +178,119 @@ class QuotationLineForm(forms.Form):
 
 QuotationLineFormSet = forms.formset_factory(
     QuotationLineForm,
+    extra=1,
+    min_num=1,
+    validate_min=True,
+    can_delete=True,
+)
+
+
+# ── Órdenes de venta ──────────────────────────────────────────────────────────
+
+class SaleOrderHeaderForm(forms.ModelForm):
+    """Cabecera de orden de venta."""
+
+    def __init__(self, *args, company_id=None, store_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
+        self.fields["customer"].widget.attrs.update(_select)
+        self.fields["document_type"].queryset = BusinessDocumentType.objects.filter(active=True).order_by("code")
+        self.fields["document_type"].widget.attrs.update(_select)
+        if company_id and store_id:
+            self.fields["series"].queryset = DocumentSeries.objects.filter(
+                company_id=company_id,
+                store_id=store_id,
+                voucher_type="OV",
+                active=True,
+            )
+        self.fields["series"].widget.attrs.update(_select)
+        self.fields["store"].widget.attrs.update(_select)
+        self.fields["currency"].widget.attrs.update(_select)
+        self.fields["notes"].widget.attrs.update(_textarea)
+        self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
+        self.fields["due_date"].widget.attrs.update({"class": "form-control", "type": "date"})
+        self.fields["payment_term_days"].widget.attrs.update(_text)
+        self.fields["internal_reference"].widget.attrs.update(_text)
+
+    class Meta:
+        model = SaleOrder
+        fields = (
+            "store",
+            "customer",
+            "document_type",
+            "series",
+            "issue_date",
+            "due_date",
+            "currency",
+            "payment_term_days",
+            "notes",
+            "internal_reference",
+        )
+        widgets = {
+            "currency": forms.Select(
+                choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+                attrs=_select,
+            ),
+        }
+
+
+class SaleOrderLineForm(forms.Form):
+    """Línea individual de orden de venta (usado en formset)."""
+
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),
+        empty_label="— Seleccionar producto —",
+        widget=forms.Select(attrs=_select),
+        error_messages={"required": "Seleccione un producto."},
+    )
+    description = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.TextInput(attrs=_text),
+    )
+    quantity = forms.DecimalField(
+        min_value=Decimal("0.0001"),
+        max_digits=14,
+        decimal_places=4,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.0001", "min": "0.0001"}),
+    )
+    unit_price = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=14,
+        decimal_places=6,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0"}),
+    )
+    discount_amount = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=14,
+        decimal_places=2,
+        required=False,
+        initial=Decimal("0"),
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
+    )
+    tax_type = forms.ChoiceField(
+        choices=TAX_TYPE_CHOICES,
+        initial="10",
+        widget=forms.Select(attrs=_select),
+    )
+    igv_rate = forms.DecimalField(
+        min_value=Decimal("0"),
+        max_digits=5,
+        decimal_places=2,
+        initial=Decimal("18"),
+        required=False,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
+    )
+
+    def clean_discount_amount(self):
+        return self.cleaned_data.get("discount_amount") or Decimal("0")
+
+    def clean_igv_rate(self):
+        return self.cleaned_data.get("igv_rate") or Decimal("18")
+
+
+SaleOrderLineFormSet = forms.formset_factory(
+    SaleOrderLineForm,
     extra=1,
     min_num=1,
     validate_min=True,
