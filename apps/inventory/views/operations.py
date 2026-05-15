@@ -16,6 +16,7 @@ from ..selectors import (
     search_movements,
 )
 from ..services import register_entry, register_exit, register_transfer
+from ..services import delete_movement, update_movement
 
 
 def _require_auth(request):
@@ -87,6 +88,124 @@ def movement_detail(request, pk):
         from django.http import Http404
         raise Http404
     return render(request, "inventory/movement_detail.html", {"movement": movement})
+
+
+def _get_movement_for_store_or_404(pk, store_id):
+    return get_object_or_404(
+        Movement.objects.prefetch_related("details"),
+        pk=pk,
+        store_id=store_id,
+    )
+
+
+def _movement_forms(request, store_id, movement):
+    initial_lines = [
+        {
+            "product": d.product_id,
+            "quantity": d.quantity,
+            "unit_price": d.unit_price,
+        }
+        for d in movement.details.all()
+    ]
+
+    if movement.type == "TRANSFER":
+        form = MovementTransferForm(request.POST or None, store_id=store_id, instance=movement)
+    else:
+        form = MovementHeaderForm(
+            request.POST or None,
+            store_id=store_id,
+            movement_type=movement.type,
+            instance=movement,
+        )
+
+    formset = MovementDetailFormSet(request.POST or None, initial=initial_lines, prefix="lines")
+    return form, formset
+
+
+def movement_edit(request, pk):
+    r = _require_auth(request)
+    if r:
+        return r
+
+    store_id = _get_store_id(request)
+    movement = _get_movement_for_store_or_404(pk, store_id)
+    form, formset = _movement_forms(request, store_id, movement)
+
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        lines = _parse_lines(formset)
+        if not lines:
+            messages.error(request, "Debe agregar al menos un producto.")
+        else:
+            cd = form.cleaned_data
+            update_data = {
+                "date": cd["date"],
+                "reason": cd.get("reason", ""),
+                "reference_doc": cd.get("reference_doc", ""),
+            }
+
+            if movement.type == "TRANSFER":
+                update_data.update({
+                    "warehouse": None,
+                    "warehouse_origin": cd["warehouse_origin"],
+                    "warehouse_dest": cd["warehouse_dest"],
+                    "supplier": None,
+                    "customer": None,
+                    "document_type": None,
+                    "carrier": None,
+                })
+            elif movement.type == "ENTRY":
+                update_data.update({
+                    "warehouse": cd["warehouse"],
+                    "warehouse_origin": None,
+                    "warehouse_dest": None,
+                    "supplier": cd.get("supplier"),
+                    "customer": None,
+                    "document_type": cd.get("document_type"),
+                    "carrier": cd.get("carrier"),
+                })
+            elif movement.type == "EXIT":
+                update_data.update({
+                    "warehouse": cd["warehouse"],
+                    "warehouse_origin": None,
+                    "warehouse_dest": None,
+                    "supplier": None,
+                    "customer": cd.get("customer"),
+                    "document_type": cd.get("document_type"),
+                    "carrier": cd.get("carrier"),
+                })
+
+            update_movement(movement, lines=lines, **update_data)
+            messages.success(request, "Movimiento actualizado correctamente.")
+            return redirect("inventory:movement_list")
+
+    return render(request, "inventory/movement_form.html", {
+        "form": form,
+        "formset": formset,
+        "title": f"Editar {movement.get_type_display().lower()}",
+        "movement_type": movement.type,
+        "cancel_url": "inventory:movement_list",
+        "is_edit": True,
+        "movement": movement,
+    })
+
+
+def movement_delete(request, pk):
+    r = _require_auth(request)
+    if r:
+        return r
+
+    store_id = _get_store_id(request)
+    movement = _get_movement_for_store_or_404(pk, store_id)
+
+    if request.method == "POST":
+        delete_movement(movement)
+        messages.success(request, "Movimiento eliminado correctamente.")
+        return redirect("inventory:movement_list")
+
+    return render(request, "inventory/confirm_delete.html", {
+        "object": movement,
+        "cancel_url": "inventory:movement_list",
+    })
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -84,6 +84,33 @@ def register_transfer(
     return movement
 
 
+@transaction.atomic
+def update_movement(movement: Movement, *, lines: list[dict], **kwargs) -> Movement:
+    """
+    Actualiza un movimiento existente recalculando su impacto en stock.
+
+    El flujo es: revertir stock anterior -> actualizar cabecera y líneas -> aplicar stock nuevo.
+    """
+    movement = Movement.objects.select_for_update().get(pk=movement.pk)
+    _reverse_movement_stock(movement)
+    movement.details.all().delete()
+
+    for field, value in kwargs.items():
+        setattr(movement, field, value)
+    movement.save()
+
+    _apply_movement_stock(movement, lines)
+    return movement
+
+
+@transaction.atomic
+def delete_movement(movement: Movement) -> None:
+    """Elimina un movimiento revirtiendo primero su impacto de stock."""
+    movement = Movement.objects.select_for_update().get(pk=movement.pk)
+    _reverse_movement_stock(movement)
+    movement.delete()
+
+
 # ── Helpers internos ───────────────────────────────────────────────────────────
 
 def _create_details_and_update_stock(
@@ -98,6 +125,65 @@ def _create_details_and_update_stock(
             unit_price=line.get("unit_price", Decimal("0")),
         )
     _update_stock_bulk(lines, warehouse_id=wh_id, delta=delta)
+
+
+def _movement_lines(movement: Movement) -> list[dict]:
+    return [
+        {
+            "product_id": d.product_id,
+            "quantity": d.quantity,
+            "unit_price": d.unit_price,
+        }
+        for d in movement.details.all()
+    ]
+
+
+def _reverse_movement_stock(movement: Movement) -> None:
+    lines = _movement_lines(movement)
+    if not lines:
+        return
+
+    if movement.type == "ENTRY":
+        if movement.warehouse_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=-1)
+        return
+
+    if movement.type == "EXIT":
+        if movement.warehouse_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=+1)
+        return
+
+    if movement.type == "TRANSFER":
+        if movement.warehouse_origin_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_origin_id, delta=+1)
+        if movement.warehouse_dest_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_dest_id, delta=-1)
+
+
+def _apply_movement_stock(movement: Movement, lines: list[dict]) -> None:
+    for line in lines:
+        MovementDetail.objects.create(
+            movement=movement,
+            product_id=line["product_id"],
+            quantity=line["quantity"],
+            unit_price=line.get("unit_price", Decimal("0")),
+        )
+
+    if movement.type == "ENTRY":
+        if movement.warehouse_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=+1)
+        return
+
+    if movement.type == "EXIT":
+        if movement.warehouse_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=-1)
+        return
+
+    if movement.type == "TRANSFER":
+        if movement.warehouse_origin_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_origin_id, delta=-1)
+        if movement.warehouse_dest_id:
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_dest_id, delta=+1)
 
 
 def _update_stock_bulk(lines: list[dict], warehouse_id: str, delta: int) -> None:

@@ -28,11 +28,11 @@
 </div>
 
 <div class="card">
-  <div class="card-header d-flex align-items-center gap-3 flex-wrap">
-    {% include "partials/search_bar.html" with placeholder="Buscar por número, referencia o motivo..." %}
-    <form method="get" class="ms-auto">
+  <div class="card-header d-flex align-items-center gap-3 flex-wrap py-3">
+    {% include "partials/search_bar.html" with placeholder="Buscar por fecha, documento o operación..." %}
+    <form method="get" class="ms-auto d-flex gap-2 align-items-center">
       {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
-      <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:160px">
+      <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:180px">
         <option value="">Todos los tipos</option>
         {% for code, label in type_choices %}
         <option value="{{ code }}" {% if movement_type == code %}selected{% endif %}>{{ label }}</option>
@@ -40,50 +40,73 @@
       </select>
     </form>
   </div>
+
   <div class="table-responsive">
-    <table class="table table-vcenter table-hover card-table">
-      <thead>
+    <table class="table table-vcenter table-hover card-table mb-0">
+      <thead class="table-light">
         <tr>
-          <th>Tipo</th>
           <th>Fecha</th>
+          <th>Tipo</th>
           <th>Almacén</th>
-          <th>N° / Referencia</th>
-          <th>Contraparte</th>
-          <th class="text-center">Ítems</th>
-          <th></th>
+          <th>Operación</th>
+          <th>Socio de Negocio</th>
+          <th>Documento</th>
+          <th class="text-center" style="width:170px">Acciones</th>
         </tr>
       </thead>
-      <tbody>
+
+      <tbody class="small">
         {% for obj in page_obj %}
         <tr>
+          <td class="text-muted">{{ obj.date|date:"d/m/Y, H:i" }}</td>
+
           <td>
-            {% if obj.type == "ENTRY" %}<span class="badge bg-success-lt">Entrada</span>
-            {% elif obj.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
-            {% elif obj.type == "TRANSFER" %}<span class="badge bg-warning-lt">Transferencia</span>
-            {% else %}<span class="badge bg-secondary-lt">Ajuste</span>{% endif %}
+            {% if obj.type == "ENTRY" %}<span class="badge bg-green text-white">Entrada</span>
+            {% elif obj.type == "EXIT" %}<span class="badge bg-red text-white">Salida</span>
+            {% elif obj.type == "TRANSFER" %}<span class="badge bg-blue text-white">Transferencia</span>
+            {% else %}<span class="badge bg-yellow text-dark">Ajuste</span>{% endif %}
           </td>
-          <td class="text-muted small">{{ obj.date|date:"d/m/Y H:i" }}</td>
-          <td class="text-muted small">
+
+          <td class="text-muted">
             {% if obj.type == "TRANSFER" %}
-              {{ obj.warehouse_origin.name|default:"?" }} → {{ obj.warehouse_dest.name|default:"?" }}
+            {{ obj.warehouse_origin.name|default:"?" }} &gt; {{ obj.warehouse_dest.name|default:"?" }}
             {% else %}
-              {{ obj.warehouse.name|default:"—" }}
+            {{ obj.warehouse.name|default:"—" }}
             {% endif %}
           </td>
-          <td class="small">
-            {% if obj.number %}{{ obj.number }}{% endif %}
-            {% if obj.reference_doc %}<span class="text-muted">/ {{ obj.reference_doc }}</span>{% endif %}
-          </td>
-          <td class="small text-muted">
+
+          <td>{{ obj.reason|default:"-" }}</td>
+
+          <td>
             {% if obj.supplier %}{{ obj.supplier.name }}
             {% elif obj.customer %}{{ obj.customer.legal_name }}
-            {% else %}—{% endif %}
+            {% else %}OTROS{% endif %}
           </td>
-          <td class="text-center text-muted small">{{ obj.details.count }}</td>
-          <td>
-            <a href="{% url 'inventory:movement_detail' obj.pk %}" class="btn btn-sm btn-outline-secondary">
-              <i class="ti ti-eye"></i>
-            </a>
+
+          <td class="text-muted">
+            {% if obj.document_type %}{{ obj.document_type.name|default:obj.document_type.code }}{% else %}OTROS{% endif %}
+            {% if obj.series or obj.number %}
+            {{ obj.series|default:"0000" }}-{{ obj.number|default:"0" }}
+            {% else %}
+            0000-0
+            {% endif %}
+          </td>
+
+          <td class="text-center">
+            <div class="d-inline-flex gap-1">
+              <a href="{% url 'inventory:movement_detail' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Ver">
+                <i class="ti ti-eye"></i>
+              </a>
+              <a href="{% url 'inventory:movement_edit' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                <i class="ti ti-pencil"></i>
+              </a>
+              <form method="post" action="{% url 'inventory:movement_delete' obj.pk %}" onsubmit="return confirm('¿Eliminar este movimiento? Esta acción no se puede deshacer.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar">
+                  <i class="ti ti-trash"></i>
+                </button>
+              </form>
+            </div>
           </td>
         </tr>
         {% empty %}
@@ -96,6 +119,30 @@
       </tbody>
     </table>
   </div>
-  <div class="card-footer">{% include "partials/pagination.html" %}</div>
+
+  <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="text-muted small">
+      {% if page_obj.paginator.count %}
+      Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }}
+      {% else %}
+      Mostrando 0 resultados
+      {% endif %}
+    </div>
+    <div>
+      <div class="btn-group">
+        {% if page_obj.has_previous %}
+        <a class="btn btn-outline-secondary btn-sm" href="?{% if query %}q={{ query }}&{% endif %}{% if movement_type %}type={{ movement_type }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% else %}
+        <button class="btn btn-outline-secondary btn-sm" disabled>Anterior</button>
+        {% endif %}
+
+        {% if page_obj.has_next %}
+        <a class="btn btn-primary btn-sm" href="?{% if query %}q={{ query }}&{% endif %}{% if movement_type %}type={{ movement_type }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        {% else %}
+        <button class="btn btn-primary btn-sm" disabled>Siguiente</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

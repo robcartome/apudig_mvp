@@ -4,7 +4,7 @@ from .views import (
     brand_create, brand_delete, brand_list, brand_update,
     category_create, category_delete, category_list, category_update,
     entry_create, exit_create,
-    movement_detail, movement_list,
+    movement_delete, movement_detail, movement_edit, movement_list,
     pricelist_create, pricelist_del_price, pricelist_detail,
     pricelist_list, pricelist_toggle, pricelist_update,
     product_create, product_delete, product_list, product_update,
@@ -23,6 +23,8 @@ urlpatterns = [
     # Movements
     path("movimientos/", movement_list, name="movement_list"),
     path("movimientos/<uuid:pk>/", movement_detail, name="movement_detail"),
+    path("movimientos/<uuid:pk>/editar/", movement_edit, name="movement_edit"),
+    path("movimientos/<uuid:pk>/eliminar/", movement_delete, name="movement_delete"),
     path("movimientos/entrada/", entry_create, name="entry_create"),
     path("movimientos/salida/", exit_create, name="exit_create"),
     path("movimientos/transferencia/", transfer_create, name="transfer_create"),

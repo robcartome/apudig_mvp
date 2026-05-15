@@ -137,3 +137,42 @@ class MovementViewsTest(TestCase):
         mv = Movement.objects.first()
         resp = self.client.get(reverse("inventory:movement_detail", args=[mv.pk]))
         self.assertEqual(resp.status_code, 200)
+
+    # ── Movement edit/delete ─────────────────────────────────────────────────
+
+    def test_movement_edit_recalculates_stock(self):
+        self._post_movement(reverse("inventory:entry_create"))
+        movement = Movement.objects.get(type="ENTRY")
+
+        resp = self.client.post(reverse("inventory:movement_edit", args=[movement.pk]), {
+            "date": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+            "warehouse": str(self.warehouse.pk),
+            "reason": "Ajuste de entrada",
+            "reference_doc": "",
+            "supplier": "",
+            "customer": "",
+            "carrier": "",
+            "document_type": "",
+            "lines-TOTAL_FORMS": "1",
+            "lines-INITIAL_FORMS": "1",
+            "lines-MIN_NUM_FORMS": "1",
+            "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-product": str(self.product.pk),
+            "lines-0-quantity": "3",
+            "lines-0-unit_price": "10",
+        })
+
+        self.assertRedirects(resp, reverse("inventory:movement_list"))
+        stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity, Decimal("3"))
+
+    def test_movement_delete_reverts_stock(self):
+        self._post_movement(reverse("inventory:entry_create"))
+        movement = Movement.objects.get(type="ENTRY")
+
+        resp = self.client.post(reverse("inventory:movement_delete", args=[movement.pk]))
+        self.assertRedirects(resp, reverse("inventory:movement_list"))
+
+        stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity, Decimal("0"))
+        self.assertFalse(Movement.objects.filter(pk=movement.pk).exists())

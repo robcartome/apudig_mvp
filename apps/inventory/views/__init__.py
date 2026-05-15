@@ -8,6 +8,8 @@ from .masters import (
 )
 from .operations import (
     entry_create,
+    movement_delete,
+    movement_edit,
     exit_create,
     movement_detail,
     movement_list,
@@ -31,6 +33,7 @@ __all__ = [
     "warehouse_create", "warehouse_delete", "warehouse_list", "warehouse_update",
     "stock_report",
     "movement_list", "movement_detail",
+    "movement_edit", "movement_delete",
     "entry_create", "exit_create", "transfer_create",
     "pricelist_list", "pricelist_create", "pricelist_detail", "pricelist_update",
     "pricelist_toggle", "pricelist_del_price",
