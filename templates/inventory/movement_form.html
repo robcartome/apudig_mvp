@@ -1,6 +1,13 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ title }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{% static 'css/inventory/movement_form.css' %}">
+{% endblock extra_css %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -14,10 +21,10 @@
 
 <form method="post" novalidate id="movement-form">
 {% csrf_token %}
-<div class="row">
+<div class="row g-3">
 
-  <!-- Cabecera -->
-  <div class="col-md-5">
+  <!-- ── Cabecera ─────────────────────────────────────────────────────── -->
+  <div class="col-12">
     <div class="card mb-3">
       <div class="card-header">
         <h3 class="card-title">
@@ -28,69 +35,118 @@
           Cabecera
         </h3>
       </div>
-      <div class="card-body">
+      <div class="card-body movement-header">
         {% if form.non_field_errors %}
         <div class="alert alert-danger mb-3">
           {% for e in form.non_field_errors %}{{ e }}{% endfor %}
         </div>
         {% endif %}
 
-        <div class="mb-3">
-          <label class="form-label required">Fecha y hora</label>
-          {{ form.date }}
-          {% if form.date.errors %}<div class="text-danger small mt-1">{{ form.date.errors.0 }}</div>{% endif %}
-        </div>
+        <div class="row g-3">
 
-        {% if movement_type == "TRANSFER" %}
-        <div class="mb-3">
-          <label class="form-label required">Almacén origen</label>
-          {{ form.warehouse_origin }}
-          {% if form.warehouse_origin.errors %}<div class="text-danger small mt-1">{{ form.warehouse_origin.errors.0 }}</div>{% endif %}
-        </div>
-        <div class="mb-3">
-          <label class="form-label required">Almacén destino</label>
-          {{ form.warehouse_dest }}
-          {% if form.warehouse_dest.errors %}<div class="text-danger small mt-1">{{ form.warehouse_dest.errors.0 }}</div>{% endif %}
-        </div>
-        {% else %}
-        <div class="mb-3">
-          <label class="form-label required">Almacén</label>
-          {{ form.warehouse }}
-          {% if form.warehouse.errors %}<div class="text-danger small mt-1">{{ form.warehouse.errors.0 }}</div>{% endif %}
-        </div>
-        {% endif %}
+          {# ── Fila 1: Proveedor / Cliente (solo ENTRY / EXIT) ── #}
+          {% if movement_type == "ENTRY" %}
+          <div class="col-12">
+            <label class="form-label">Proveedor</label>
+            {{ form.supplier }}{# hidden #}
+            <select id="supplier-select" class="partner-select w-100"
+                    data-partner-url="{% url 'inventory:api_supplier_search' %}"
+                    data-hidden-id="{{ form.supplier.id_for_label }}"
+                    data-placeholder="Buscar por RUC o nombre…">
+              {% if form.instance.supplier_id %}
+              <option value="{{ form.instance.supplier_id }}" selected>{{ form.instance.supplier }}</option>
+              {% endif %}
+            </select>
+          </div>
+          {% elif movement_type == "EXIT" %}
+          <div class="col-12">
+            <label class="form-label">Cliente</label>
+            {{ form.customer }}{# hidden #}
+            <select id="customer-select" class="partner-select w-100"
+                    data-partner-url="{% url 'inventory:api_customer_search' %}"
+                    data-hidden-id="{{ form.customer.id_for_label }}"
+                    data-placeholder="Buscar por RUC o nombre…">
+              {% if form.instance.customer_id %}
+              <option value="{{ form.instance.customer_id }}" selected>{{ form.instance.customer }}</option>
+              {% endif %}
+            </select>
+          </div>
+          {% endif %}
 
-        {% if movement_type == "ENTRY" %}
-        <div class="mb-3">
-          <label class="form-label">Proveedor</label>
-          {{ form.supplier }}
-        </div>
-        {% endif %}
-        {% if movement_type == "EXIT" %}
-        <div class="mb-3">
-          <label class="form-label">Cliente</label>
-          {{ form.customer }}
-        </div>
-        {% endif %}
-        {% if movement_type in "ENTRY EXIT" %}
-        <div class="mb-3">
-          <label class="form-label">Tipo de documento</label>
-          {{ form.document_type }}
-        </div>
-        {% endif %}
+          {# ── Fila 2: Almacenes (TRANSFER) / Almacén + Doc (ENTRY/EXIT) ── #}
+          {% if movement_type == "TRANSFER" %}
+          <div class="col-12 col-md-6">
+            <label class="form-label required">Almacén origen</label>
+            {{ form.warehouse_origin }}
+            {% if form.warehouse_origin.errors %}<div class="text-danger small mt-1">{{ form.warehouse_origin.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label required">Almacén destino</label>
+            {{ form.warehouse_dest }}
+            {% if form.warehouse_dest.errors %}<div class="text-danger small mt-1">{{ form.warehouse_dest.errors.0 }}</div>{% endif %}
+          </div>
+          {% else %}
+          <div class="col-12 col-sm-6 col-lg-4">
+            <label class="form-label">Tipo de documento</label>
+            {{ form.document_type }}
+          </div>
+          <div class="col-6 col-sm-3 col-lg-4">
+            <label class="form-label">Serie</label>
+            {{ form.series }}
+          </div>
+          <div class="col-6 col-sm-3 col-lg-4">
+            <label class="form-label">Número</label>
+            {{ form.number }}
+          </div>
+          {% endif %}
 
-        <div class="mb-3">
-          <label class="form-label">Documento de referencia</label>
-          {{ form.reference_doc }}
-        </div>
-        <div class="mb-0">
-          <label class="form-label">Motivo / Observaciones</label>
-          {{ form.reason }}
+          {# ── Fila 3: Operación + Almacén (o solo Operación para TRANSFER) ── #}
+          <div class="col-12 col-md-6">
+            <label class="form-label">Operación</label>
+            <select id="id_reason_ui" name="reason" class="reason-select form-select"
+                    data-init="{{ form.instance.reason|default:'' }}">
+              {% if movement_type == "ENTRY" or movement_type == "ADJUSTMENT" %}
+              <option value="Compra">Compra</option>
+              <option value="Devolución">Devolución</option>
+              <option value="Préstamo recibido">Préstamo recibido</option>
+              <option value="Consumo interno">Consumo interno</option>
+              <option value="Ajuste">Ajuste</option>
+              <option value="Saldo inicial">Saldo inicial</option>
+              {% elif movement_type == "EXIT" %}
+              <option value="Venta">Venta</option>
+              <option value="Préstamo entregado">Préstamo entregado</option>
+              <option value="Consumo interno">Consumo interno</option>
+              <option value="Ajuste">Ajuste</option>
+              {% else %}{# TRANSFER #}
+              <option value="Traslado">Traslado</option>
+              <option value="Préstamo">Préstamo</option>
+              <option value="Reposición">Reposición</option>
+              {% endif %}
+            </select>
+          </div>
+          {% if movement_type != "TRANSFER" %}
+          <div class="col-12 col-md-6">
+            <label class="form-label required">Almacén</label>
+            {{ form.warehouse }}
+            {% if form.warehouse.errors %}<div class="text-danger small mt-1">{{ form.warehouse.errors.0 }}</div>{% endif %}
+          </div>
+          {% endif %}
+
+          {# ── Fila 4: Fecha + Referencia ── #}
+          <div class="col-12 col-md-6">
+            <label class="form-label required">Fecha y hora</label>
+            {{ form.date }}
+            {% if form.date.errors %}<div class="text-danger small mt-1">{{ form.date.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">Documento de referencia</label>
+            {{ form.reference_doc }}
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="d-grid gap-2">
+    <div class="movement-actions d-grid d-md-flex gap-2 mb-2">
       <button type="submit" class="btn btn-primary">
         {% if is_edit %}
         <i class="ti ti-edit me-1"></i>Guardar cambios
@@ -104,82 +160,174 @@
     </div>
   </div>
 
-  <!-- Líneas de detalle -->
-  <div class="col-md-7">
-    <div class="card mb-3">
-      <div class="card-header d-flex align-items-center">
-        <h3 class="card-title mb-0">Productos</h3>
-        <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="add-line">
-          <i class="ti ti-plus me-1"></i>Agregar línea
-        </button>
+  <!-- ── Detalle de productos ──────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">Detalle del Movimiento</h3>
       </div>
-      <div class="card-body p-0">
+      <div class="table-responsive">
         {{ formset.management_form }}
-        <table class="table table-sm mb-0" id="lines-table">
+        <table class="table table-sm table-vcenter mb-0" id="lines-table">
           <thead class="table-light">
             <tr>
-              <th style="min-width:220px">Producto</th>
-              <th style="width:110px">Cantidad</th>
-              <th style="width:110px">P. Unitario</th>
-              <th style="width:40px"></th>
+              <th class="text-center" style="width:38px">#</th>
+              <th>Producto</th>
+              <th style="width:140px">Unidad</th>
+              <th style="width:130px">Cantidad</th>
+              <th style="width:130px">STOCK POR ALM</th>
+              <th style="width:180px">Ubicación</th>
+              <th style="width:130px">P. Unitario</th>
+              <th style="width:38px"></th>
             </tr>
           </thead>
           <tbody id="lines-body">
             {% for f in formset %}
-            <tr class="line-row">
-              <td>{{ f.product }}</td>
-              <td>{{ f.quantity }}</td>
-              <td>{{ f.unit_price }}</td>
+            <tr class="line-row"
+                data-init-product="{{ f.initial.product|default:'' }}"
+                data-init-name="{{ f.initial.product_name|default:'' }}"
+              data-init-unit-id="{{ f.initial.product_unit_id|default:'' }}"
+                data-init-unit="{{ f.initial.product_unit|default:'' }}">
+
+              <td class="text-center text-muted line-num">{{ forloop.counter }}</td>
+              <td style="min-width:220px">
+                {{ f.product }}
+                <select class="product-select w-100">
+                  {% if f.initial.product %}
+                  <option value="{{ f.initial.product }}" selected>{{ f.initial.product_name|default:'' }}</option>
+                  {% endif %}
+                </select>
+                {% if f.product.errors %}
+                <div class="text-danger" style="font-size:.75rem">{{ f.product.errors.0 }}</div>
+                {% endif %}
+              </td>
               <td>
-                <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar">
+                <select class="form-select form-select-sm product-unit-select" disabled
+                        title="La unidad se define por producto. Cuando existan equivalencias se habilitará.">
+                  <option value="{{ f.initial.product_unit_id|default:'' }}">
+                    {{ f.initial.product_unit|default:'—' }}
+                  </option>
+                </select>
+              </td>
+              <td>
+                {{ f.quantity }}
+                {% if f.quantity.errors %}
+                <div class="text-danger" style="font-size:.75rem">{{ f.quantity.errors.0 }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <input type="text" class="form-control form-control-sm product-stock text-end text-muted"
+                       value="—" disabled readonly>
+              </td>
+              <td style="min-width:160px">
+                {{ f.location }}
+                <select class="location-select w-100"
+                        data-location-url="{% url 'inventory:api_location_search' %}"
+                        data-placeholder="Ubicación (opcional)">
+                  {% if f.initial.location_id %}
+                  <option value="{{ f.initial.location_id }}" selected>{{ f.initial.location_text|default:'' }}</option>
+                  {% endif %}
+                </select>
+              </td>
+              <td>
+                {{ f.unit_price }}
+                {% if f.unit_price.errors %}
+                <div class="text-danger" style="font-size:.75rem">{{ f.unit_price.errors.0 }}</div>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar fila">
                   <i class="ti ti-x"></i>
                 </button>
               </td>
             </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="8">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
+                  <i class="ti ti-plus me-1"></i>Agregar producto
+                </button>
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
   </div>
 
-</div>
+  <!-- ── Información adicional ──────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title mb-0">Información adicional</h3></div>
+      <div class="card-body">
+        {{ form.description }}
+      </div>
+    </div>
+  </div>
+
+</div>{# /row #}
 </form>
 
-<script>
-(function () {
-  const totalFormsInput = document.getElementById('id_lines-TOTAL_FORMS');
-  const linesBody = document.getElementById('lines-body');
-  const firstRow = linesBody.querySelector('.line-row');
 
-  document.getElementById('add-line').addEventListener('click', function () {
-    const count = parseInt(totalFormsInput.value);
-    const newRow = firstRow.cloneNode(true);
-    newRow.querySelectorAll('input, select').forEach(el => {
-      el.name = el.name.replace(/-\d+-/, `-${count}-`);
-      el.id = el.id.replace(/-\d+-/, `-${count}-`);
-      el.value = '';
-    });
-    linesBody.appendChild(newRow);
-    totalFormsInput.value = count + 1;
-  });
+<!-- ── Config para movement-form.js y ProductPicker ─────────────────────── -->
+<div id="inv-form-config" hidden
+     data-search-url="{% url 'inventory:api_product_search' %}"
+     data-stock-url="{% url 'inventory:api_product_stock' %}"
+     data-create-url="{% url 'inventory:api_product_create' %}"
+     data-location-url="{% url 'inventory:api_location_search' %}"
+     data-movement-type="{{ movement_type }}"></div>
 
-  linesBody.addEventListener('click', function (e) {
-    const btn = e.target.closest('.remove-line');
-    if (!btn) return;
-    const rows = linesBody.querySelectorAll('.line-row');
-    if (rows.length > 1) {
-      btn.closest('.line-row').remove();
-      // Re-index remaining rows
-      linesBody.querySelectorAll('.line-row').forEach((row, i) => {
-        row.querySelectorAll('input, select').forEach(el => {
-          el.name = el.name.replace(/-\d+-/, `-${i}-`);
-          el.id = el.id.replace(/-\d+-/, `-${i}-`);
-        });
-      });
-      totalFormsInput.value = linesBody.querySelectorAll('.line-row').length;
-    }
-  });
-})();
-</script>
+
+<!-- ── Modal: Crear producto rápido ──────────────────────────────────────── -->
+<div class="modal fade" id="quickCreateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="ti ti-package me-2 text-primary"></i>Crear producto
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="qc-error" class="alert alert-danger d-none small py-2"></div>
+        <div class="mb-3">
+          <label class="form-label required">Nombre</label>
+          <input type="text" id="qc-name" class="form-control" placeholder="Nombre del producto">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">SKU / Código</label>
+          <input type="text" id="qc-sku" class="form-control" placeholder="Se genera automáticamente si está vacío">
+        </div>
+        <div class="mb-3">
+          <label class="form-label required">Unidad de medida</label>
+          <select id="qc-unit" class="form-select">
+            <option value="">— Seleccionar unidad —</option>
+            {% for u in units %}
+            <option value="{{ u.pk }}">{{ u.code }} — {{ u.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="qc-btn-save">
+          <i class="ti ti-device-floppy me-1"></i>Crear producto
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/components/product-picker.js' %}"></script>
+<script src="{% static 'js/inventory/movement-form.js' %}"></script>
+{# All JS logic lives in static/js/** — nothing inline needed here #}
+{% endblock extra_js %}
+

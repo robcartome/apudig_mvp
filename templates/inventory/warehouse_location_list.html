@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Ubicaciones en Bodega — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Ubicaciones en Bodega</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'inventory:admin_panel' %}">Administración</a></li>
+          <li class="breadcrumb-item active">Ubicaciones en Bodega</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'inventory:warehouse_location_create' %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-plus me-1"></i>Agregar Ubicación
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card">
+  <div class="card-header d-flex align-items-center gap-3 flex-wrap py-3">
+    <!-- Search -->
+    <form method="get" class="d-flex gap-2 align-items-center flex-grow-1">
+      {% if selected_warehouse %}<input type="hidden" name="warehouse" value="{{ selected_warehouse }}">{% endif %}
+      <div class="input-group input-group-sm" style="max-width:300px">
+        <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Buscar código o nombre…">
+        <button type="submit" class="btn btn-outline-secondary"><i class="ti ti-search"></i></button>
+        {% if query %}<a href="?{% if selected_warehouse %}warehouse={{ selected_warehouse }}{% endif %}" class="btn btn-outline-secondary"><i class="ti ti-x"></i></a>{% endif %}
+      </div>
+    </form>
+    <!-- Filter by warehouse -->
+    <form method="get" class="d-flex gap-2 align-items-center ms-auto">
+      {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+      <select name="warehouse" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:200px">
+        <option value="">— Todos los almacenes —</option>
+        {% for wh in warehouses %}
+        <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:"s" %}selected{% endif %}>{{ wh.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Almacén</th>
+          <th>Descripción</th>
+          <th class="text-center" style="width:80px">Activo</th>
+          <th style="width:120px"></th>
+        </tr>
+      </thead>
+      <tbody class="small">
+        {% for obj in page_obj %}
+        <tr>
+          <td class="fw-semibold">{{ obj.code }}</td>
+          <td>{{ obj.name }}</td>
+          <td class="text-muted">{{ obj.warehouse.name }}</td>
+          <td class="text-muted">{{ obj.description|default:"—" }}</td>
+          <td class="text-center">
+            {% if obj.active %}
+            <span class="badge bg-success-lt">Sí</span>
+            {% else %}
+            <span class="badge bg-secondary-lt">No</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-inline-flex gap-1">
+              <a href="{% url 'inventory:warehouse_location_update' obj.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Editar">
+                <i class="ti ti-edit"></i>
+              </a>
+              <form method="post" action="{% url 'inventory:warehouse_location_delete' obj.pk %}"
+                    onsubmit="return confirm('¿Eliminar esta ubicación?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                  <i class="ti ti-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            No hay ubicaciones registradas{% if query %} para "{{ query }}"{% endif %}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="text-muted small">
+      {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }}
+    </div>
+    <div class="btn-group">
+      {% if page_obj.has_previous %}
+      <a class="btn btn-outline-secondary btn-sm" href="?{% if query %}q={{ query }}&{% endif %}{% if selected_warehouse %}warehouse={{ selected_warehouse }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+      {% else %}
+      <button class="btn btn-outline-secondary btn-sm" disabled>Anterior</button>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a class="btn btn-primary btn-sm" href="?{% if query %}q={{ query }}&{% endif %}{% if selected_warehouse %}warehouse={{ selected_warehouse }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+      {% else %}
+      <button class="btn btn-primary btn-sm" disabled>Siguiente</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

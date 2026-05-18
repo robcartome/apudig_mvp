@@ -94,9 +94,15 @@
 
           <td class="text-center">
             <div class="d-inline-flex gap-1">
-              <a href="{% url 'inventory:movement_detail' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Ver">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                title="Ver"
+                data-bs-toggle="modal"
+                data-bs-target="#movementModal-{{ obj.pk }}"
+              >
                 <i class="ti ti-eye"></i>
-              </a>
+              </button>
               <a href="{% url 'inventory:movement_edit' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
                 <i class="ti ti-pencil"></i>
               </a>
@@ -145,4 +151,162 @@
     </div>
   </div>
 </div>
+
+{% for obj in page_obj %}
+<div class="modal fade movement-modal" id="movementModal-{{ obj.pk }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <span>Detalles del Movimiento</span>
+          {% if obj.type == "ENTRY" %}<span class="badge bg-green text-white">Entrada</span>
+          {% elif obj.type == "EXIT" %}<span class="badge bg-red text-white">Salida</span>
+          {% elif obj.type == "TRANSFER" %}<span class="badge bg-blue text-white">Transferencia</span>
+          {% else %}<span class="badge bg-yellow text-dark">Ajuste</span>{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="card bg-light mb-3">
+          <div class="card-body">
+            <h6 class="text-muted mb-3">Información General</h6>
+            <div class="row g-3 small">
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Fecha de Movimiento</div>
+                <div class="fw-semibold">{{ obj.date|date:"d/m/Y H:i" }}</div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Almacén de Operación</div>
+                <div class="fw-semibold">
+                  {% if obj.type == "TRANSFER" %}
+                  {{ obj.warehouse_origin.name|default:"?" }} &gt; {{ obj.warehouse_dest.name|default:"?" }}
+                  {% else %}
+                  {{ obj.warehouse.name|default:"—" }}
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Motivo / Operación</div>
+                <div class="fw-semibold">{{ obj.reason|default:"-" }}</div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Asociado</div>
+                <div class="fw-semibold">
+                  {% if obj.supplier %}{{ obj.supplier.name }}
+                  {% elif obj.customer %}{{ obj.customer.legal_name }}
+                  {% else %}OTROS{% endif %}
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Tipo de Documento</div>
+                <div class="fw-semibold">
+                  {% if obj.document_type %}{{ obj.document_type.name|default:obj.document_type.code }}{% else %}OTROS{% endif %}
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Número de Documento</div>
+                <div class="fw-semibold">
+                  {% if obj.series or obj.number %}
+                  {{ obj.series|default:"0000" }}-{{ obj.number|default:"0" }}
+                  {% else %}
+                  0000-0
+                  {% endif %}
+                </div>
+              </div>
+
+              {% if obj.reference_doc %}
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Referencia</div>
+                <div class="fw-semibold">{{ obj.reference_doc }}</div>
+              </div>
+              {% endif %}
+
+              {% if obj.carrier %}
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Transportista</div>
+                <div class="fw-semibold">{{ obj.carrier.business_name }}</div>
+              </div>
+              {% endif %}
+
+              {% if obj.description %}
+              <div class="col-12">
+                <div class="text-muted">Información adicional</div>
+                <div class="fw-semibold">{{ obj.description }}</div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <h6 class="mb-2">Productos Detallados</h6>
+        <div class="table-responsive border rounded">
+          <table class="table table-sm table-vcenter mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="text-center" style="width:38px">#</th>
+                <th>Producto</th>
+                <th class="text-end">Cantidad</th>
+                <th class="text-end">Precio Unitario</th>
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in obj.details.all %}
+              <tr class="movement-detail-row" data-qty="{{ d.quantity }}" data-unit-price="{{ d.unit_price }}">
+                <td class="text-center text-muted">{{ forloop.counter }}</td>
+                <td class="fw-semibold">{{ d.product.name }}</td>
+                <td class="text-end">{{ d.quantity|floatformat:3 }}</td>
+                <td class="text-end">S/ {{ d.unit_price|floatformat:2 }}</td>
+                <td class="text-end movement-line-total">S/ 0.00</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center text-muted py-3">No hay productos para este movimiento.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-end mt-3">
+          <div class="fs-5 fw-bold">Total General: <span class="movement-grand-total">S/ 0.00</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+(function () {
+  function formatCurrency(value) {
+    return `S/ ${value.toFixed(2)}`;
+  }
+
+  document.querySelectorAll('.movement-modal').forEach(function (modalEl) {
+    let total = 0;
+    modalEl.querySelectorAll('.movement-detail-row').forEach(function (row) {
+      const qty = Number.parseFloat(row.dataset.qty || '0');
+      const unitPrice = Number.parseFloat(row.dataset.unitPrice || '0');
+      const lineTotal = qty * unitPrice;
+      total += lineTotal;
+      const lineTotalEl = row.querySelector('.movement-line-total');
+      if (lineTotalEl) {
+        lineTotalEl.textContent = formatCurrency(lineTotal);
+      }
+    });
+
+    const grandTotalEl = modalEl.querySelector('.movement-grand-total');
+    if (grandTotalEl) {
+      grandTotalEl.textContent = formatCurrency(total);
+    }
+  });
+})();
+</script>
 {% endblock %}

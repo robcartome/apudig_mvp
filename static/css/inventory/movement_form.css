@@ -1,0 +1,40 @@
+.movement-header .form-label {
+  margin-bottom: .25rem;
+  font-weight: 600;
+}
+
+.movement-header .form-control,
+.movement-header .form-select {
+  min-height: calc(1.5em + .5rem + 2px);
+}
+
+#lines-table td {
+  vertical-align: middle;
+}
+
+#lines-table .form-control,
+#lines-table .form-select,
+#lines-table .select2-container--bootstrap-5 .select2-selection {
+  min-height: calc(1.5em + .5rem + 2px);
+  height: calc(1.5em + .5rem + 2px);
+}
+
+#lines-table .select2-container--bootstrap-5 .select2-selection__rendered {
+  font-size: .78rem;
+}
+
+#lines-table tfoot td {
+  background: var(--tblr-bg-surface-secondary, #f6f8fb);
+}
+
+@media (max-width: 767.98px) {
+  .movement-actions {
+    display: grid;
+    gap: .5rem;
+  }
+
+  #lines-table th,
+  #lines-table td {
+    white-space: nowrap;
+  }
+}

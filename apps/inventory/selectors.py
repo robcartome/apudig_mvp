@@ -130,7 +130,8 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
     qs = (
         Movement.objects
         .select_related("warehouse", "warehouse_origin", "warehouse_dest",
-                        "supplier", "customer", "created_by")
+                        "supplier", "customer", "document_type", "created_by")
+        .prefetch_related("details__product__unit")
         .filter(store_id=store_id)
     )
     if movement_type:

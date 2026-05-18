@@ -49,6 +49,14 @@
           <dt class="col-5 text-muted">Transportista</dt>
           <dd class="col-7">{{ movement.carrier.business_name }}</dd>
           {% endif %}
+          {% if movement.document_type %}
+          <dt class="col-5 text-muted">Tipo doc.</dt>
+          <dd class="col-7">{{ movement.document_type }}</dd>
+          {% endif %}
+          {% if movement.series or movement.number %}
+          <dt class="col-5 text-muted">Serie / Número</dt>
+          <dd class="col-7">{{ movement.series|default:'—' }} / {{ movement.number|default:'—' }}</dd>
+          {% endif %}
           {% if movement.reference_doc %}
           <dt class="col-5 text-muted">Ref. doc.</dt>
           <dd class="col-7">{{ movement.reference_doc }}</dd>
@@ -56,6 +64,10 @@
           {% if movement.reason %}
           <dt class="col-5 text-muted">Motivo</dt>
           <dd class="col-7">{{ movement.reason }}</dd>
+          {% endif %}
+          {% if movement.description %}
+          <dt class="col-5 text-muted">Info. adicional</dt>
+          <dd class="col-7">{{ movement.description }}</dd>
           {% endif %}
           <dt class="col-5 text-muted">Registrado por</dt>
           <dd class="col-7">{{ movement.created_by|default:"—" }}</dd>
@@ -73,10 +85,12 @@
         <table class="table table-vcenter card-table mb-0">
           <thead>
             <tr>
+              <th class="text-center" style="width:38px">#</th>
               <th>SKU</th>
               <th>Producto</th>
               <th class="text-end">Cant.</th>
               <th>Unidad</th>
+              <th>Ubicación</th>
               <th class="text-end">P. Unit.</th>
               <th class="text-end">Total</th>
             </tr>
@@ -84,10 +98,12 @@
           <tbody>
             {% for d in movement.details.all %}
             <tr>
+              <td class="text-center text-muted">{{ forloop.counter }}</td>
               <td class="text-muted small">{{ d.product.sku }}</td>
               <td>{{ d.product.name }}</td>
               <td class="text-end fw-semibold">{{ d.quantity|floatformat:3 }}</td>
               <td class="text-muted small">{{ d.product.unit }}</td>
+              <td class="text-muted small">{{ d.location.name|default:"—" }}</td>
               <td class="text-end text-muted small">{{ d.unit_price|floatformat:2 }}</td>
               <td class="text-end fw-semibold">{{ d.quantity|floatformat:2 }}</td>
             </tr>

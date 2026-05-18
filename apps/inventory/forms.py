@@ -4,7 +4,7 @@ from django import forms
 
 from apps.partners.models import Carrier, CoreCustomer, DocumentType, Supplier
 
-from .models import Brand, Category, Movement, MovementDetail, PriceList, Product, ProductPrice, Unit, Warehouse
+from .models import Brand, Category, Movement, MovementDetail, PriceList, Product, ProductPrice, Unit, Warehouse, WarehouseLocation
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -66,6 +66,28 @@ class WarehouseForm(forms.ModelForm):
         return instance
 
 
+class WarehouseLocationForm(forms.ModelForm):
+    class Meta:
+        model = WarehouseLocation
+        fields = ("warehouse", "code", "name", "description", "active")
+        widgets = {
+            "warehouse": forms.Select(attrs=_select),
+            "code": forms.TextInput(attrs={**_text, "placeholder": "Ej: A-01, PASILLO-B"}),
+            "name": forms.TextInput(attrs={**_text, "placeholder": "Pasillo A estante 1"}),
+            "description": forms.TextInput(attrs={**_text, "placeholder": "Descripción (opcional)"}),
+            "active": forms.CheckboxInput(attrs=_check),
+        }
+
+    def __init__(self, *args, store_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if store_id:
+            self.fields["warehouse"].queryset = Warehouse.objects.filter(
+                store_id=store_id, active=True
+            ).order_by("name")
+        else:
+            self.fields["warehouse"].queryset = Warehouse.objects.filter(active=True).order_by("name")
+
+
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
@@ -89,6 +111,12 @@ class ProductForm(forms.ModelForm):
         }
 
 _date = {"class": "form-control", "type": "datetime-local"}
+_date_format = "%Y-%m-%dT%H:%M"
+_date_input_formats = (
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+)
 _textarea = {"class": "form-control", "rows": 2}
 
 
@@ -97,24 +125,32 @@ class MovementHeaderForm(forms.ModelForm):
 
     class Meta:
         model = Movement
-        fields = ("date", "warehouse", "reason", "reference_doc",
+        fields = ("date", "warehouse", "series", "number",
+                  "reason", "reference_doc", "description",
                   "supplier", "customer", "carrier", "document_type")
         widgets = {
-            "date": forms.DateTimeInput(attrs=_date),
+            "date": forms.DateTimeInput(format=_date_format, attrs=_date),
             "warehouse": forms.Select(attrs=_select),
-            "reason": forms.Textarea(attrs=_textarea),
+            "series": forms.TextInput(attrs={**_text, "placeholder": "0000"}),
+            "number": forms.TextInput(attrs={**_text, "placeholder": "0"}),
+            "reason": forms.HiddenInput(),
             "reference_doc": forms.TextInput(attrs=_text),
-            "supplier": forms.Select(attrs=_select),
-            "customer": forms.Select(attrs=_select),
+            "description": forms.Textarea(attrs={**_text, "rows": 2, "placeholder": "Información adicional (opcional)"}),
+            "supplier": forms.HiddenInput(),
+            "customer": forms.HiddenInput(),
             "carrier": forms.Select(attrs=_select),
             "document_type": forms.Select(attrs=_select),
         }
 
     def __init__(self, *args, store_id=None, movement_type="ENTRY", **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["date"].input_formats = _date_input_formats
         self.fields["date"].required = True
         self.fields["reason"].required = False
+        self.fields["series"].required = False
+        self.fields["number"].required = False
         self.fields["reference_doc"].required = False
+        self.fields["description"].required = False
         self.fields["supplier"].required = False
         self.fields["customer"].required = False
         self.fields["carrier"].required = False
@@ -134,13 +170,7 @@ class MovementHeaderForm(forms.ModelForm):
         self.fields["document_type"].queryset = DocumentType.objects.filter(active=True).order_by("code")
 
         # Show/hide fields by type
-        if movement_type == "ENTRY":
-            self.fields["customer"].widget = forms.HiddenInput()
-        elif movement_type == "EXIT":
-            self.fields["supplier"].widget = forms.HiddenInput()
-        elif movement_type in ("TRANSFER", "ADJUSTMENT"):
-            self.fields["supplier"].widget = forms.HiddenInput()
-            self.fields["customer"].widget = forms.HiddenInput()
+        if movement_type in ("TRANSFER", "ADJUSTMENT"):
             self.fields["carrier"].widget = forms.HiddenInput()
 
 
@@ -149,19 +179,23 @@ class MovementTransferForm(forms.ModelForm):
 
     class Meta:
         model = Movement
-        fields = ("date", "warehouse_origin", "warehouse_dest", "reason", "reference_doc")
+        fields = ("date", "warehouse_origin", "warehouse_dest",
+                  "reason", "reference_doc", "description")
         widgets = {
-            "date": forms.DateTimeInput(attrs=_date),
+            "date": forms.DateTimeInput(format=_date_format, attrs=_date),
             "warehouse_origin": forms.Select(attrs=_select),
             "warehouse_dest": forms.Select(attrs=_select),
-            "reason": forms.Textarea(attrs=_textarea),
+            "reason": forms.HiddenInput(),
             "reference_doc": forms.TextInput(attrs=_text),
+            "description": forms.Textarea(attrs={**_text, "rows": 2, "placeholder": "Información adicional (opcional)"}),
         }
 
     def __init__(self, *args, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["date"].input_formats = _date_input_formats
         self.fields["reason"].required = False
         self.fields["reference_doc"].required = False
+        self.fields["description"].required = False
         qs = Warehouse.objects.none()
         if store_id:
             qs = Warehouse.objects.filter(store_id=store_id, active=True).order_by("name")
@@ -177,22 +211,30 @@ class MovementTransferForm(forms.ModelForm):
         return cleaned_data
 
 
+_sm = "form-control form-control-sm"
+
+
 class MovementDetailForm(forms.Form):
     product = forms.ModelChoiceField(
         queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),
-        widget=forms.Select(attrs=_select),
+        widget=forms.HiddenInput(),  # UI managed by JS product-picker
         label="Producto",
     )
     quantity = forms.DecimalField(
         max_digits=10, decimal_places=3, min_value=Decimal("0.001"),
-        widget=forms.NumberInput(attrs={**_text, "step": "0.001", "min": "0.001"}),
+        widget=forms.NumberInput(attrs={"class": _sm, "step": "0.001", "min": "0.001"}),
         label="Cantidad",
     )
     unit_price = forms.DecimalField(
         max_digits=10, decimal_places=3, min_value=Decimal("0"),
         required=False,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.001", "min": "0"}),
+        widget=forms.NumberInput(attrs={"class": _sm, "step": "0.001", "min": "0"}),
         label="P. Unitario",
+    )
+    location = forms.UUIDField(
+        required=False,
+        widget=forms.HiddenInput(),
+        label="Ubicación",
     )
 
     def clean_unit_price(self):

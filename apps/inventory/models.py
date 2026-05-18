@@ -116,6 +116,23 @@ class Warehouse(TimeStampedModel):
         return f"{self.store} / {self.name}"
 
 
+class WarehouseLocation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name="locations")
+    code = models.CharField(max_length=50)
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=500, blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "warehouse_locations"
+        ordering = ["warehouse", "code"]
+        unique_together = ("warehouse", "code")
+
+    def __str__(self) -> str:
+        return f"{self.warehouse.name} / {self.code} - {self.name}"
+
+
 class StockByWarehouse(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="stocks")
@@ -167,6 +184,7 @@ class Movement(TimeStampedModel):
     )
     date = models.DateTimeField()
     reason = models.CharField(max_length=500, blank=True)
+    description = models.TextField(blank=True)
     series = models.CharField(max_length=10, blank=True)
     number = models.CharField(max_length=20, blank=True)
     reference_doc = models.CharField(max_length=100, blank=True)
@@ -201,6 +219,10 @@ class MovementDetail(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=3)
     unit_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     physical_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    location = models.ForeignKey(
+        WarehouseLocation, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="movement_details"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

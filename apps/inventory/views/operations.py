@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from ..forms import MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
-from ..models import Movement
+from ..models import Movement, Unit
 from ..selectors import (
     get_movement_detail,
     get_movements_for_store,
@@ -42,6 +42,7 @@ def _parse_lines(formset):
                 "product_id": f.cleaned_data["product"].pk,
                 "quantity": f.cleaned_data["quantity"],
                 "unit_price": f.cleaned_data.get("unit_price", 0),
+                "location_id": f.cleaned_data.get("location") or None,
             })
     return lines
 
@@ -92,7 +93,7 @@ def movement_detail(request, pk):
 
 def _get_movement_for_store_or_404(pk, store_id):
     return get_object_or_404(
-        Movement.objects.prefetch_related("details"),
+        Movement.objects.prefetch_related("details__product__unit"),
         pk=pk,
         store_id=store_id,
     )
@@ -101,9 +102,11 @@ def _get_movement_for_store_or_404(pk, store_id):
 def _movement_forms(request, store_id, movement):
     initial_lines = [
         {
-            "product": d.product_id,
-            "quantity": d.quantity,
-            "unit_price": d.unit_price,
+            "product":      d.product_id,
+            "product_name": d.product.name,
+            "product_unit": d.product.unit.code if d.product.unit else "",
+            "quantity":     d.quantity,
+            "unit_price":   d.unit_price,
         }
         for d in movement.details.all()
     ]
@@ -141,6 +144,9 @@ def movement_edit(request, pk):
                 "date": cd["date"],
                 "reason": cd.get("reason", ""),
                 "reference_doc": cd.get("reference_doc", ""),
+                "description": cd.get("description", ""),
+                "series": cd.get("series", ""),
+                "number": cd.get("number", ""),
             }
 
             if movement.type == "TRANSFER":
@@ -186,6 +192,7 @@ def movement_edit(request, pk):
         "cancel_url": "inventory:movement_list",
         "is_edit": True,
         "movement": movement,
+        "units": Unit.objects.all().order_by("code"),
     })
 
 
@@ -219,7 +226,7 @@ def entry_create(request):
     store_id = _get_store_id(request)
     form = MovementHeaderForm(
         request.POST or None, store_id=store_id, movement_type="ENTRY",
-        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M")},
+        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
     formset = MovementDetailFormSet(request.POST or None, prefix="lines")
 
@@ -237,6 +244,9 @@ def entry_create(request):
                 created_by=request.user,
                 reason=cd.get("reason", ""),
                 reference_doc=cd.get("reference_doc", ""),
+                description=cd.get("description", ""),
+                series=cd.get("series", ""),
+                number=cd.get("number", ""),
                 supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
                 document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
             )
@@ -249,6 +259,7 @@ def entry_create(request):
         "title": "Nueva entrada",
         "movement_type": "ENTRY",
         "cancel_url": "inventory:movement_list",
+        "units": Unit.objects.all().order_by("code"),
     })
 
 
@@ -263,7 +274,7 @@ def exit_create(request):
     store_id = _get_store_id(request)
     form = MovementHeaderForm(
         request.POST or None, store_id=store_id, movement_type="EXIT",
-        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M")},
+        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
     formset = MovementDetailFormSet(request.POST or None, prefix="lines")
 
@@ -281,6 +292,9 @@ def exit_create(request):
                 created_by=request.user,
                 reason=cd.get("reason", ""),
                 reference_doc=cd.get("reference_doc", ""),
+                description=cd.get("description", ""),
+                series=cd.get("series", ""),
+                number=cd.get("number", ""),
                 customer_id=cd["customer"].pk if cd.get("customer") else None,
                 document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
             )
@@ -293,6 +307,7 @@ def exit_create(request):
         "title": "Nueva salida",
         "movement_type": "EXIT",
         "cancel_url": "inventory:movement_list",
+        "units": Unit.objects.all().order_by("code"),
     })
 
 
@@ -326,6 +341,7 @@ def transfer_create(request):
                 created_by=request.user,
                 reason=cd.get("reason", ""),
                 reference_doc=cd.get("reference_doc", ""),
+                description=cd.get("description", ""),
             )
             messages.success(request, "Transferencia registrada correctamente.")
             return redirect("inventory:movement_list")
@@ -336,4 +352,5 @@ def transfer_create(request):
         "title": "Nueva transferencia",
         "movement_type": "TRANSFER",
         "cancel_url": "inventory:movement_list",
+        "units": Unit.objects.all().order_by("code"),
     })

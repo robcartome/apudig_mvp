@@ -1,22 +1,37 @@
 from django.urls import path
 
 from .views import (
+    admin_panel,
     brand_create, brand_delete, brand_list, brand_update,
     category_create, category_delete, category_list, category_update,
+    customer_search,
     entry_create, exit_create,
+    location_search,
     movement_delete, movement_detail, movement_edit, movement_list,
     pricelist_create, pricelist_del_price, pricelist_detail,
     pricelist_list, pricelist_toggle, pricelist_update,
     product_create, product_delete, product_list, product_update,
+    product_quick_create, product_search, product_stock,
     stock_report,
+    supplier_search,
     transfer_create,
     unit_create, unit_delete, unit_list, unit_update,
     warehouse_create, warehouse_delete, warehouse_list, warehouse_update,
+    warehouse_location_create, warehouse_location_delete,
+    warehouse_location_list, warehouse_location_update,
 )
 
 app_name = "inventory"
 
 urlpatterns = [
+    # API (AJAX)
+    path("api/productos/",       product_search,       name="api_product_search"),
+    path("api/productos/stock/", product_stock,        name="api_product_stock"),
+    path("api/productos/crear/", product_quick_create, name="api_product_create"),
+    path("api/proveedores/",     supplier_search,      name="api_supplier_search"),
+    path("api/clientes/",        customer_search,      name="api_customer_search"),
+    path("api/ubicaciones/",     location_search,      name="api_location_search"),
+
     # Stock
     path("stock/", stock_report, name="stock_report"),
 
@@ -52,6 +67,15 @@ urlpatterns = [
     path("almacenes/nuevo/", warehouse_create, name="warehouse_create"),
     path("almacenes/<uuid:pk>/editar/", warehouse_update, name="warehouse_update"),
     path("almacenes/<uuid:pk>/eliminar/", warehouse_delete, name="warehouse_delete"),
+
+    # Warehouse Locations
+    path("ubicaciones/", warehouse_location_list, name="warehouse_location_list"),
+    path("ubicaciones/nueva/", warehouse_location_create, name="warehouse_location_create"),
+    path("ubicaciones/<uuid:pk>/editar/", warehouse_location_update, name="warehouse_location_update"),
+    path("ubicaciones/<uuid:pk>/eliminar/", warehouse_location_delete, name="warehouse_location_delete"),
+
+    # Admin panel
+    path("administracion/", admin_panel, name="admin_panel"),
 
     # Products
     path("productos/", product_list, name="product_list"),

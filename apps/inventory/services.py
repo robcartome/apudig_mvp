@@ -123,6 +123,7 @@ def _create_details_and_update_stock(
             product_id=line["product_id"],
             quantity=line["quantity"],
             unit_price=line.get("unit_price", Decimal("0")),
+            location_id=line.get("location_id") or None,
         )
     _update_stock_bulk(lines, warehouse_id=wh_id, delta=delta)
 
@@ -167,6 +168,7 @@ def _apply_movement_stock(movement: Movement, lines: list[dict]) -> None:
             product_id=line["product_id"],
             quantity=line["quantity"],
             unit_price=line.get("unit_price", Decimal("0")),
+            location_id=line.get("location_id") or None,
         )
 
     if movement.type == "ENTRY":
