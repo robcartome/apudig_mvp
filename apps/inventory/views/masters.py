@@ -8,13 +8,14 @@ Patrón por entidad:
   Delete → POST     /inventory/<entidad>/<pk>/eliminar/
 """
 from django.contrib import messages
+from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView
 
 from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
 
-from ..forms import BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm
-from ..models import Brand, Category, Product, Unit, Warehouse
+from ..forms import BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
+from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation
 from ..selectors import (
     get_brands,
     get_categories,
@@ -332,4 +333,84 @@ def product_delete(request, pk):
         return redirect("inventory:product_list")
     return render(request, "inventory/confirm_delete.html", {
         "object": obj, "cancel_url": "inventory:product_list",
+    })
+
+
+def warehouse_location_list(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    store_id = _require_store(request)
+    warehouse_id = request.GET.get("warehouse", "")
+    query = request.GET.get("q", "")
+
+    warehouses = Warehouse.objects.filter(store_id=store_id, active=True).order_by("name") if store_id else Warehouse.objects.none()
+
+    qs = WarehouseLocation.objects.select_related("warehouse")
+    if store_id:
+        qs = qs.filter(warehouse__store_id=store_id)
+    if warehouse_id:
+        qs = qs.filter(warehouse_id=warehouse_id)
+    if query:
+        qs = qs.filter(models.Q(code__icontains=query) | models.Q(name__icontains=query))
+    qs = qs.order_by("warehouse__name", "code")
+
+    page_obj = _paginate(request, qs)
+    return render(request, "inventory/warehouse_location_list.html", {
+        "page_obj": page_obj,
+        "warehouses": warehouses,
+        "selected_warehouse": warehouse_id,
+        "query": query,
+    })
+
+
+def warehouse_location_create(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    store_id = _require_store(request)
+    form = WarehouseLocationForm(request.POST or None, store_id=store_id)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Ubicación creada correctamente.")
+        return redirect("inventory:warehouse_location_list")
+    return render(request, "inventory/warehouse_location_form.html", {
+        "form": form, "title": "Nueva ubicación en bodega", "cancel_url": "inventory:warehouse_location_list",
+    })
+
+
+def warehouse_location_update(request, pk):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    store_id = _require_store(request)
+    obj = get_object_or_404(WarehouseLocation, pk=pk)
+    form = WarehouseLocationForm(request.POST or None, instance=obj, store_id=store_id)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Ubicación actualizada.")
+        return redirect("inventory:warehouse_location_list")
+    return render(request, "inventory/warehouse_location_form.html", {
+        "form": form, "title": "Editar ubicación", "object": obj, "cancel_url": "inventory:warehouse_location_list",
+    })
+
+
+def warehouse_location_delete(request, pk):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    obj = get_object_or_404(WarehouseLocation, pk=pk)
+    if request.method == "POST":
+        obj.delete()
+        messages.success(request, "Ubicación eliminada.")
+        return redirect("inventory:warehouse_location_list")
+    return render(request, "inventory/confirm_delete.html", {
+        "object": obj, "cancel_url": "inventory:warehouse_location_list",
+    })
+
+def admin_panel(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
+    store_id = _require_store(request)
+    warehouse_count = Warehouse.objects.filter(store_id=store_id, active=True).count() if store_id else 0
+    location_count = WarehouseLocation.objects.filter(warehouse__store_id=store_id, active=True).count() if store_id else 0
+    return render(request, "inventory/admin_panel.html", {
+        "warehouse_count": warehouse_count,
+        "location_count": location_count,
     })

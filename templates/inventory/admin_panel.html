@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Administración — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-4">
+  <div class="row align-items-center">
+    <div class="col">
+      <p class="text-muted mb-0">Configura los parámetros operativos de tu empresa desde aquí.</p>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="ti ti-package me-2 text-primary"></i>Inventario
+        </h3>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'inventory:warehouse_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-blue-lt">
+                    <i class="ti ti-building-warehouse fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Almacenes</div>
+                <div class="text-muted small mt-1">{{ warehouse_count }} activo{{ warehouse_count|pluralize }}</div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'inventory:warehouse_location_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-teal-lt">
+                    <i class="ti ti-map-pin fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Ubicaciones en Bodega</div>
+                <div class="text-muted small mt-1">{{ location_count }} activa{{ location_count|pluralize }}</div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'inventory:category_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-purple-lt">
+                    <i class="ti ti-tags fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Categorías</div>
+                <div class="text-muted small mt-1">Clasificación de productos</div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'inventory:brand_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-orange-lt">
+                    <i class="ti ti-certificate fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Marcas</div>
+                <div class="text-muted small mt-1">Marcas de productos</div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'inventory:unit_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-green-lt">
+                    <i class="ti ti-ruler fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Unidades de medida</div>
+                <div class="text-muted small mt-1">UND, KG, MT…</div>
+              </div>
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="ti ti-users me-2 text-indigo"></i>Socios Comerciales
+        </h3>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'partners:customer_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-cyan-lt">
+                    <i class="ti ti-user-check fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Clientes</div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'partners:supplier_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-yellow-lt">
+                    <i class="ti ti-truck-delivery fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Proveedores</div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-6 col-md-4 col-lg-3">
+            <a href="{% url 'partners:carrier_list' %}" class="card card-link border h-100 text-decoration-none">
+              <div class="card-body text-center py-4">
+                <div class="mb-2">
+                  <span class="avatar avatar-lg bg-red-lt">
+                    <i class="ti ti-truck fs-2"></i>
+                  </span>
+                </div>
+                <div class="fw-semibold">Transportistas</div>
+              </div>
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

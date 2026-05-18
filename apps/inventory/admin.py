@@ -11,6 +11,7 @@ from .models import (
     StockByWarehouse,
     Unit,
     Warehouse,
+    WarehouseLocation,
 )
 
 
@@ -59,6 +60,13 @@ class WarehouseAdmin(admin.ModelAdmin):
     list_display = ("name", "store", "is_default", "active")
     list_filter = ("store", "active", "is_default")
     search_fields = ("name",)
+
+
+@admin.register(WarehouseLocation)
+class WarehouseLocationAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "warehouse", "active")
+    list_filter = ("warehouse", "active")
+    search_fields = ("code", "name")
 
 
 @admin.register(StockByWarehouse)
