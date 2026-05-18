@@ -1,0 +1,264 @@
+﻿/* ══════════════════════════════════════════════════════════
+   APUDIG Sidebar — Tabler light mode, left side
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Tabler primary brand color ── */
+:root {
+  --tblr-primary:     #0ca678;
+  --tblr-primary-rgb: 12, 166, 120;
+}
+
+/* ── Sidebar width: Tabler beta20 hardcodes 15rem (240px); override to 220px ──
+   Also add margin transition for smooth collapse animation                    */
+@media (min-width: 992px) {
+  #sidebar {
+    width: 220px;
+    transition: width .22s cubic-bezier(.4,0,.2,1);
+  }
+  .navbar-vertical.navbar-expand-lg ~ .page-wrapper {
+    margin-left: 220px !important;
+    transition: margin-left .22s cubic-bezier(.4,0,.2,1);
+  }
+}
+
+/* overflow-x hidden prevents content peeking during collapse */
+#sidebar { overflow-x: hidden; }
+
+/* ── Brand variants ── */
+.sidebar-brand-full  { display: inline-block; line-height: 1; }
+.sidebar-brand-short { display: none; line-height: 1; }
+
+/* ── Section sub-labels (Almacen / Productos) ── */
+.sidebar-section-label {
+  display: block;
+  padding: .25rem .5rem;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--tblr-secondary);
+  user-select: none;
+}
+
+/* ── Desktop collapse toggle ── */
+#sidebar-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--tblr-secondary);
+  cursor: pointer;
+  padding: .25rem .35rem;
+  border-radius: .375rem;
+  transition: color .15s, background .15s;
+  line-height: 1;
+  display: none;
+}
+#sidebar-toggle-btn:hover {
+  color: var(--tblr-body-color);
+  background: rgba(0,0,0,.06);
+}
+@media (min-width: 992px) {
+  #sidebar-toggle-btn { display: flex; align-items: center; }
+}
+
+/* ── Expand button (visible only when collapsed) ── */
+.sidebar-expand-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--tblr-secondary);
+  cursor: pointer;
+  padding: .25rem .35rem;
+  border-radius: .375rem;
+  transition: color .15s, background .15s;
+  line-height: 1;
+  align-items: center;
+}
+.sidebar-expand-btn:hover {
+  color: var(--tblr-body-color);
+  background: rgba(0,0,0,.06);
+}
+
+/* ══════════════════════════════════════════
+   COLLAPSED STATE — desktop only (>= 992px)
+   All collapse rules are inside this media query so mobile
+   layout is never affected.
+   ══════════════════════════════════════════ */
+@media (min-width: 992px) {
+  #sidebar.sidebar-collapsed {
+    width: 3.5rem !important;
+  }
+  body.sidebar-collapsed-body .page-wrapper {
+    margin-left: 3.5rem !important;
+  }
+
+  #sidebar.sidebar-collapsed .sidebar-brand-full { display: none; }
+  #sidebar.sidebar-collapsed .sidebar-brand-short { display: inline; }
+  #sidebar.sidebar-collapsed #sidebar-toggle-btn  { display: none !important; }
+  #sidebar.sidebar-collapsed .sidebar-expand-btn  { display: flex !important; }
+
+  #sidebar.sidebar-collapsed .nav-link-title,
+  #sidebar.sidebar-collapsed .nav-link-arrow,
+  #sidebar.sidebar-collapsed .sidebar-section-label { display: none !important; }
+
+  #sidebar.sidebar-collapsed .nav-link-icon { margin-right: 0 !important; }
+  #sidebar.sidebar-collapsed .nav-link {
+    justify-content: center !important;
+    padding-left:  0 !important;
+    padding-right: 0 !important;
+  }
+  #sidebar.sidebar-collapsed .navbar-nav.ps-lg-3          { display: none !important; }
+  #sidebar.sidebar-collapsed .navbar-collapse .collapse   { display: none !important; }
+}
+
+/* ══════════════════════════════════════════
+   FLYOUT SUBMENU
+   Appears to the RIGHT of the collapsed left rail
+   ══════════════════════════════════════════ */
+.apudig-flyout {
+  position:       fixed;
+  left:           calc(3.5rem + 6px);
+  right:          auto;
+  background:     #fff;
+  border:         1px solid var(--tblr-border-color, #e5e7eb);
+  border-radius:  .5rem;
+  box-shadow:     0 8px 24px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06);
+  padding:        .375rem;
+  z-index:        9999;
+  min-width:      13rem;
+  opacity:        0;
+  transform:      translateX(-6px);
+  transition:     opacity .15s ease, transform .15s ease;
+  pointer-events: none;
+}
+.apudig-flyout.visible {
+  opacity:        1;
+  transform:      translateX(0);
+  pointer-events: auto;
+}
+.apudig-flyout-header {
+  padding:        .375rem .625rem .25rem;
+  font-size:      .7rem;
+  font-weight:    700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color:          var(--tblr-secondary, #6b7280);
+  border-bottom:  1px solid var(--tblr-border-color, #f3f4f6);
+  margin-bottom:  .25rem;
+}
+.apudig-flyout a {
+  display:         block;
+  padding:         .4rem .625rem;
+  border-radius:   .35rem;
+  font-size:       .8125rem;
+  color:           var(--tblr-body-color, #374151);
+  text-decoration: none;
+  transition:      background .12s, color .12s;
+}
+.apudig-flyout a:hover  { background: rgba(0,0,0,.04); }
+.apudig-flyout a.active { background: rgba(12,166,120,.12); color: #0ca678; font-weight: 600; }
+
+/* ── Leaf tooltip (right of collapsed rail) ── */
+.apudig-sidebar-tooltip {
+  position:     fixed;
+  left:         calc(3.5rem + 8px);
+  right:        auto;
+  background:   #1e293b;
+  color:        rgba(255,255,255,.92);
+  padding:      .35rem .85rem;
+  border-radius:.4rem;
+  font-size:    .8rem;
+  font-weight:  500;
+  white-space:  nowrap;
+  z-index:      9999;
+  pointer-events: none;
+  opacity:      0;
+  transform:    translateY(-50%) translateX(-4px);
+  transition:   opacity .15s ease, transform .15s ease;
+  box-shadow:   0 4px 12px rgba(0,0,0,.3);
+}
+.apudig-sidebar-tooltip::before {
+  content:   '';
+  position:  absolute;
+  right:     100%;
+  left:      auto;
+  top:       50%;
+  transform: translateY(-50%);
+  border:    5px solid transparent;
+  border-right-color: #1e293b;
+}
+.apudig-sidebar-tooltip.visible { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+/* ══════════════════════════════════════════
+   MOBILE OVERLAY
+   ══════════════════════════════════════════ */
+.apudig-sidebar-overlay {
+  display:         none;
+  position:        fixed;
+  inset:           0;
+  background:      rgba(0,0,0,.45);
+  z-index:         1039;
+  backdrop-filter: blur(1px);
+}
+.apudig-sidebar-overlay.active { display: block; }
+
+/* ══════════════════════════════════════════
+   MOBILE SIDEBAR — slide in from the left
+   (replaces Bootstrap collapse on mobile)
+   ══════════════════════════════════════════ */
+@media (max-width: 991.98px) {
+  #sidebar {
+    position:   fixed !important;
+    top:        0;
+    left:       0;
+    height:     100vh;
+    z-index:    1040;
+    width:      220px !important;
+    transform:  translateX(-100%);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+    overflow-y: auto;
+  }
+  #sidebar.sidebar-mobile-open {
+    transform: translateX(0);
+  }
+  /* Show all nav items when sidebar is open on mobile */
+  #sidebar.sidebar-mobile-open #navbar-menu {
+    display:        flex !important;
+    flex-direction: column;
+  }
+  /* Page wrapper uses full width on mobile — sidebar is fixed, not in flow */
+  .navbar-vertical.navbar-expand-lg ~ .page-wrapper {
+    margin-left: 0 !important;
+  }
+  /* Prevent background scroll while sidebar is open */
+  body.sidebar-mobile-open-body {
+    overflow: hidden;
+  }
+}
+
+/* ══════════════════════════════════════════
+   HEADER SIDEBAR TOGGLE BUTTON
+   • Mobile  : always visible
+   • Desktop : visible only when sidebar is collapsed
+   ══════════════════════════════════════════ */
+.sidebar-header-toggle {
+  display: none !important;
+}
+@media (min-width: 992px) {
+  body.sidebar-collapsed-body .sidebar-header-toggle {
+    display: flex !important;
+    align-items: center;
+  }
+}
+@media (max-width: 991.98px) {
+  .sidebar-header-toggle {
+    display: flex !important;
+    align-items: center;
+  }
+}
+
+/* ══════════════════════════════════════════
+   HEADER — always fills 100 % of page-wrapper
+   ══════════════════════════════════════════ */
+.page-wrapper > header {
+  width: 100%;
+}
