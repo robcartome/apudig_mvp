@@ -6,8 +6,8 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from ..forms import MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
-from ..models import Movement, Unit
+from ..forms import MovementDetailEditFormSet, MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
+from ..models import Movement, MovementType, Unit
 from ..selectors import (
     get_movement_detail,
     get_movements_for_store,
@@ -15,7 +15,7 @@ from ..selectors import (
     get_warehouses_for_store,
     search_movements,
 )
-from ..services import register_entry, register_exit, register_transfer
+from ..services import confirm_movement, register_adjustment, register_entry, register_exit, register_transfer
 from ..services import delete_movement, update_movement
 
 
@@ -41,6 +41,7 @@ def _parse_lines(formset):
             lines.append({
                 "product_id": f.cleaned_data["product"].pk,
                 "quantity": f.cleaned_data["quantity"],
+                "physical_quantity": f.cleaned_data.get("quantity"),
                 "unit_price": f.cleaned_data.get("unit_price", 0),
                 "location_id": f.cleaned_data.get("location") or None,
             })
@@ -105,13 +106,13 @@ def _movement_forms(request, store_id, movement):
             "product":      d.product_id,
             "product_name": d.product.name,
             "product_unit": d.product.unit.code if d.product.unit else "",
-            "quantity":     d.quantity,
+            "quantity":     d.physical_quantity if movement.type == MovementType.ADJUSTMENT and d.physical_quantity is not None else d.quantity,
             "unit_price":   d.unit_price,
         }
         for d in movement.details.all()
     ]
 
-    if movement.type == "TRANSFER":
+    if movement.type == MovementType.TRANSFER:
         form = MovementTransferForm(request.POST or None, store_id=store_id, instance=movement)
     else:
         form = MovementHeaderForm(
@@ -121,7 +122,7 @@ def _movement_forms(request, store_id, movement):
             instance=movement,
         )
 
-    formset = MovementDetailFormSet(request.POST or None, initial=initial_lines, prefix="lines")
+    formset = MovementDetailEditFormSet(request.POST or None, initial=initial_lines, prefix="lines")
     return form, formset
 
 
@@ -132,6 +133,11 @@ def movement_edit(request, pk):
 
     store_id = _get_store_id(request)
     movement = _get_movement_for_store_or_404(pk, store_id)
+
+    if movement.is_locked_for_changes:
+        messages.error(request, movement.lock_reason or "Movimiento bloqueado para edición.")
+        return redirect("inventory:movement_list")
+
     form, formset = _movement_forms(request, store_id, movement)
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
@@ -149,7 +155,7 @@ def movement_edit(request, pk):
                 "number": cd.get("number", ""),
             }
 
-            if movement.type == "TRANSFER":
+            if movement.type == MovementType.TRANSFER:
                 update_data.update({
                     "warehouse": None,
                     "warehouse_origin": cd["warehouse_origin"],
@@ -159,7 +165,7 @@ def movement_edit(request, pk):
                     "document_type": None,
                     "carrier": None,
                 })
-            elif movement.type == "ENTRY":
+            elif movement.type == MovementType.ENTRY:
                 update_data.update({
                     "warehouse": cd["warehouse"],
                     "warehouse_origin": None,
@@ -169,7 +175,7 @@ def movement_edit(request, pk):
                     "document_type": cd.get("document_type"),
                     "carrier": cd.get("carrier"),
                 })
-            elif movement.type == "EXIT":
+            elif movement.type == MovementType.EXIT:
                 update_data.update({
                     "warehouse": cd["warehouse"],
                     "warehouse_origin": None,
@@ -179,10 +185,26 @@ def movement_edit(request, pk):
                     "document_type": cd.get("document_type"),
                     "carrier": cd.get("carrier"),
                 })
+            elif movement.type == MovementType.ADJUSTMENT:
+                update_data.update({
+                    "warehouse": cd["warehouse"],
+                    "warehouse_origin": None,
+                    "warehouse_dest": None,
+                    "supplier": None,
+                    "customer": None,
+                    "document_type": None,
+                    "carrier": None,
+                    "series": "",
+                    "number": "",
+                })
 
-            update_movement(movement, lines=lines, **update_data)
-            messages.success(request, "Movimiento actualizado correctamente.")
-            return redirect("inventory:movement_list")
+            try:
+                update_movement(movement, lines=lines, updated_by=request.user, **update_data)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "Movimiento actualizado correctamente.")
+                return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
         "form": form,
@@ -205,7 +227,11 @@ def movement_delete(request, pk):
     movement = _get_movement_for_store_or_404(pk, store_id)
 
     if request.method == "POST":
-        delete_movement(movement)
+        try:
+            delete_movement(movement, deleted_by=request.user)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("inventory:movement_list")
         messages.success(request, "Movimiento eliminado correctamente.")
         return redirect("inventory:movement_list")
 
@@ -213,6 +239,26 @@ def movement_delete(request, pk):
         "object": movement,
         "cancel_url": "inventory:movement_list",
     })
+
+
+def movement_confirm(request, pk):
+    r = _require_auth(request)
+    if r:
+        return r
+    if request.method != "POST":
+        return redirect("inventory:movement_list")
+
+    store_id = _get_store_id(request)
+    movement = _get_movement_for_store_or_404(pk, store_id)
+
+    try:
+        confirm_movement(movement, confirmed_by=request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "Movimiento confirmado correctamente.")
+
+    return redirect("inventory:movement_list")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -225,7 +271,7 @@ def entry_create(request):
         return r
     store_id = _get_store_id(request)
     form = MovementHeaderForm(
-        request.POST or None, store_id=store_id, movement_type="ENTRY",
+        request.POST or None, store_id=store_id, movement_type=MovementType.ENTRY,
         initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
     formset = MovementDetailFormSet(request.POST or None, prefix="lines")
@@ -257,7 +303,7 @@ def entry_create(request):
         "form": form,
         "formset": formset,
         "title": "Nueva entrada",
-        "movement_type": "ENTRY",
+        "movement_type": MovementType.ENTRY,
         "cancel_url": "inventory:movement_list",
         "units": Unit.objects.all().order_by("code"),
     })
@@ -273,7 +319,7 @@ def exit_create(request):
         return r
     store_id = _get_store_id(request)
     form = MovementHeaderForm(
-        request.POST or None, store_id=store_id, movement_type="EXIT",
+        request.POST or None, store_id=store_id, movement_type=MovementType.EXIT,
         initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
     formset = MovementDetailFormSet(request.POST or None, prefix="lines")
@@ -305,7 +351,7 @@ def exit_create(request):
         "form": form,
         "formset": formset,
         "title": "Nueva salida",
-        "movement_type": "EXIT",
+        "movement_type": MovementType.EXIT,
         "cancel_url": "inventory:movement_list",
         "units": Unit.objects.all().order_by("code"),
     })
@@ -350,7 +396,59 @@ def transfer_create(request):
         "form": form,
         "formset": formset,
         "title": "Nueva transferencia",
-        "movement_type": "TRANSFER",
+        "movement_type": MovementType.TRANSFER,
+        "cancel_url": "inventory:movement_list",
+        "units": Unit.objects.all().order_by("code"),
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADJUSTMENT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def adjustment_create(request):
+    r = _require_auth(request)
+    if r:
+        return r
+    store_id = _get_store_id(request)
+    form = MovementHeaderForm(
+        request.POST or None,
+        store_id=store_id,
+        movement_type=MovementType.ADJUSTMENT,
+        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "reason": "Saldo inicial"},
+    )
+    formset = MovementDetailFormSet(request.POST or None, prefix="lines")
+
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        lines = _parse_lines(formset)
+        if not lines:
+            messages.error(request, "Debe agregar al menos un producto.")
+        else:
+            cd = form.cleaned_data
+            register_adjustment(
+                store_id=store_id,
+                warehouse_id=str(cd["warehouse"].pk),
+                date=cd["date"],
+                lines=lines,
+                created_by=request.user,
+                reason=cd.get("reason", ""),
+                reference_doc=cd.get("reference_doc", ""),
+                description=cd.get("description", ""),
+                series="",
+                number="",
+                supplier_id=None,
+                customer_id=None,
+                document_type_id=None,
+                carrier_id=None,
+            )
+            messages.success(request, "Ajuste registrado correctamente.")
+            return redirect("inventory:movement_list")
+
+    return render(request, "inventory/movement_form.html", {
+        "form": form,
+        "formset": formset,
+        "title": "Nuevo ajuste",
+        "movement_type": MovementType.ADJUSTMENT,
         "cancel_url": "inventory:movement_list",
         "units": Unit.objects.all().order_by("code"),
     })

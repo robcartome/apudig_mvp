@@ -1,7 +1,9 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models import TimeStampedModel
 
@@ -160,13 +162,22 @@ class StoreProductConfig(models.Model):
         unique_together = ("store", "product")
 
 
+class MovementType(models.TextChoices):
+    ENTRY = "ENTRY", "Entrada"
+    EXIT = "EXIT", "Salida"
+    TRANSFER = "TRANSFER", "Transferencia"
+    ADJUSTMENT = "ADJUSTMENT", "Ajuste"
+
+
+class MovementStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Borrador"
+    CONFIRMED = "CONFIRMED", "Confirmado"
+    CLOSED = "CLOSED", "Cerrado"
+
+
 class Movement(TimeStampedModel):
-    MOVEMENT_TYPES = [
-        ("ENTRY", "Entrada"),
-        ("EXIT", "Salida"),
-        ("TRANSFER", "Transferencia"),
-        ("ADJUSTMENT", "Ajuste"),
-    ]
+    MOVEMENT_TYPES = MovementType.choices
+    STATUS_CHOICES = MovementStatus.choices
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
@@ -203,6 +214,23 @@ class Movement(TimeStampedModel):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=MovementStatus.DRAFT)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="confirmed_movements",
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="closed_movements",
+    )
 
     class Meta:
         db_table = "movements"
@@ -210,6 +238,73 @@ class Movement(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.type} {self.number} ({self.date:%Y-%m-%d})"
+
+    @property
+    def lock_mode_enabled(self) -> bool:
+        if not self.store_id:
+            return True
+        if hasattr(self, "store") and self.store:
+            return bool(getattr(self.store, "lock_movement_edits", True))
+        return True
+
+    @property
+    def has_posterior_related_movements(self) -> bool:
+        """Determina si existen movimientos posteriores relacionados."""
+        if hasattr(self, "_has_posterior_related_movements_cache"):
+            return self._has_posterior_related_movements_cache
+
+        product_ids = list(self.details.values_list("product_id", flat=True))
+        if not product_ids:
+            self._has_posterior_related_movements_cache = False
+            return self._has_posterior_related_movements_cache
+
+        warehouse_ids = {
+            self.warehouse_id,
+            self.warehouse_origin_id,
+            self.warehouse_dest_id,
+        }
+        warehouse_ids.discard(None)
+        if not warehouse_ids:
+            self._has_posterior_related_movements_cache = False
+            return self._has_posterior_related_movements_cache
+
+        date_q = Q(date__gt=self.date)
+        if self.created_at:
+            date_q |= Q(date=self.date, created_at__gt=self.created_at)
+
+        self._has_posterior_related_movements_cache = (
+            Movement.objects
+            .exclude(pk=self.pk)
+            .filter(store_id=self.store_id)
+            .filter(details__product_id__in=product_ids)
+            .filter(date_q)
+            .filter(
+                Q(warehouse_id__in=warehouse_ids)
+                | Q(warehouse_origin_id__in=warehouse_ids)
+                | Q(warehouse_dest_id__in=warehouse_ids)
+            )
+            .distinct()
+            .exists()
+        )
+        return self._has_posterior_related_movements_cache
+
+    @property
+    def lock_reason(self) -> str:
+        if self.status == MovementStatus.CLOSED:
+            return "Movimiento cerrado. Solo se permite corrección con nuevo movimiento."
+        if self.status == MovementStatus.CONFIRMED:
+            return "Movimiento confirmado. Para cambiarlo debe registrar un movimiento correctivo."
+        if self.lock_mode_enabled and self.has_posterior_related_movements:
+            return "No editable: existen movimientos posteriores relacionados en el mismo producto/almacén."
+        return ""
+
+    @property
+    def is_locked_for_changes(self) -> bool:
+        if self.status in (MovementStatus.CONFIRMED, MovementStatus.CLOSED):
+            return True
+        if not self.lock_mode_enabled:
+            return False
+        return self.has_posterior_related_movements
 
 
 class MovementDetail(models.Model):
@@ -230,3 +325,38 @@ class MovementDetail(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.sku} x{self.quantity}"
+
+    @property
+    def system_quantity(self):
+        """Cantidad del sistema justo antes del ajuste (solo para ADJUSTMENT)."""
+        if self.physical_quantity is None:
+            return None
+        return Decimal(str(self.physical_quantity)) - Decimal(str(self.quantity))
+
+
+class MovementAuditLog(models.Model):
+    class ActionType(models.TextChoices):
+        CREATE = "CREATE", "Creación"
+        UPDATE = "UPDATE", "Actualización"
+        CONFIRM = "CONFIRM", "Confirmación"
+        CLOSE = "CLOSE", "Cierre"
+        DELETE = "DELETE", "Eliminación"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    movement = models.ForeignKey(Movement, on_delete=models.CASCADE, related_name="audit_logs")
+    action = models.CharField(max_length=20, choices=ActionType.choices)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movement_audit_logs",
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    before_data = models.JSONField(null=True, blank=True)
+    after_data = models.JSONField(null=True, blank=True)
+    message = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        db_table = "movement_audit_logs"
+        ordering = ["-changed_at"]

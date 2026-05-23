@@ -23,6 +23,9 @@
       <a href="{% url 'inventory:transfer_create' %}" class="btn btn-warning btn-sm">
         <i class="ti ti-arrows-exchange me-1"></i>Transferencia
       </a>
+      <a href="{% url 'inventory:adjustment_create' %}" class="btn btn-yellow btn-sm">
+        <i class="ti ti-adjustments me-1"></i>Ajuste
+      </a>
     </div>
   </div>
 </div>
@@ -47,11 +50,12 @@
         <tr>
           <th>Fecha</th>
           <th>Tipo</th>
+          <th>Estado</th>
           <th>Almacén</th>
           <th>Operación</th>
           <th>Socio de Negocio</th>
           <th>Documento</th>
-          <th class="text-center" style="width:170px">Acciones</th>
+          <th class="text-center" style="width:240px">Acciones</th>
         </tr>
       </thead>
 
@@ -65,6 +69,12 @@
             {% elif obj.type == "EXIT" %}<span class="badge bg-red text-white">Salida</span>
             {% elif obj.type == "TRANSFER" %}<span class="badge bg-blue text-white">Transferencia</span>
             {% else %}<span class="badge bg-yellow text-dark">Ajuste</span>{% endif %}
+          </td>
+
+          <td>
+            {% if obj.status == "DRAFT" %}<span class="badge bg-secondary text-white">Borrador</span>
+            {% elif obj.status == "CONFIRMED" %}<span class="badge bg-success text-white">Confirmado</span>
+            {% else %}<span class="badge bg-dark text-white">Cerrado</span>{% endif %}
           </td>
 
           <td class="text-muted">
@@ -103,6 +113,19 @@
               >
                 <i class="ti ti-eye"></i>
               </button>
+              {% if obj.status == "DRAFT" and not obj.is_locked_for_changes %}
+              <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Confirmar este movimiento? Luego no será editable.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Confirmar movimiento">
+                  <i class="ti ti-check"></i>
+                </button>
+              </form>
+              {% endif %}
+              {% if obj.is_locked_for_changes %}
+              <button type="button" class="btn btn-sm btn-outline-secondary" title="{{ obj.lock_reason|default:'Movimiento bloqueado' }}">
+                <i class="ti ti-lock"></i>
+              </button>
+              {% else %}
               <a href="{% url 'inventory:movement_edit' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
                 <i class="ti ti-pencil"></i>
               </a>
@@ -112,12 +135,13 @@
                   <i class="ti ti-trash"></i>
                 </button>
               </form>
+              {% endif %}
             </div>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">
+          <td colspan="8" class="text-center text-muted py-4">
             No hay movimientos{% if query %} que coincidan con "{{ query }}"{% endif %}.
           </td>
         </tr>
@@ -173,6 +197,15 @@
             <h6 class="text-muted mb-3">Información General</h6>
             <div class="row g-3 small">
               <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Estado</div>
+                <div class="fw-semibold">
+                  {% if obj.status == "DRAFT" %}Borrador
+                  {% elif obj.status == "CONFIRMED" %}Confirmado
+                  {% else %}Cerrado{% endif %}
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Fecha de Movimiento</div>
                 <div class="fw-semibold">{{ obj.date|date:"d/m/Y H:i" }}</div>
               </div>
@@ -192,6 +225,18 @@
                 <div class="text-muted">Motivo / Operación</div>
                 <div class="fw-semibold">{{ obj.reason|default:"-" }}</div>
               </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Registrado por</div>
+                <div class="fw-semibold">{{ obj.created_by|default:"Sistema" }}</div>
+              </div>
+
+              {% if obj.confirmed_at %}
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Confirmado por</div>
+                <div class="fw-semibold">{{ obj.confirmed_by|default:"Sistema" }} — {{ obj.confirmed_at|date:"d/m/Y H:i" }}</div>
+              </div>
+              {% endif %}
 
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Asociado</div>
@@ -245,38 +290,65 @@
         </div>
 
         <h6 class="mb-2">Productos Detallados</h6>
+        {% if obj.type == "ADJUSTMENT" %}
+        <div class="alert alert-warning py-2 px-3 mb-2 small">
+          Movimiento de ajuste: se muestra trazabilidad por línea (Qty Sistema, Qty Física, Ajuste).
+        </div>
+        {% endif %}
         <div class="table-responsive border rounded">
           <table class="table table-sm table-vcenter mb-0">
             <thead class="table-light">
               <tr>
                 <th class="text-center" style="width:38px">#</th>
+                <th>SKU</th>
                 <th>Producto</th>
+                {% if obj.type == "ADJUSTMENT" %}
+                <th class="text-end">Qty Sistema</th>
+                <th class="text-end">Qty Física</th>
+                <th class="text-end">Ajuste (Dif)</th>
+                {% else %}
                 <th class="text-end">Cantidad</th>
+                {% endif %}
+                {% if obj.type != "ADJUSTMENT" %}
                 <th class="text-end">Precio Unitario</th>
                 <th class="text-end">Total</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
               {% for d in obj.details.all %}
               <tr class="movement-detail-row" data-qty="{{ d.quantity }}" data-unit-price="{{ d.unit_price }}">
                 <td class="text-center text-muted">{{ forloop.counter }}</td>
+                <td class="text-muted">{{ d.product.sku|default:"—" }}</td>
                 <td class="fw-semibold">{{ d.product.name }}</td>
+                {% if obj.type == "ADJUSTMENT" %}
+                <td class="text-end">{{ d.system_quantity|floatformat:3 }}</td>
+                <td class="text-end">{{ d.physical_quantity|floatformat:3 }}</td>
+                <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|floatformat:3 }}</td>
+                {% else %}
                 <td class="text-end">{{ d.quantity|floatformat:3 }}</td>
                 <td class="text-end">S/ {{ d.unit_price|floatformat:2 }}</td>
                 <td class="text-end movement-line-total">S/ 0.00</td>
+                {% endif %}
               </tr>
               {% empty %}
               <tr>
-                <td colspan="5" class="text-center text-muted py-3">No hay productos para este movimiento.</td>
+                <td colspan="{% if obj.type == 'ADJUSTMENT' %}6{% else %}6{% endif %}" class="text-center text-muted py-3">No hay productos para este movimiento.</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
 
+        {% if obj.type == "ADJUSTMENT" %}
+        <div class="d-flex justify-content-end mt-3">
+          <div class="fs-6 fw-bold">Ajuste Neto: {{ obj.details.all|length }} ítem(s)</div>
+        </div>
+        {% else %}
         <div class="d-flex justify-content-end mt-3">
           <div class="fs-5 fw-bold">Total General: <span class="movement-grand-total">S/ 0.00</span></div>
         </div>
+        {% endif %}
       </div>
     </div>
   </div>

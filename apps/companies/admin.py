@@ -17,8 +17,8 @@ class CompanyBrandingAdmin(admin.ModelAdmin):
 
 @admin.register(Store)
 class StoreAdmin(admin.ModelAdmin):
-    list_display = ("id", "company", "name", "active")
-    list_filter = ("company", "active")
+    list_display = ("id", "company", "name", "active", "lock_movement_edits")
+    list_filter = ("company", "active", "lock_movement_edits")
     search_fields = ("name",)
 
 

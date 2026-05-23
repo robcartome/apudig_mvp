@@ -17,6 +17,7 @@
   const stockUrl = configEl.dataset.stockUrl;
   const locationUrl = configEl.dataset.locationUrl;
   const movementType = configEl.dataset.movementType;
+  const showUnitPrice = configEl.dataset.showUnitPrice === '1';
   const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
   const warehouseInput = document.getElementById(
@@ -111,6 +112,13 @@
   function buildRow(index) {
     const row = document.createElement('tr');
     row.className = 'line-row';
+    const unitPriceCell = showUnitPrice
+      ? `<td>
+        <input type="number" name="lines-${index}-unit_price" id="id_lines-${index}-unit_price"
+               class="form-control form-control-sm" step="0.001" min="0" value="">
+      </td>`
+      : '';
+
     row.innerHTML = `
       <td class="text-center text-muted line-num">${index + 1}</td>
       <td style="min-width:220px">
@@ -138,10 +146,7 @@
                 data-placeholder="Ubicación (opcional)">
         </select>
       </td>
-      <td>
-        <input type="number" name="lines-${index}-unit_price" id="id_lines-${index}-unit_price"
-               class="form-control form-control-sm" step="0.001" min="0" value="">
-      </td>
+      ${unitPriceCell}
       <td class="text-center">
         <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar fila">
           <i class="ti ti-x"></i>

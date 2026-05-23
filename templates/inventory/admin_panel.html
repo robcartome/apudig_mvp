@@ -23,6 +23,31 @@
       <div class="card-body">
         <div class="row g-3">
 
+          <div class="col-12 col-md-6 col-lg-6">
+            <div class="card border h-100">
+              <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between gap-3">
+                  <div>
+                    <div class="fw-semibold mb-1">Bloqueo de movimientos posteriores</div>
+                    <div class="text-muted small">Si está activo, no se permite editar/eliminar movimientos con operaciones posteriores relacionadas.</div>
+                    {% if active_store %}
+                    <div class="text-muted small mt-2">Sucursal activa: <strong>{{ active_store.name }}</strong></div>
+                    {% endif %}
+                  </div>
+                  <form method="post" class="ms-auto">
+                    {% csrf_token %}
+                    <label class="form-check form-switch m-0">
+                      <input class="form-check-input" type="checkbox" name="lock_movement_edits"
+                             {% if movement_lock_enabled %}checked{% endif %}
+                             onchange="this.form.submit()">
+                      <span class="form-check-label">{% if movement_lock_enabled %}Activo{% else %}Inactivo{% endif %}</span>
+                    </label>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="col-6 col-md-4 col-lg-3">
             <a href="{% url 'inventory:warehouse_list' %}" class="card card-link border h-100 text-decoration-none">
               <div class="card-body text-center py-4">

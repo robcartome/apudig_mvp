@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView
 
 from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
+from apps.companies.models import Store
 
 from ..forms import BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
 from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation
@@ -408,9 +409,20 @@ def admin_panel(request):
     if not request.user.is_authenticated:
         return redirect("login")
     store_id = _require_store(request)
+    store = Store.objects.filter(pk=store_id).first() if store_id else None
+
+    if request.method == "POST" and store:
+        lock_enabled = request.POST.get("lock_movement_edits") == "on"
+        store.lock_movement_edits = lock_enabled
+        store.save(update_fields=["lock_movement_edits", "updated_at"])
+        messages.success(request, "Configuración de bloqueo de movimientos actualizada.")
+        return redirect("inventory:admin_panel")
+
     warehouse_count = Warehouse.objects.filter(store_id=store_id, active=True).count() if store_id else 0
     location_count = WarehouseLocation.objects.filter(warehouse__store_id=store_id, active=True).count() if store_id else 0
     return render(request, "inventory/admin_panel.html", {
         "warehouse_count": warehouse_count,
         "location_count": location_count,
+        "movement_lock_enabled": bool(store.lock_movement_edits) if store else True,
+        "active_store": store,
     })

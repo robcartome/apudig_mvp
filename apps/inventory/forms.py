@@ -4,7 +4,7 @@ from django import forms
 
 from apps.partners.models import Carrier, CoreCustomer, DocumentType, Supplier
 
-from .models import Brand, Category, Movement, MovementDetail, PriceList, Product, ProductPrice, Unit, Warehouse, WarehouseLocation
+from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, Unit, Warehouse, WarehouseLocation
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -170,7 +170,7 @@ class MovementHeaderForm(forms.ModelForm):
         self.fields["document_type"].queryset = DocumentType.objects.filter(active=True).order_by("code")
 
         # Show/hide fields by type
-        if movement_type in ("TRANSFER", "ADJUSTMENT"):
+        if movement_type in (MovementType.TRANSFER, MovementType.ADJUSTMENT):
             self.fields["carrier"].widget = forms.HiddenInput()
 
 
@@ -244,6 +244,10 @@ class MovementDetailForm(forms.Form):
 
 MovementDetailFormSet = forms.formset_factory(
     MovementDetailForm, extra=1, min_num=1, validate_min=True
+)
+
+MovementDetailEditFormSet = forms.formset_factory(
+    MovementDetailForm, extra=0, min_num=1, validate_min=True
 )
 
 

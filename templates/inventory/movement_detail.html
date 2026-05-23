@@ -25,6 +25,12 @@
             {% elif movement.type == "TRANSFER" %}<span class="badge bg-warning-lt">Transferencia</span>
             {% else %}<span class="badge bg-secondary-lt">Ajuste</span>{% endif %}
           </dd>
+          <dt class="col-5 text-muted">Estado</dt>
+          <dd class="col-7">
+            {% if movement.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
+            {% elif movement.status == "CONFIRMED" %}<span class="badge bg-success-lt">Confirmado</span>
+            {% else %}<span class="badge bg-dark-lt">Cerrado</span>{% endif %}
+          </dd>
           <dt class="col-5 text-muted">Fecha</dt>
           <dd class="col-7">{{ movement.date|date:"d/m/Y H:i" }}</dd>
           {% if movement.warehouse %}
@@ -73,6 +79,18 @@
           <dd class="col-7">{{ movement.created_by|default:"—" }}</dd>
           <dt class="col-5 text-muted">Creado</dt>
           <dd class="col-7">{{ movement.created_at|date:"d/m/Y H:i" }}</dd>
+          {% if movement.confirmed_at %}
+          <dt class="col-5 text-muted">Confirmado por</dt>
+          <dd class="col-7">{{ movement.confirmed_by|default:"Sistema" }}</dd>
+          <dt class="col-5 text-muted">Fecha confirmación</dt>
+          <dd class="col-7">{{ movement.confirmed_at|date:"d/m/Y H:i" }}</dd>
+          {% endif %}
+          {% if movement.closed_at %}
+          <dt class="col-5 text-muted">Cerrado por</dt>
+          <dd class="col-7">{{ movement.closed_by|default:"Sistema" }}</dd>
+          <dt class="col-5 text-muted">Fecha cierre</dt>
+          <dd class="col-7">{{ movement.closed_at|date:"d/m/Y H:i" }}</dd>
+          {% endif %}
         </dl>
       </div>
     </div>
@@ -88,11 +106,19 @@
               <th class="text-center" style="width:38px">#</th>
               <th>SKU</th>
               <th>Producto</th>
+              {% if movement.type == "ADJUSTMENT" %}
+              <th class="text-end">Qty Sistema</th>
+              <th class="text-end">Qty Física</th>
+              <th class="text-end">Ajuste (Dif)</th>
+              {% else %}
               <th class="text-end">Cant.</th>
+              {% endif %}
               <th>Unidad</th>
               <th>Ubicación</th>
+              {% if movement.type != "ADJUSTMENT" %}
               <th class="text-end">P. Unit.</th>
               <th class="text-end">Total</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -101,17 +127,55 @@
               <td class="text-center text-muted">{{ forloop.counter }}</td>
               <td class="text-muted small">{{ d.product.sku }}</td>
               <td>{{ d.product.name }}</td>
+              {% if movement.type == "ADJUSTMENT" %}
+              <td class="text-end fw-semibold">{{ d.system_quantity|floatformat:3 }}</td>
+              <td class="text-end fw-semibold">{{ d.physical_quantity|floatformat:3 }}</td>
+              <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|floatformat:3 }}</td>
+              {% else %}
               <td class="text-end fw-semibold">{{ d.quantity|floatformat:3 }}</td>
+              {% endif %}
               <td class="text-muted small">{{ d.product.unit }}</td>
               <td class="text-muted small">{{ d.location.name|default:"—" }}</td>
+              {% if movement.type != "ADJUSTMENT" %}
               <td class="text-end text-muted small">{{ d.unit_price|floatformat:2 }}</td>
               <td class="text-end fw-semibold">{{ d.quantity|floatformat:2 }}</td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><h3 class="card-title">Bitácora de auditoría</h3></div>
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table mb-0">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Acción</th>
+          <th>Usuario</th>
+          <th>Detalle</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in movement.audit_logs.all %}
+        <tr>
+          <td class="text-muted small">{{ log.changed_at|date:"d/m/Y H:i:s" }}</td>
+          <td><span class="badge bg-azure-lt">{{ log.get_action_display }}</span></td>
+          <td>{{ log.changed_by|default:"Sistema" }}</td>
+          <td class="text-muted small">{{ log.message|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center text-muted py-3">No hay registros de auditoría.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 

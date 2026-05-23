@@ -18,7 +18,9 @@ from .masters import (
     warehouse_location_list, warehouse_location_update,
 )
 from .operations import (
+    adjustment_create,
     entry_create,
+    movement_confirm,
     movement_delete,
     movement_edit,
     exit_create,
@@ -45,8 +47,8 @@ __all__ = [
     "warehouse_create", "warehouse_delete", "warehouse_list", "warehouse_update",
     "stock_report",
     "movement_list", "movement_detail",
-    "movement_edit", "movement_delete",
-    "entry_create", "exit_create", "transfer_create",
+    "movement_edit", "movement_delete", "movement_confirm",
+    "entry_create", "exit_create", "transfer_create", "adjustment_create",
     "pricelist_list", "pricelist_create", "pricelist_detail", "pricelist_update",
     "pricelist_toggle", "pricelist_del_price",
 ]

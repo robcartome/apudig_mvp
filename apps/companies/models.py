@@ -45,6 +45,7 @@ class Store(TimeStampedModel):
     name = models.CharField(max_length=255)
     address = models.CharField(max_length=500, blank=True)
     active = models.BooleanField(default=True)
+    lock_movement_edits = models.BooleanField(default=True)
 
     class Meta:
         db_table = "stores"

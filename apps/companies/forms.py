@@ -25,4 +25,4 @@ class CompanyBrandingForm(forms.ModelForm):
 class StoreForm(forms.ModelForm):
     class Meta:
         model = Store
-        fields = ("company", "name", "address", "active")
+        fields = ("company", "name", "address", "active", "lock_movement_edits")

@@ -85,6 +85,12 @@
             {{ form.warehouse_dest }}
             {% if form.warehouse_dest.errors %}<div class="text-danger small mt-1">{{ form.warehouse_dest.errors.0 }}</div>{% endif %}
           </div>
+          {% elif movement_type == "ADJUSTMENT" %}
+          <div class="col-12">
+            <label class="form-label required">Almacén</label>
+            {{ form.warehouse }}
+            {% if form.warehouse.errors %}<div class="text-danger small mt-1">{{ form.warehouse.errors.0 }}</div>{% endif %}
+          </div>
           {% else %}
           <div class="col-12 col-sm-6 col-lg-4">
             <label class="form-label">Tipo de documento</label>
@@ -105,12 +111,15 @@
             <label class="form-label">Operación</label>
             <select id="id_reason_ui" name="reason" class="reason-select form-select"
                     data-init="{{ form.instance.reason|default:'' }}">
-              {% if movement_type == "ENTRY" or movement_type == "ADJUSTMENT" %}
+              {% if movement_type == "ENTRY" %}
               <option value="Compra">Compra</option>
               <option value="Devolución">Devolución</option>
               <option value="Préstamo recibido">Préstamo recibido</option>
               <option value="Consumo interno">Consumo interno</option>
-              <option value="Ajuste">Ajuste</option>
+              {% elif movement_type == "ADJUSTMENT" %}
+              <option value="Ajuste general">Ajuste general</option>
+              <option value="Ajuste semanal">Ajuste semanal</option>
+              <option value="Ajuste mensual">Ajuste mensual</option>
               <option value="Saldo inicial">Saldo inicial</option>
               {% elif movement_type == "EXIT" %}
               <option value="Venta">Venta</option>
@@ -124,7 +133,7 @@
               {% endif %}
             </select>
           </div>
-          {% if movement_type != "TRANSFER" %}
+          {% if movement_type != "TRANSFER" and movement_type != "ADJUSTMENT" %}
           <div class="col-12 col-md-6">
             <label class="form-label required">Almacén</label>
             {{ form.warehouse }}
@@ -174,10 +183,12 @@
               <th class="text-center" style="width:38px">#</th>
               <th>Producto</th>
               <th style="width:140px">Unidad</th>
-              <th style="width:130px">Cantidad</th>
+              <th style="width:130px">{% if movement_type == "ADJUSTMENT" %}Cantidad Física{% else %}Cantidad{% endif %}</th>
               <th style="width:130px">STOCK POR ALM</th>
               <th style="width:180px">Ubicación</th>
+              {% if movement_type != "ADJUSTMENT" %}
               <th style="width:130px">P. Unitario</th>
+              {% endif %}
               <th style="width:38px"></th>
             </tr>
           </thead>
@@ -229,12 +240,14 @@
                   {% endif %}
                 </select>
               </td>
+              {% if movement_type != "ADJUSTMENT" %}
               <td>
                 {{ f.unit_price }}
                 {% if f.unit_price.errors %}
                 <div class="text-danger" style="font-size:.75rem">{{ f.unit_price.errors.0 }}</div>
                 {% endif %}
               </td>
+              {% endif %}
               <td class="text-center">
                 <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar fila">
                   <i class="ti ti-x"></i>
@@ -245,7 +258,7 @@
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="8">
+              <td colspan="{% if movement_type == 'ADJUSTMENT' %}7{% else %}8{% endif %}">
                 <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
                   <i class="ti ti-plus me-1"></i>Agregar producto
                 </button>
@@ -277,6 +290,7 @@
      data-stock-url="{% url 'inventory:api_product_stock' %}"
      data-create-url="{% url 'inventory:api_product_create' %}"
      data-location-url="{% url 'inventory:api_location_search' %}"
+  data-show-unit-price="{% if movement_type == 'ADJUSTMENT' %}0{% else %}1{% endif %}"
      data-movement-type="{{ movement_type }}"></div>
 
 
