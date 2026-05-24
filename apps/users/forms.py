@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
+from apps.companies.models import Company, CompanyBranding, Store
 from .models import Permission, Role, UserOperationalFlags
 
 User = get_user_model()
@@ -115,3 +116,47 @@ class PermissionForm(forms.ModelForm):
     class Meta:
         model = Permission
         fields = ("code", "action_name", "module", "description")
+
+
+class CompanyAdminForm(forms.ModelForm):
+    class Meta:
+        model = Company
+        fields = ("name", "ruc", "address", "email", "phone", "is_active")
+        widgets = {
+            "name": forms.TextInput(attrs={"autofocus": True}),
+            "address": forms.TextInput(),
+        }
+
+    def clean_ruc(self):
+        ruc = self.cleaned_data["ruc"].strip()
+        qs = Company.objects.filter(ruc=ruc)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("Ya existe una empresa con este RUC.")
+        return ruc
+
+
+class CompanyBrandingAdminForm(forms.ModelForm):
+    class Meta:
+        model = CompanyBranding
+        fields = ("app_logo_url", "primary_color", "secondary_color")
+        widgets = {
+            "primary_color": forms.TextInput(attrs={"type": "color", "class": "form-control form-control-color"}),
+            "secondary_color": forms.TextInput(attrs={"type": "color", "class": "form-control form-control-color"}),
+            "app_logo_url": forms.URLInput(attrs={"placeholder": "https://...  (URL del logo)"}),
+        }
+        labels = {
+            "app_logo_url": "URL del logo",
+            "primary_color": "Color primario",
+            "secondary_color": "Color secundario",
+        }
+
+
+class StoreAdminForm(forms.ModelForm):
+    class Meta:
+        model = Store
+        fields = ("name", "address", "active", "lock_movement_edits")
+        widgets = {
+            "name": forms.TextInput(attrs={"autofocus": True}),
+        }

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Eliminar Sucursal — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7 col-lg-5">
+    <div class="card border-danger">
+      <div class="card-header bg-danger-lt">
+        <h4 class="card-title mb-0 text-danger">
+          <i class="ti ti-alert-triangle me-2"></i>Eliminar sucursal
+        </h4>
+      </div>
+      <div class="card-body text-center py-4">
+        <p class="mb-1">¿Deseas eliminar la sucursal</p>
+        <p class="fw-bold fs-4 mb-1">{{ store.name }}</p>
+        <p class="text-muted small mb-3">de la empresa <strong>{{ company.name }}</strong></p>
+        <div class="alert alert-warning text-start small">
+          <i class="ti ti-alert-circle me-1"></i>
+          Esta acción eliminará también los accesos de usuario y configuraciones vinculadas a esta sucursal.
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-center gap-3">
+        <a href="{% url 'users:company_edit' company.pk %}" class="btn btn-outline-secondary">
+          <i class="ti ti-arrow-left me-1"></i>Cancelar
+        </a>
+        <form method="post">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="ti ti-trash me-1"></i>Sí, eliminar sucursal
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

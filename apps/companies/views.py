@@ -8,16 +8,19 @@ from .models import Company, Store, UserCompanyAccess
 
 @login_required
 def select_company(request):
-    # Superuser fallback: if no explicit access rows exist, grant company-level access
-    # to all active companies so the account is never blocked on the selector.
-    if request.user.is_superuser and not UserCompanyAccess.objects.filter(user=request.user).exists():
+    # Superusuario: sincronizar siempre con todas las empresas y sucursales activas.
+    # Se ejecuta en cada carga del selector para capturar nuevas empresas/sucursales.
+    if request.user.is_superuser:
         for company in Company.objects.filter(is_active=True):
             UserCompanyAccess.objects.get_or_create(
-                user=request.user,
-                company=company,
-                store=None,
+                user=request.user, company=company, store=None,
                 defaults={"is_default": False},
             )
+            for store in Store.objects.filter(company=company, active=True):
+                UserCompanyAccess.objects.get_or_create(
+                    user=request.user, company=company, store=store,
+                    defaults={"is_default": False},
+                )
 
     accesses = UserCompanyAccess.objects.select_related("company", "store").filter(user=request.user)
     accesses = accesses.order_by("-is_default", "company__name", "store__name")

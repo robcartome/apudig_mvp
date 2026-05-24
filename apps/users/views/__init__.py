@@ -1,6 +1,9 @@
 # users/views package
 from .admin import (  # noqa: F401
     admin_panel,
+    company_create,
+    company_delete,
+    company_edit,
     company_list,
     configuracion,
     permission_create,
@@ -11,6 +14,9 @@ from .admin import (  # noqa: F401
     role_edit,
     role_list,
     role_permissions,
+    store_create,
+    store_delete,
+    store_edit,
     user_create,
     user_delete,
     user_detail,

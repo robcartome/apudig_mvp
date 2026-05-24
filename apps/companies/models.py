@@ -10,6 +10,9 @@ class Company(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     ruc = models.CharField(max_length=15, unique=True)
+    address = models.CharField(max_length=500, blank=True)
+    email = models.EmailField(max_length=255, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -29,8 +32,8 @@ class CompanyBranding(TimeStampedModel):
     )
     app_logo_url = models.CharField(max_length=1000, blank=True)
     pdf_logo_url = models.CharField(max_length=1000, blank=True)
-    primary_color = models.CharField(max_length=20, blank=True)
-    secondary_color = models.CharField(max_length=20, blank=True)
+    primary_color = models.CharField(max_length=20, blank=True, default="#066fd1")
+    secondary_color = models.CharField(max_length=20, blank=True, default="#4a4a4a")
 
     class Meta:
         db_table = "company_branding"

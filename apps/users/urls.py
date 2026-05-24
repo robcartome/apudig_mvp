@@ -2,6 +2,9 @@ from django.urls import path
 
 from .views import (
     admin_panel,
+    company_create,
+    company_delete,
+    company_edit,
     company_list,
     configuracion,
     permission_create,
@@ -12,6 +15,9 @@ from .views import (
     role_edit,
     role_list,
     role_permissions,
+    store_create,
+    store_delete,
+    store_edit,
     user_create,
     user_delete,
     user_detail,
@@ -44,6 +50,14 @@ urlpatterns = [
 
     # ── Empresas ──────────────────────────────────────────────────────────
     path("empresas/", company_list, name="company_list"),
+    path("empresas/nueva/", company_create, name="company_create"),
+    path("empresas/<uuid:pk>/editar/", company_edit, name="company_edit"),
+    path("empresas/<uuid:pk>/eliminar/", company_delete, name="company_delete"),
+
+    # ── Sucursales (dentro de una empresa) ────────────────────────────────
+    path("empresas/<uuid:company_pk>/sucursales/nueva/", store_create, name="store_create"),
+    path("empresas/<uuid:company_pk>/sucursales/<uuid:pk>/editar/", store_edit, name="store_edit"),
+    path("empresas/<uuid:company_pk>/sucursales/<uuid:pk>/eliminar/", store_delete, name="store_delete"),
 
     # ── Configuración ─────────────────────────────────────────────────────
     path("configuracion/", configuracion, name="configuracion"),

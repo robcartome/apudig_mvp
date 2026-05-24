@@ -51,6 +51,14 @@
         <i class="ti ti-key me-1"></i>Roles y Accesos
       </a>
     </li>
+    {% if request.user.is_superuser %}
+    <li class="nav-item">
+      <a class="nav-link {% if detail_tab == 'accesos' %}active{% endif %}"
+         href="?tab=accesos">
+        <i class="ti ti-building me-1"></i>Empresas y Sucursales
+      </a>
+    </li>
+    {% endif %}
   </ul>
 </div>
 
@@ -336,6 +344,80 @@
 <div class="alert alert-warning">
   <i class="ti ti-alert-triangle me-2"></i>
   Selecciona una empresa activa para gestionar los roles de este usuario.
+</div>
+{% endif %}
+{% endif %}
+
+{# ── Tab: Empresas y Sucursales ── #}
+{% if detail_tab == 'accesos' %}
+{% if request.user.is_superuser %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="card">
+    <div class="card-header">
+      <h4 class="card-title mb-0">
+        <i class="ti ti-building me-2"></i>Acceso a Empresas y Sucursales
+      </h4>
+      <p class="card-subtitle mt-1 text-muted small">
+        Marca las sucursales a las que este usuario puede acceder. El acceso <strong>Nivel empresa</strong>
+        permite operar sin una sucursal específica (útil para administradores).
+      </p>
+    </div>
+    <div class="card-body">
+      {% for grupo in accesos_por_empresa %}
+      <div class="mb-4">
+        <h5 class="mb-2">
+          <i class="ti ti-building-store me-1 text-primary"></i>{{ grupo.company.name }}
+          <span class="text-muted fw-normal small ms-2">{{ grupo.company.ruc }}</span>
+        </h5>
+        <div class="row g-2 ps-2">
+          {# Acceso nivel empresa #}
+          <div class="col-auto">
+            <label class="form-check">
+              <input type="checkbox" name="access"
+                     value="{{ grupo.company.pk }}|"
+                     class="form-check-input"
+                     {% if grupo.has_company_access %}checked{% endif %}>
+              <span class="form-check-label">
+                <span class="badge bg-blue-lt text-blue">Nivel empresa (admin general)</span>
+              </span>
+            </label>
+          </div>
+          {# Sucursales #}
+          {% for info in grupo.stores %}
+          <div class="col-auto">
+            <label class="form-check">
+              <input type="checkbox" name="access"
+                     value="{{ grupo.company.pk }}|{{ info.store.pk }}"
+                     class="form-check-input"
+                     {% if info.has_access %}checked{% endif %}>
+              <span class="form-check-label">
+                <i class="ti ti-home me-1 text-muted"></i>{{ info.store.name }}
+              </span>
+            </label>
+          </div>
+          {% empty %}
+          <div class="col-12">
+            <span class="text-muted small">Esta empresa no tiene sucursales activas.</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% if not forloop.last %}<hr class="my-3">{% endif %}
+      {% empty %}
+      <p class="text-muted">No hay empresas activas en el sistema.</p>
+      {% endfor %}
+    </div>
+    <div class="card-footer">
+      <button type="submit" name="save_accesos" class="btn btn-primary">
+        <i class="ti ti-device-floppy me-1"></i>Guardar accesos
+      </button>
+    </div>
+  </div>
+</form>
+{% else %}
+<div class="alert alert-warning">
+  <i class="ti ti-lock me-2"></i>Solo los superusuarios pueden gestionar los accesos de empresa.
 </div>
 {% endif %}
 {% endif %}

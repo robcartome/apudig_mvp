@@ -12,12 +12,8 @@
              class="btn {% if active_tab == 'empresas' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
             <i class="ti ti-building me-1"></i>Empresas
           </a>
-          <a href="{% url 'users:role_list' %}"
-             class="btn {% if active_tab == 'roles' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-            <i class="ti ti-key me-1"></i>Roles y Permisos
-          </a>
           <a href="{% url 'users:configuracion' %}"
-             class="btn {% if active_tab == 'configuracion' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+             class="btn {% if active_tab == 'configuracion' or active_tab == 'roles' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
             <i class="ti ti-adjustments me-1"></i>Configuración
           </a>
         </div>

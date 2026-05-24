@@ -9,11 +9,14 @@ from django.db.models import Count, Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 
-from apps.companies.models import Company, UserCompanyAccess
+from apps.companies.models import Company, CompanyBranding, Store, UserCompanyAccess
 from apps.users.forms import (
+    CompanyAdminForm,
+    CompanyBrandingAdminForm,
     PermissionForm,
     RoleForm,
     SetPasswordForm,
+    StoreAdminForm,
     UserCreateForm,
     UserEditForm,
     UserOperationalFlagsForm,
@@ -213,6 +216,64 @@ def user_detail(request, pk):
         messages.success(request, "Roles actualizados correctamente.")
         return redirect(f"{request.path}?tab=roles")
 
+    # ── Tab: Empresas y Sucursales (accesos) ──────────────────────────────
+    # Solo superusuarios pueden gestionar los accesos de otros usuarios
+    accesos_por_empresa = []
+    if request.user.is_superuser:
+        user_access_pairs = set(
+            UserCompanyAccess.objects.filter(user=target)
+            .values_list("company_id", "store_id")
+        )
+        # Normalizar: store_id None queda como None, UUID como str
+        user_access_set = {
+            (str(c), str(s) if s else None)
+            for c, s in user_access_pairs
+        }
+        for co in Company.objects.filter(is_active=True).prefetch_related("stores").order_by("name"):
+            stores_info = [
+                {
+                    "store": st,
+                    "has_access": (str(co.pk), str(st.pk)) in user_access_set,
+                }
+                for st in co.stores.filter(active=True).order_by("name")
+            ]
+            accesos_por_empresa.append({
+                "company": co,
+                "has_company_access": (str(co.pk), None) in user_access_set,
+                "stores": stores_info,
+            })
+
+    if request.method == "POST" and "save_accesos" in request.POST and request.user.is_superuser:
+        selected_pairs = request.POST.getlist("access")  # e.g. ["UUID|", "UUID|UUID"]
+        desired: set[tuple[str, str | None]] = set()
+        for item in selected_pairs:
+            parts = item.split("|", 1)
+            co_id = parts[0].strip()
+            st_id = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+            if co_id:
+                desired.add((co_id, st_id))
+
+        with transaction.atomic():
+            # Eliminar los accesos que ya no están seleccionados
+            for access in UserCompanyAccess.objects.filter(user=target).select_related("company", "store"):
+                key = (str(access.company_id), str(access.store_id) if access.store_id else None)
+                if key not in desired:
+                    access.delete()
+            # Agregar los accesos nuevos
+            for co_id, st_id in desired:
+                co = Company.objects.filter(pk=co_id).first()
+                if not co:
+                    continue
+                store = Store.objects.filter(pk=st_id, company=co).first() if st_id else None
+                UserCompanyAccess.objects.get_or_create(
+                    user=target,
+                    company=co,
+                    store=store,
+                    defaults={"is_default": False},
+                )
+        messages.success(request, "Accesos a empresas/sucursales actualizados.")
+        return redirect(f"{request.path}?tab=accesos")
+
     return render(request, "admin_panel/user_detail.html", {
         "target": target,
         "edit_form": edit_form,
@@ -220,6 +281,7 @@ def user_detail(request, pk):
         "flags_form": flags_form,
         "assigned_roles": assigned_roles,
         "available_roles": available_roles,
+        "accesos_por_empresa": accesos_por_empresa,
         "active_tab": "usuarios",
         "detail_tab": tab,
         "active_company": company,
@@ -446,19 +508,200 @@ def company_list(request):
         return err
 
     if request.user.is_superuser:
-        companies = Company.objects.all().order_by("name")
+        companies = Company.objects.prefetch_related("stores", "branding").order_by("name")
     else:
-        # Solo empresas a las que el usuario tiene acceso
         company_ids = UserRole.objects.filter(user=request.user).values_list("company_id", flat=True).distinct()
-        companies = Company.objects.filter(id__in=company_ids).order_by("name")
+        companies = Company.objects.filter(id__in=company_ids).prefetch_related("stores", "branding").order_by("name")
 
-    companies = companies.annotate(
-        user_count=Count("user_roles__user", distinct=True),
-        store_count=Count("stores", distinct=True),
-    )
+    total_stores = sum(c.stores.count() for c in companies)
 
     return render(request, "admin_panel/company_list.html", {
         "companies": companies,
+        "total_stores": total_stores,
+        "active_tab": "empresas",
+    })
+
+
+@login_required
+def company_create(request):
+    ok, err = _staff_required(request)
+    if not ok:
+        return err
+
+    company_form = CompanyAdminForm(request.POST or None)
+    branding_form = CompanyBrandingAdminForm(request.POST or None)
+
+    if request.method == "POST" and company_form.is_valid() and branding_form.is_valid():
+        with transaction.atomic():
+            company = company_form.save()
+            branding = branding_form.save(commit=False)
+            branding.company = company
+            branding.save()
+        messages.success(request, f"Empresa '{company.name}' creada correctamente.")
+        return redirect("users:company_list")
+
+    preset_colors = [
+        ("#066fd1", "Skin 1"), ("#1AB394", "Md Skin"), ("#23C6C8", "Skin 2"),
+        ("#ECBA52", "Skin 3"), ("#94C748", "Skin 4"),
+    ]
+    return render(request, "admin_panel/company_form.html", {
+        "company_form": company_form,
+        "branding_form": branding_form,
+        "preset_colors": preset_colors,
+        "active_tab": "empresas",
+        "title": "Nueva Empresa",
+        "submit_label": "Crear empresa",
+        "is_new": True,
+    })
+
+
+@login_required
+def company_edit(request, pk):
+    ok, err = _staff_required(request)
+    if not ok:
+        return err
+
+    company = get_object_or_404(Company, pk=pk)
+    branding, _ = CompanyBranding.objects.get_or_create(company=company)
+    stores = company.stores.order_by("name")
+
+    company_form = CompanyAdminForm(request.POST or None, instance=company)
+    branding_form = CompanyBrandingAdminForm(request.POST or None, instance=branding)
+
+    if request.method == "POST" and company_form.is_valid() and branding_form.is_valid():
+        with transaction.atomic():
+            company_form.save()
+            branding_form.save()
+        messages.success(request, "Empresa actualizada correctamente.")
+        return redirect("users:company_edit", pk=company.pk)
+
+    preset_colors = [
+        ("#066fd1", "Skin 1"), ("#1AB394", "Md Skin"), ("#23C6C8", "Skin 2"),
+        ("#ECBA52", "Skin 3"), ("#94C748", "Skin 4"),
+    ]
+    return render(request, "admin_panel/company_form.html", {
+        "company": company,
+        "company_form": company_form,
+        "branding_form": branding_form,
+        "stores": stores,
+        "preset_colors": preset_colors,
+        "active_tab": "empresas",
+        "title": f"Editar: {company.name}",
+        "submit_label": "Guardar cambios",
+        "is_new": False,
+    })
+
+
+@login_required
+def company_delete(request, pk):
+    ok, err = _staff_required(request)
+    if not ok:
+        return err
+
+    company = get_object_or_404(Company, pk=pk)
+
+    if request.method == "POST":
+        name = company.name
+        company.delete()
+        messages.success(request, f"Empresa '{name}' eliminada.")
+        return redirect("users:company_list")
+
+    return render(request, "admin_panel/company_confirm_delete.html", {
+        "company": company,
+        "active_tab": "empresas",
+    })
+
+
+# ─────────────────────────────────────────────
+# Gestión de Tiendas / Sucursales
+# ─────────────────────────────────────────────
+
+@login_required
+def store_create(request, company_pk):
+    ok, err = _staff_required(request)
+    if not ok:
+        return err
+
+    company = get_object_or_404(Company, pk=company_pk)
+    form = StoreAdminForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            store = form.save(commit=False)
+            store.company = company
+            store.save()
+
+            # Propagar acceso a la nueva sucursal para usuarios que ya tienen
+            # acceso a la empresa (global) o roles dentro de la empresa.
+            company_access_user_ids = UserCompanyAccess.objects.filter(
+                company=company,
+                store__isnull=True,
+            ).values_list("user_id", flat=True)
+            role_user_ids = UserRole.objects.filter(company=company).values_list("user_id", flat=True)
+
+            target_user_ids = set(list(company_access_user_ids) + list(role_user_ids) + [request.user.id])
+            for user_id in target_user_ids:
+                UserCompanyAccess.objects.get_or_create(
+                    user_id=user_id,
+                    company=company,
+                    store=store,
+                    defaults={"is_default": False},
+                )
+        messages.success(request, f"Sucursal '{store.name}' creada.")
+        return redirect("users:company_edit", pk=company.pk)
+
+    return render(request, "admin_panel/store_form.html", {
+        "form": form,
+        "company": company,
+        "active_tab": "empresas",
+        "title": f"Nueva sucursal — {company.name}",
+        "submit_label": "Crear sucursal",
+    })
+
+
+@login_required
+def store_edit(request, company_pk, pk):
+    ok, err = _staff_required(request)
+    if not ok:
+        return err
+
+    company = get_object_or_404(Company, pk=company_pk)
+    store = get_object_or_404(Store, pk=pk, company=company)
+    form = StoreAdminForm(request.POST or None, instance=store)
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, f"Sucursal '{store.name}' actualizada.")
+        return redirect("users:company_edit", pk=company.pk)
+
+    return render(request, "admin_panel/store_form.html", {
+        "form": form,
+        "company": company,
+        "store": store,
+        "active_tab": "empresas",
+        "title": f"Editar sucursal — {store.name}",
+        "submit_label": "Guardar cambios",
+    })
+
+
+@login_required
+def store_delete(request, company_pk, pk):
+    ok, err = _staff_required(request)
+    if not ok:
+        return err
+
+    company = get_object_or_404(Company, pk=company_pk)
+    store = get_object_or_404(Store, pk=pk, company=company)
+
+    if request.method == "POST":
+        name = store.name
+        store.delete()
+        messages.success(request, f"Sucursal '{name}' eliminada.")
+        return redirect("users:company_edit", pk=company.pk)
+
+    return render(request, "admin_panel/store_confirm_delete.html", {
+        "store": store,
+        "company": company,
         "active_tab": "empresas",
     })
 
@@ -473,9 +716,61 @@ def configuracion(request):
     if not ok:
         return err
 
+    from django.urls import NoReverseMatch, reverse
+    from apps.inventory.models import Brand, Category, Unit, Warehouse, WarehouseLocation
+
     company = _get_active_company(request)
+    item = request.GET.get("item", None)
+
+    item_label = None
+    item_objects = []
+    item_add_url = None    # pre-resolved (no pk needed)
+    item_edit_url = None   # named URL — used in template with obj.pk
+    item_delete_url = None
+
+    if item:
+        if item == "almacenes":
+            item_label = "Almacenes"
+            qs = (Warehouse.objects.filter(store__company=company).select_related("store")
+                  if company else Warehouse.objects.none())
+            item_objects = list(qs.order_by("store__name", "name"))
+            item_add_url = reverse("inventory:warehouse_create")
+            item_edit_url = "inventory:warehouse_update"
+            item_delete_url = "inventory:warehouse_delete"
+        elif item == "ubicaciones":
+            item_label = "Ubicaciones en Bodega"
+            qs = (WarehouseLocation.objects.filter(warehouse__store__company=company).select_related("warehouse")
+                  if company else WarehouseLocation.objects.none())
+            item_objects = list(qs.order_by("warehouse__name", "code"))
+            item_add_url = reverse("inventory:warehouse_location_create")
+            item_edit_url = "inventory:warehouse_location_update"
+            item_delete_url = "inventory:warehouse_location_delete"
+        elif item == "categorias":
+            item_label = "Categorías"
+            item_objects = list(Category.objects.all())
+            item_add_url = reverse("inventory:category_create")
+            item_edit_url = "inventory:category_update"
+            item_delete_url = "inventory:category_delete"
+        elif item == "marcas":
+            item_label = "Marcas"
+            item_objects = list(Brand.objects.all())
+            item_add_url = reverse("inventory:brand_create")
+            item_edit_url = "inventory:brand_update"
+            item_delete_url = "inventory:brand_delete"
+        elif item == "unidades":
+            item_label = "Unidades de Medida"
+            item_objects = list(Unit.objects.all())
+            item_add_url = reverse("inventory:unit_create")
+            item_edit_url = "inventory:unit_update"
+            item_delete_url = "inventory:unit_delete"
 
     return render(request, "admin_panel/configuracion.html", {
         "active_tab": "configuracion",
         "active_company": company,
+        "item": item,
+        "item_label": item_label,
+        "item_objects": item_objects,
+        "item_add_url": item_add_url,
+        "item_edit_url": item_edit_url,
+        "item_delete_url": item_delete_url,
     })

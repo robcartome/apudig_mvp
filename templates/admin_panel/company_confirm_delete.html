@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Eliminar Empresa — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7 col-lg-5">
+    <div class="card border-danger">
+      <div class="card-header bg-danger-lt">
+        <h4 class="card-title mb-0 text-danger">
+          <i class="ti ti-alert-triangle me-2"></i>Eliminar empresa
+        </h4>
+      </div>
+      <div class="card-body text-center py-4">
+        <p class="mb-1">¿Estás seguro de que deseas eliminar la empresa</p>
+        <p class="fw-bold fs-4 mb-1">{{ company.name }}</p>
+        <p class="text-muted small mb-3">RUC: {{ company.ruc }}</p>
+        <div class="alert alert-warning text-start small">
+          <i class="ti ti-alert-circle me-1"></i>
+          Esta acción eliminará también todas sus <strong>sucursales, accesos de usuario y configuraciones</strong> asociadas. No se puede deshacer.
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-center gap-3">
+        <a href="{% url 'users:company_list' %}" class="btn btn-outline-secondary">
+          <i class="ti ti-arrow-left me-1"></i>Cancelar
+        </a>
+        <form method="post">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="ti ti-trash me-1"></i>Sí, eliminar empresa
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

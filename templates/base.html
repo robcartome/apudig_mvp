@@ -9,6 +9,48 @@
   <link href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" rel="stylesheet"/>
   <link href="{% static 'css/components/sidebar.css' %}" rel="stylesheet"/>
+  <style>
+    :root {
+      --company-primary: {% if active_branding and active_branding.primary_color %}{{ active_branding.primary_color }}{% else %}#066fd1{% endif %};
+      --company-secondary: {% if active_branding and active_branding.secondary_color %}{{ active_branding.secondary_color }}{% else %}#4a4a4a{% endif %};
+    }
+
+    /* ── Botones primarios ──────────────────────────────── */
+    .btn-primary {
+      background-color: var(--company-primary) !important;
+      border-color: var(--company-primary) !important;
+      color: #fff !important;
+    }
+    .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+      filter: brightness(0.88);
+      color: #fff !important;
+    }
+
+    /* ── Botones outline-primary ────────────────────────── */
+    .btn-outline-primary {
+      color: var(--company-primary) !important;
+      border-color: var(--company-primary) !important;
+    }
+    .btn-outline-primary:hover,
+    .btn-outline-primary:focus,
+    .btn-outline-primary:active,
+    .btn-outline-primary.active {
+      background-color: var(--company-primary) !important;
+      border-color: var(--company-primary) !important;
+      color: #fff !important;
+    }
+
+    /* ── Textos y badges primarios ──────────────────────── */
+    .text-primary { color: var(--company-primary) !important; }
+    .bg-primary, .badge.bg-primary { background-color: var(--company-primary) !important; color: #fff !important; }
+
+    /* ── Nav activo / paginación ────────────────────────── */
+    .nav-link.active, .page-item.active .page-link {
+      background-color: var(--company-primary) !important;
+      border-color: var(--company-primary) !important;
+      color: #fff !important;
+    }
+  </style>
   {% block extra_css %}{% endblock %}
 </head>
 <body class="antialiased">
