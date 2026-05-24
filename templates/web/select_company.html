@@ -34,7 +34,7 @@
             <option value="">— seleccionar —</option>
             {% for access in accesses %}
             <option value="{{ access.id }}">
-              {{ access.company_name }}{% if access.store_name %} / {{ access.store_name }}{% endif %}
+              {{ access.company.name }}{% if access.store %} / {{ access.store.name }}{% endif %}
             </option>
             {% endfor %}
           </select>
@@ -48,9 +48,12 @@
       {% endif %}
 
       <div class="text-center mt-3">
-        <a href="{% url 'logout' %}" class="text-muted small">
-          <i class="ti ti-logout me-1"></i>Cerrar sesión
-        </a>
+        <form method="post" action="{% url 'logout' %}" class="m-0 p-0 d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-link text-muted small p-0 text-decoration-none">
+            <i class="ti ti-logout me-1"></i>Cerrar sesión
+          </button>
+        </form>
       </div>
     </div>
   </div>

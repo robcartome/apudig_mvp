@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Configuración — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="d-flex align-items-center mb-3">
+  <h3 class="mb-0">
+    <i class="ti ti-adjustments me-2 text-primary"></i>Configuración general
+  </h3>
+</div>
+
+{% if active_company %}
+<div class="alert alert-info mb-4">
+  <i class="ti ti-building me-2"></i>
+  Configuración para empresa: <strong>{{ active_company.name }}</strong>
+</div>
+{% else %}
+<div class="alert alert-warning mb-4">
+  <i class="ti ti-alert-triangle me-2"></i>
+  Selecciona una empresa activa para ver su configuración.
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title"><i class="ti ti-palette me-2"></i>Identidad visual</h4>
+      </div>
+      <div class="card-body text-muted">
+        <p>Configuración de logo, colores y apariencia de la empresa.</p>
+        <p class="small">Próximamente disponible.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title"><i class="ti ti-file-invoice me-2"></i>Documentos</h4>
+      </div>
+      <div class="card-body text-muted">
+        <p>Configuración de series documentales, formatos PDF y plantillas.</p>
+        <a href="{% url 'sales:series_list' %}" class="btn btn-sm btn-outline-primary">
+          <i class="ti ti-arrow-right me-1"></i>Ir a series documentales
+        </a>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title"><i class="ti ti-building-warehouse me-2"></i>Almacenes</h4>
+      </div>
+      <div class="card-body text-muted">
+        <p>Gestión de almacenes, ubicaciones y configuración de bloqueos.</p>
+        <a href="{% url 'inventory:admin_panel' %}" class="btn btn-sm btn-outline-primary">
+          <i class="ti ti-arrow-right me-1"></i>Ir a configuración de inventario
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

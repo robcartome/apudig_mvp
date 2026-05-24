@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="ti ti-key me-2 text-primary"></i>{{ title }}
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label required">Nombre del rol</label>
+            <input type="text" name="name" value="{{ form.name.value|default:'' }}"
+                   class="form-control {% if form.name.errors %}is-invalid{% endif %}"
+                   autofocus>
+            {% for e in form.name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <input type="text" name="description" value="{{ form.description.value|default:'' }}"
+                   class="form-control" placeholder="Describe brevemente este rol…">
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="ti ti-check me-1"></i>{{ submit_label }}
+            </button>
+            <a href="{% url 'users:role_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

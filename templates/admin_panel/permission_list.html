@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Catálogo de Permisos — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h3 class="mb-0">
+    <i class="ti ti-lock me-2 text-primary"></i>Catálogo de permisos
+  </h3>
+  <a href="{% url 'users:permission_create' %}" class="btn btn-primary">
+    <i class="ti ti-plus me-1"></i>Nuevo permiso
+  </a>
+</div>
+
+{% for module, perms in by_module.items %}
+<div class="card mb-3">
+  <div class="card-header bg-blue-lt py-2">
+    <h4 class="card-title mb-0 small fw-semibold text-uppercase text-muted">
+      <i class="ti ti-folder me-1"></i>{{ module }}
+    </h4>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter table-sm card-table mb-0">
+      <tbody>
+        {% for perm in perms %}
+        <tr>
+          <td class="w-50">{{ perm.display_label }}</td>
+          <td class="text-muted font-monospace small">{{ perm.code }}</td>
+          <td class="text-end">
+            <a href="{% url 'users:permission_delete' perm.pk %}"
+               class="btn btn-sm btn-ghost-danger" title="Eliminar">
+              <i class="ti ti-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="card">
+  <div class="card-body text-center text-muted py-5">
+    No hay permisos definidos. <a href="{% url 'users:permission_create' %}">Crear el primero</a>.
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

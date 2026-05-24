@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7">
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="ti ti-user-plus me-2 text-primary"></i>{{ title }}
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label required">Correo electrónico</label>
+            <input type="email" name="email" value="{{ form.email.value|default:'' }}"
+                   class="form-control {% if form.email.errors %}is-invalid{% endif %}"
+                   autocomplete="off" autofocus required>
+            {% for e in form.email.errors %}
+            <div class="invalid-feedback">{{ e }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Nombre completo</label>
+            <input type="text" name="name" value="{{ form.name.value|default:'' }}"
+                   class="form-control {% if form.name.errors %}is-invalid{% endif %}">
+            {% for e in form.name.errors %}
+            <div class="invalid-feedback">{{ e }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Teléfono</label>
+            <input type="text" name="phone" value="{{ form.phone.value|default:'' }}"
+                   class="form-control {% if form.phone.errors %}is-invalid{% endif %}">
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label required">Contraseña</label>
+              <input type="password" name="password1"
+                     class="form-control {% if form.password1.errors %}is-invalid{% endif %}"
+                     autocomplete="new-password" required>
+              {% for e in form.password1.errors %}
+              <div class="invalid-feedback">{{ e }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-6">
+              <label class="form-label required">Confirmar contraseña</label>
+              <input type="password" name="password2"
+                     class="form-control {% if form.password2.errors %}is-invalid{% endif %}"
+                     autocomplete="new-password" required>
+              {% for e in form.password2.errors %}
+              <div class="invalid-feedback">{{ e }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_active"
+                       {% if form.is_active.value != False %}checked{% endif %}>
+                <span class="form-check-label">Usuario activo</span>
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_staff"
+                       {% if form.is_staff.value %}checked{% endif %}>
+                <span class="form-check-label">Acceso de staff (admin)</span>
+              </label>
+            </div>
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+          </div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="ti ti-check me-1"></i>{{ submit_label }}
+            </button>
+            <a href="{% url 'users:user_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

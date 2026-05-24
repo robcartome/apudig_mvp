@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Usuarios — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+{# ── Cabecera de la sección ── #}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h3 class="mb-0">
+      <i class="ti ti-users me-2 text-primary"></i>
+      Usuarios{% if active_company %} de <span class="text-muted fw-normal">{{ active_company.name }}</span>{% endif %}
+    </h3>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'users:user_create' %}" class="btn btn-primary">
+      <i class="ti ti-plus me-1"></i>Nuevo usuario
+    </a>
+  </div>
+</div>
+
+{# ── Búsqueda ── #}
+<form method="get" class="mb-3">
+  <div class="input-group" style="max-width: 340px;">
+    <input type="text" name="q" value="{{ search }}" class="form-control"
+           placeholder="Buscar por nombre o correo…" autocomplete="off">
+    <button class="btn btn-outline-secondary" type="submit">
+      <i class="ti ti-search"></i>
+    </button>
+    {% if search %}
+    <a href="{% url 'users:user_list' %}" class="btn btn-outline-danger" title="Limpiar">
+      <i class="ti ti-x"></i>
+    </a>
+    {% endif %}
+  </div>
+</form>
+
+{# ── Tabla ── #}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>NOMBRE</th>
+          <th>CORREO</th>
+          <th class="text-center">EMPRESAS</th>
+          <th>ROLES{% if active_company %} ({{ active_company.name|truncatechars:20 }}){% endif %}</th>
+          <th class="text-center">ESTADO</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in users_data %}
+        <tr>
+          <td>
+            <a href="{% url 'users:user_detail' item.user.pk %}" class="text-body fw-semibold text-decoration-none">
+              {{ item.user.name|default:item.user.email }}
+            </a>
+          </td>
+          <td class="text-muted">{{ item.user.email }}</td>
+          <td class="text-center">
+            <span class="badge bg-blue-lt">
+              <i class="ti ti-building me-1"></i>{{ item.company_count }}
+            </span>
+          </td>
+          <td>
+            {% for rol in item.roles %}
+            <span class="badge bg-purple-lt me-1">{{ rol }}</span>
+            {% empty %}
+            <span class="text-muted small">Sin roles</span>
+            {% endfor %}
+          </td>
+          <td class="text-center">
+            {% if item.user.is_active %}
+            <span class="badge bg-success-lt">Activo</span>
+            {% else %}
+            <span class="badge bg-danger-lt">Inactivo</span>
+            {% endif %}
+            {% if item.user.is_staff %}
+            <span class="badge bg-orange-lt ms-1">Staff</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="{% url 'users:user_detail' item.user.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Editar">
+                <i class="ti ti-pencil"></i>
+              </a>
+              <a href="{% url 'users:user_delete' item.user.pk %}"
+                 class="btn btn-sm btn-outline-danger" title="Eliminar">
+                <i class="ti ti-trash"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            {% if search %}
+            No se encontraron usuarios para "<strong>{{ search }}</strong>".
+            {% else %}
+            No hay usuarios registrados en esta empresa.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

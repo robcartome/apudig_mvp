@@ -1,0 +1,28 @@
+{# admin_panel/_tabs.html — Navegación de tabs del panel de administración #}
+<div class="page-header d-print-none mb-0">
+  <div class="container-xl">
+    <div class="row align-items-center">
+      <div class="col">
+        <div class="d-flex gap-2">
+          <a href="{% url 'users:user_list' %}"
+             class="btn {% if active_tab == 'usuarios' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            <i class="ti ti-users me-1"></i>Usuarios
+          </a>
+          <a href="{% url 'users:company_list' %}"
+             class="btn {% if active_tab == 'empresas' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            <i class="ti ti-building me-1"></i>Empresas
+          </a>
+          <a href="{% url 'users:role_list' %}"
+             class="btn {% if active_tab == 'roles' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            <i class="ti ti-key me-1"></i>Roles y Permisos
+          </a>
+          <a href="{% url 'users:configuracion' %}"
+             class="btn {% if active_tab == 'configuracion' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            <i class="ti ti-adjustments me-1"></i>Configuración
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<hr class="mt-2 mb-4">

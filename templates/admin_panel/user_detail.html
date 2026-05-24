@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}{{ target.display_name }} — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+{# ── Cabecera del usuario ── #}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="d-flex align-items-center gap-3">
+      <span class="avatar avatar-lg bg-blue-lt text-blue" style="font-size:1.5rem;">
+        <i class="ti ti-user"></i>
+      </span>
+      <div>
+        <h3 class="mb-0">{{ target.name|default:target.email }}</h3>
+        <div class="text-muted">{{ target.email }}</div>
+        <div class="mt-1">
+          {% if target.is_active %}<span class="badge bg-success-lt me-1">Activo</span>{% else %}<span class="badge bg-danger-lt me-1">Inactivo</span>{% endif %}
+          {% if target.is_staff %}<span class="badge bg-orange-lt me-1">Staff</span>{% endif %}
+          {% if target.is_superuser %}<span class="badge bg-red-lt">Superusuario</span>{% endif %}
+        </div>
+      </div>
+      <div class="ms-auto">
+        <a href="{% url 'users:user_delete' target.pk %}" class="btn btn-sm btn-outline-danger">
+          <i class="ti ti-trash me-1"></i>Eliminar usuario
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Tabs internos ── #}
+<div class="mb-3">
+  <ul class="nav nav-tabs">
+    <li class="nav-item">
+      <a class="nav-link {% if detail_tab == 'general' %}active{% endif %}"
+         href="?tab=general">
+        <i class="ti ti-info-circle me-1"></i>General
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if detail_tab == 'operativos' %}active{% endif %}"
+         href="?tab=operativos">
+        <i class="ti ti-shield-check me-1"></i>Permisos Operativos
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if detail_tab == 'roles' %}active{% endif %}"
+         href="?tab=roles">
+        <i class="ti ti-key me-1"></i>Roles y Accesos
+      </a>
+    </li>
+  </ul>
+</div>
+
+{# ── Tab: General ── #}
+{% if detail_tab == 'general' %}
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Información General</h4>
+      </div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label required">Correo electrónico</label>
+            <input type="email" name="email" value="{{ edit_form.email.value|default:'' }}"
+                   class="form-control {% if edit_form.email.errors %}is-invalid{% endif %}">
+            {% for e in edit_form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nombre completo</label>
+            <input type="text" name="name" value="{{ edit_form.name.value|default:'' }}"
+                   class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Teléfono</label>
+            <input type="text" name="phone" value="{{ edit_form.phone.value|default:'' }}"
+                   class="form-control">
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_active"
+                       {% if edit_form.is_active.value %}checked{% endif %}>
+                <span class="form-check-label">Usuario activo</span>
+              </label>
+            </div>
+            <div class="col-6">
+              <label class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_staff"
+                       {% if edit_form.is_staff.value %}checked{% endif %}>
+                <span class="form-check-label">Acceso de staff</span>
+              </label>
+            </div>
+          </div>
+          <button type="submit" name="save_general" class="btn btn-primary">
+            <i class="ti ti-device-floppy me-1"></i>Guardar cambios
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Cambiar contraseña</h4>
+      </div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label required">Nueva contraseña</label>
+            <input type="password" name="password1"
+                   class="form-control {% if pw_form.password1.errors %}is-invalid{% endif %}"
+                   autocomplete="new-password" minlength="8">
+            {% for e in pw_form.password1.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label required">Confirmar contraseña</label>
+            <input type="password" name="password2"
+                   class="form-control {% if pw_form.password2.errors %}is-invalid{% endif %}"
+                   autocomplete="new-password">
+            {% for e in pw_form.password2.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          {% if pw_form.non_field_errors %}
+          <div class="alert alert-danger py-2">{{ pw_form.non_field_errors.0 }}</div>
+          {% endif %}
+          <button type="submit" name="save_password" class="btn btn-outline-warning">
+            <i class="ti ti-lock me-1"></i>Actualizar contraseña
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Tab: Permisos Operativos ── #}
+{% if detail_tab == 'operativos' %}
+{% if flags_form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="row g-3">
+
+    {# Configuración general #}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header bg-blue-lt">
+          <h4 class="card-title mb-0">
+            <i class="ti ti-settings me-2"></i>Configuración general
+          </h4>
+        </div>
+        <div class="card-body">
+          {% for field in flags_form %}
+            {% if field.name == 'is_operation_admin' or field.name == 'ignore_notification_emails' %}
+            <div class="mb-3 d-flex align-items-center justify-content-between">
+              <label class="form-check-label text-end me-3" for="{{ field.id_for_label }}">
+                {{ field.label }}
+              </label>
+              <div class="form-check form-switch m-0">
+                {{ field }}
+              </div>
+            </div>
+            {% endif %}
+          {% endfor %}
+          <div class="text-muted small mt-2">Aplica a SC, OC, Créditos y Programación de pago.</div>
+        </div>
+      </div>
+    </div>
+
+    {# Permisos de administración #}
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header bg-orange-lt">
+          <h4 class="card-title mb-0">
+            <i class="ti ti-shield me-2"></i>Permisos de administración
+          </h4>
+        </div>
+        <div class="card-body">
+          {% for field in flags_form %}
+            {% if field.name != 'is_operation_admin' and field.name != 'ignore_notification_emails' %}
+            <div class="mb-3 d-flex align-items-center justify-content-between">
+              <label class="form-check-label text-end me-3" for="{{ field.id_for_label }}">
+                {{ field.label }}
+              </label>
+              <div class="form-check form-switch m-0">
+                {{ field }}
+              </div>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="mt-3">
+    <button type="submit" name="save_flags" class="btn btn-primary">
+      <i class="ti ti-device-floppy me-1"></i>Guardar permisos operativos
+    </button>
+  </div>
+</form>
+{% else %}
+<div class="alert alert-warning">
+  <i class="ti ti-alert-triangle me-2"></i>
+  Selecciona una empresa activa para configurar los permisos operativos de este usuario.
+</div>
+{% endif %}
+{% endif %}
+
+{# ── Tab: Roles y Accesos ── #}
+{% if detail_tab == 'roles' %}
+{% if active_company %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="card">
+    <div class="card-header">
+      <h4 class="card-title mb-0">
+        <i class="ti ti-key me-2"></i>Roles en <strong>{{ active_company.name }}</strong>
+      </h4>
+      <div class="card-options text-muted small">
+        La lista izquierda representa roles sin asignar; la derecha, roles habilitados.
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+
+        {# Sin acceso #}
+        <div class="col-12 col-md-5">
+          <label class="form-label text-muted small fw-semibold">SIN ASIGNAR — {{ available_roles|length }}</label>
+          <div class="border rounded" style="height:320px; overflow-y:auto;" id="available-roles-box">
+            {% for role in available_roles %}
+            <div class="dual-list-item px-3 py-2 border-bottom cursor-pointer text-muted"
+                 data-id="{{ role.pk }}" data-name="{{ role.name }}"
+                 onclick="moveToAssigned(this)">
+              {{ role.name }}
+              {% if role.description %}<div class="text-muted" style="font-size:0.75rem;">{{ role.description }}</div>{% endif %}
+            </div>
+            {% empty %}
+            <div class="p-3 text-muted small">Todos los roles están asignados.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Botones ── #}
+        <div class="col-12 col-md-2 d-flex flex-column align-items-center justify-content-center gap-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveAllToAssigned()">
+            <i class="ti ti-chevrons-right"></i>
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveAllToAvailable()">
+            <i class="ti ti-chevrons-left"></i>
+          </button>
+        </div>
+
+        {# Con acceso #}
+        <div class="col-12 col-md-5">
+          <label class="form-label text-muted small fw-semibold">ASIGNADOS — <span id="assigned-count">{{ assigned_roles|length }}</span></label>
+          <div class="border rounded border-primary" style="height:320px; overflow-y:auto;" id="assigned-roles-box">
+            {% for role in assigned_roles %}
+            <div class="dual-list-item px-3 py-2 border-bottom cursor-pointer assigned"
+                 data-id="{{ role.pk }}" data-name="{{ role.name }}"
+                 onclick="moveToAvailable(this)">
+              {{ role.name }}
+              {% if role.description %}<div class="text-muted" style="font-size:0.75rem;">{{ role.description }}</div>{% endif %}
+            </div>
+            {% empty %}
+            <div class="p-3 text-muted small" id="assigned-empty">Sin roles asignados.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+      </div>
+
+      {# Hidden inputs para el POST #}
+      <div id="hidden-role-inputs"></div>
+    </div>
+    <div class="card-footer">
+      <button type="submit" name="save_roles" class="btn btn-primary" onclick="syncHiddenInputs()">
+        <i class="ti ti-device-floppy me-1"></i>Guardar roles
+      </button>
+      <a href="{% url 'users:role_list' %}" class="btn btn-outline-secondary ms-2">
+        Administrar roles del sistema →
+      </a>
+    </div>
+  </div>
+</form>
+
+<style>
+  .dual-list-item { cursor: pointer; transition: background 0.15s; }
+  .dual-list-item:hover { background: var(--tblr-active-bg, #f4f6fa); }
+  .dual-list-item.assigned { color: var(--tblr-primary); font-weight: 500; }
+</style>
+<script>
+  function moveToAssigned(el) {
+    el.classList.add('assigned');
+    document.getElementById('assigned-roles-box').appendChild(el);
+    updateCount();
+    el.onclick = function() { moveToAvailable(el); };
+  }
+  function moveToAvailable(el) {
+    el.classList.remove('assigned');
+    document.getElementById('available-roles-box').appendChild(el);
+    updateCount();
+    el.onclick = function() { moveToAssigned(el); };
+  }
+  function moveAllToAssigned() {
+    document.querySelectorAll('#available-roles-box .dual-list-item').forEach(moveToAssigned);
+  }
+  function moveAllToAvailable() {
+    document.querySelectorAll('#assigned-roles-box .dual-list-item').forEach(moveToAvailable);
+  }
+  function updateCount() {
+    const n = document.querySelectorAll('#assigned-roles-box .dual-list-item').length;
+    document.getElementById('assigned-count').textContent = n;
+  }
+  function syncHiddenInputs() {
+    const container = document.getElementById('hidden-role-inputs');
+    container.innerHTML = '';
+    document.querySelectorAll('#assigned-roles-box .dual-list-item').forEach(el => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'role_ids';
+      inp.value = el.dataset.id;
+      container.appendChild(inp);
+    });
+  }
+</script>
+{% else %}
+<div class="alert alert-warning">
+  <i class="ti ti-alert-triangle me-2"></i>
+  Selecciona una empresa activa para gestionar los roles de este usuario.
+</div>
+{% endif %}
+{% endif %}
+
+{# Volver #}
+<div class="mt-3">
+  <a href="{% url 'users:user_list' %}" class="text-muted small">
+    <i class="ti ti-arrow-left me-1"></i>Volver a la lista de usuarios
+  </a>
+</div>
+{% endblock %}

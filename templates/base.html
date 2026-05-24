@@ -32,13 +32,21 @@
 
         <div class="d-flex align-items-center gap-2">
           <!-- Empresa / Sucursal activa -->
-          {% if active_company %}
+          {% if available_accesses %}
+          <form method="post" action="{% url 'select_company' %}" class="d-flex align-items-center gap-1">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <select class="form-select form-select-sm" name="access_id" onchange="this.form.submit()" style="min-width: 250px;">
+              {% for access in available_accesses %}
+              <option value="{{ access.id }}" {% if active_access_id == access.id|stringformat:'s' %}selected{% endif %}>
+                {{ access.company.name }}{% if access.store %} / {{ access.store.name }}{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </form>
+          {% elif active_company %}
           <a href="{% url 'select_company' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="ti ti-building me-1"></i>
-            {{ active_company.name }}
-            {% if active_store %}
-            <span class="text-muted ms-1">/ {{ active_store.name }}</span>
-            {% endif %}
+            <i class="ti ti-building me-1"></i>{{ active_company.name }}{% if active_store %} / {{ active_store.name }}{% endif %}
           </a>
           {% endif %}
 
@@ -62,9 +70,12 @@
                 <i class="ti ti-building me-2 text-muted"></i>Cambiar empresa/sucursal
               </a>
               <div class="dropdown-divider"></div>
-              <a href="{% url 'logout' %}" class="dropdown-item text-danger">
-                <i class="ti ti-logout me-2"></i>Cerrar sesión
-              </a>
+              <form method="post" action="{% url 'logout' %}" class="m-0 p-0">
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item text-danger">
+                  <i class="ti ti-logout me-2"></i>Cerrar sesión
+                </button>
+              </form>
             </div>
           </div>
         </div><!-- /d-flex -->

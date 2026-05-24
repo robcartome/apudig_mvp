@@ -42,19 +42,19 @@
 
         {# ─── Inventario ─── #}
         <li class="nav-item">
-          <a class="nav-link {% if '/inventory/' in request.path and 'administracion' not in request.path and '/almacenes' not in request.path and '/ubicaciones' not in request.path and '/categorias' not in request.path and '/marcas' not in request.path and '/unidades' not in request.path %}active{% endif %}"
+          <a class="nav-link {% if '/inventory/' in request.path %}active{% endif %}"
              href="#sidebar-inventory"
              data-bs-toggle="collapse"
              data-section-url="{% url 'inventory:movement_list' %}"
              data-tooltip-label="Inventario"
-             aria-expanded="{% if '/inventory/' in request.path and 'administracion' not in request.path and '/almacenes' not in request.path and '/ubicaciones' not in request.path and '/categorias' not in request.path and '/marcas' not in request.path and '/unidades' not in request.path %}true{% else %}false{% endif %}">
+             aria-expanded="{% if '/inventory/' in request.path %}true{% else %}false{% endif %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="ti ti-package fs-2"></i>
             </span>
             <span class="nav-link-title">Inventario</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if '/inventory/' in request.path and 'administracion' not in request.path and '/almacenes' not in request.path and '/ubicaciones' not in request.path and '/categorias' not in request.path and '/marcas' not in request.path and '/unidades' not in request.path %}show{% endif %}" id="sidebar-inventory">
+          <div class="collapse {% if '/inventory/' in request.path %}show{% endif %}" id="sidebar-inventory">
             <ul class="navbar-nav ps-lg-3">
               <li class="nav-item">
                 <a class="nav-link {% if 'product' in request.resolver_match.url_name|default:'' %}active{% endif %}"
@@ -71,6 +71,29 @@
               <li class="nav-item">
                 <a class="nav-link {% if 'pricelist' in request.resolver_match.url_name|default:'' %}active{% endif %}"
                    href="{% url 'inventory:pricelist_list' %}">Listas de precio</a>
+              </li>
+              <li class="nav-item mt-1">
+                <span class="sidebar-section-label">Maestros</span>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'warehouse' in request.resolver_match.url_name|default:'' and 'location' not in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:warehouse_list' %}">Almacenes</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'warehouse_location' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:warehouse_location_list' %}">Ubicaciones</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'category' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:category_list' %}">Categorías</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'brand' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:brand_list' %}">Marcas</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'unit' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:unit_list' %}">Unidades</a>
               </li>
             </ul>
           </div>
@@ -133,55 +156,19 @@
           </div>
         </li>
 
-        {# ─── Administración ─── #}
+        {# ─── Administración ERP ─── #}
+        {% if user.is_staff %}
         <li class="nav-item">
-          <a class="nav-link {% if '/inventory/almacenes' in request.path or '/inventory/ubicaciones' in request.path or '/inventory/categorias' in request.path or '/inventory/marcas' in request.path or '/inventory/unidades' in request.path or '/inventory/administracion' in request.path %}active{% endif %}"
-             href="#sidebar-administracion"
-             data-bs-toggle="collapse"
-             data-section-url="{% url 'inventory:admin_panel' %}"
-             data-tooltip-label="Administración"
-             aria-expanded="{% if '/inventory/almacenes' in request.path or '/inventory/ubicaciones' in request.path or '/inventory/categorias' in request.path or '/inventory/marcas' in request.path or '/inventory/unidades' in request.path or '/inventory/administracion' in request.path %}true{% else %}false{% endif %}">
+          <a class="nav-link {% if '/gestion/' in request.path %}active{% endif %}"
+             href="{% url 'users:admin_panel' %}"
+             data-tooltip-label="Administración">
             <span class="nav-link-icon d-md-none d-lg-inline-block">
               <i class="ti ti-adjustments-cog fs-2"></i>
             </span>
             <span class="nav-link-title">Administración</span>
-            <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if '/inventory/almacenes' in request.path or '/inventory/ubicaciones' in request.path or '/inventory/categorias' in request.path or '/inventory/marcas' in request.path or '/inventory/unidades' in request.path or '/inventory/administracion' in request.path %}show{% endif %}" id="sidebar-administracion">
-            <ul class="navbar-nav ps-lg-3">
-              <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'admin_panel' %}active{% endif %}"
-                   href="{% url 'inventory:admin_panel' %}">Panel general</a>
-              </li>
-              <li class="nav-item mt-1">
-                <span class="sidebar-section-label">Almacén</span>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'warehouse' in request.resolver_match.url_name|default:'' and 'location' not in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:warehouse_list' %}">Almacenes</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'warehouse_location' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:warehouse_location_list' %}">Ubicaciones</a>
-              </li>
-              <li class="nav-item mt-1">
-                <span class="sidebar-section-label">Productos</span>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'category' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:category_list' %}">Categorías</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'brand' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:brand_list' %}">Marcas</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'unit' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:unit_list' %}">Unidades</a>
-              </li>
-            </ul>
-          </div>
         </li>
+        {% endif %}
 
         {# ─── Admin Django (solo superusuarios) ─── #}
         {% if user.is_superuser %}

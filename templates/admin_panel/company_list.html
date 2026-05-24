@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Empresas — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h3 class="mb-0">
+    <i class="ti ti-building me-2 text-primary"></i>Empresas
+  </h3>
+</div>
+
+<div class="row g-3">
+  {% for company in companies %}
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <span class="avatar bg-blue-lt text-blue">
+            <i class="ti ti-building"></i>
+          </span>
+          <div>
+            <div class="fw-semibold">{{ company.name }}</div>
+            <div class="text-muted small">RUC: {{ company.ruc }}</div>
+          </div>
+          {% if company.is_active %}
+          <span class="badge bg-success-lt ms-auto">Activa</span>
+          {% else %}
+          <span class="badge bg-danger-lt ms-auto">Inactiva</span>
+          {% endif %}
+        </div>
+        <div class="row g-2 text-center">
+          <div class="col-6">
+            <div class="bg-blue-lt rounded py-2">
+              <div class="fw-bold fs-4">{{ company.user_count }}</div>
+              <div class="text-muted small">Usuarios</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="bg-teal-lt rounded py-2">
+              <div class="fw-bold fs-4">{{ company.store_count }}</div>
+              <div class="text-muted small">Sucursales</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body text-center text-muted py-5">
+        No hay empresas registradas.
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

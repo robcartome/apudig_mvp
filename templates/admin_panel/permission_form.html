@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title"><i class="ti ti-lock me-2 text-primary"></i>{{ title }}</h3>
+      </div>
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label required">Acción</label>
+              <select name="action_name" class="form-select {% if form.action_name.errors %}is-invalid{% endif %}">
+                <option value="">-- Seleccionar --</option>
+                {% for val, label in form.fields.action_name.choices %}
+                <option value="{{ val }}" {% if form.action_name.value == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% for e in form.action_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-6">
+              <label class="form-label required">Módulo</label>
+              <input type="text" name="module" value="{{ form.module.value|default:'' }}"
+                     class="form-control {% if form.module.errors %}is-invalid{% endif %}"
+                     placeholder="Ej: inventory.products">
+              {% for e in form.module.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Código (se autogenera si se deja vacío)</label>
+            <input type="text" name="code" value="{{ form.code.value|default:'' }}"
+                   class="form-control font-monospace {% if form.code.errors %}is-invalid{% endif %}"
+                   placeholder="read.inventory.products">
+            {% for e in form.code.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <input type="text" name="description" value="{{ form.description.value|default:'' }}"
+                   class="form-control" placeholder="Descripción legible del permiso">
+          </div>
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="ti ti-check me-1"></i>{{ submit_label }}
+            </button>
+            <a href="{% url 'users:permission_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

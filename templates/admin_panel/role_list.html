@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Roles y Permisos — Administración{% endblock %}
+{% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
+
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h3 class="mb-0">
+    <i class="ti ti-key me-2 text-primary"></i>Roles del sistema
+  </h3>
+  <div class="d-flex gap-2">
+    <a href="{% url 'users:permission_list' %}" class="btn btn-outline-secondary">
+      <i class="ti ti-lock me-1"></i>Catálogo de permisos
+    </a>
+    <a href="{% url 'users:role_create' %}" class="btn btn-primary">
+      <i class="ti ti-plus me-1"></i>Nuevo rol
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>ROL</th>
+          <th>DESCRIPCIÓN</th>
+          <th class="text-center">USUARIOS</th>
+          <th class="text-center">PERMISOS</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for role in roles %}
+        <tr>
+          <td class="fw-semibold">{{ role.name }}</td>
+          <td class="text-muted">{{ role.description|default:"—" }}</td>
+          <td class="text-center">
+            <span class="badge bg-blue-lt">{{ role.user_count }}</span>
+          </td>
+          <td class="text-center">
+            <span class="badge bg-purple-lt">{{ role.permission_count }}</span>
+          </td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="{% url 'users:role_permissions' role.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Permisos">
+                <i class="ti ti-lock"></i>
+              </a>
+              <a href="{% url 'users:role_edit' role.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Editar">
+                <i class="ti ti-pencil"></i>
+              </a>
+              <a href="{% url 'users:role_delete' role.pk %}"
+                 class="btn btn-sm btn-outline-danger" title="Eliminar">
+                <i class="ti ti-trash"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">
+            No hay roles definidos. <a href="{% url 'users:role_create' %}">Crear el primero</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
