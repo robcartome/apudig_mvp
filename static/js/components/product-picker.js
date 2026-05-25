@@ -157,7 +157,7 @@ window.ProductPicker = (function ($) {
         <div style="min-width:0">
           <div class="fw-semibold text-truncate" style="font-size:.85rem">${esc(product.sku || 'SIN-COD')} | ${esc(product.name || product.text)}</div>
           <div class="text-muted" style="font-size:.72rem">
-            Stock total: <strong class="${stockClass}">${totalStock}</strong>
+            Stock sucursal: <strong class="${stockClass}">${totalStock}</strong>
             ${esc(product.unit || '')}
           </div>
         </div>
@@ -171,7 +171,7 @@ window.ProductPicker = (function ($) {
     const code = product.sku || 'SIN-COD';
     const name = product.name || product.text || '';
     const total = (product.total_stock !== null && product.total_stock !== undefined) ? product.total_stock : '—';
-    return `${code} | ${name} | Stock Total: ${total}`;
+    return `${code} | ${name} | Stock sucursal: ${total}`;
   }
 
   function renderSelection(product) {

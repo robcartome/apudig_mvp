@@ -2,6 +2,9 @@ from django.urls import path
 
 from .views import (
     admin_panel,
+    bulk_import,
+    bulk_import_errors,
+    bulk_import_template,
     brand_create, brand_delete, brand_list, brand_update,
     category_create, category_delete, category_list, category_update,
     customer_search,
@@ -24,6 +27,10 @@ from .views import (
 app_name = "inventory"
 
 urlpatterns = [
+    path("importar/<str:entity>/", bulk_import, name="bulk_import"),
+    path("importar/<str:entity>/plantilla/", bulk_import_template, name="bulk_import_template"),
+    path("importar/errores/<str:token>/", bulk_import_errors, name="bulk_import_errors"),
+
     # API (AJAX)
     path("api/productos/",       product_search,       name="api_product_search"),
     path("api/productos/stock/", product_stock,        name="api_product_stock"),

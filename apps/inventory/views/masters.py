@@ -7,15 +7,25 @@ Patrón por entidad:
   Update → GET+POST /inventory/<entidad>/<pk>/editar/
   Delete → POST     /inventory/<entidad>/<pk>/eliminar/
 """
+import csv
+import io
+from uuid import uuid4
+
 from django.contrib import messages
 from django.db import models
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView
 
 from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
 from apps.companies.models import Company, Store
 
-from ..forms import BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
+from ..forms import BulkImportForm, BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
+from ..importers import (
+    ENTITY_LABELS,
+    build_import_template_workbook,
+    import_inventory_excel,
+)
 from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation
 from ..selectors import (
     get_brands,
@@ -54,6 +64,113 @@ def _require_company(request):
     except Company.DoesNotExist:
         messages.error(request, "Empresa no encontrada.")
         return None, redirect("select_company")
+
+
+def bulk_import(request, entity: str):
+    if not request.user.is_authenticated:
+        return redirect("login")
+
+    if entity not in ENTITY_LABELS:
+        messages.error(request, "Tipo de importacion no valido.")
+        return redirect("inventory:product_list")
+
+    company = None
+    if entity in {"categories", "brands", "products"}:
+        company, err = _require_company(request)
+        if err:
+            return err
+
+    label = ENTITY_LABELS[entity]
+    form = BulkImportForm(request.POST or None, request.FILES or None)
+    error_token = ""
+
+    if request.method == "POST" and form.is_valid():
+        upload = form.cleaned_data["file"]
+        dry_run = bool(form.cleaned_data.get("dry_run"))
+        try:
+            result = import_inventory_excel(
+                entity=entity,
+                file_obj=upload,
+                filename=upload.name,
+                company=company,
+                dry_run=dry_run,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        except Exception as exc:
+            messages.error(request, f"Error al procesar archivo: {exc}")
+        else:
+            prefix = "Validacion" if dry_run else "Importacion"
+            if result.errors:
+                buffer = io.StringIO()
+                writer = csv.writer(buffer)
+                writer.writerow(["error"])
+                for err_line in result.errors:
+                    writer.writerow([err_line])
+                error_token = uuid4().hex
+                request.session[f"inventory_bulk_errors_{error_token}"] = buffer.getvalue()
+
+                messages.error(
+                    request,
+                    f"{prefix} con errores para {label}. Filas: {result.total_rows}. "
+                    f"Creados: {result.created}. Actualizados: {result.updated}. "
+                    f"Errores: {len(result.errors)}.",
+                )
+                for err_line in result.errors[:20]:
+                    messages.warning(request, err_line)
+                if len(result.errors) > 20:
+                    messages.warning(request, f"Se omitieron {len(result.errors) - 20} errores adicionales.")
+            else:
+                messages.success(
+                    request,
+                    f"{prefix} OK para {label}. Filas: {result.total_rows}. "
+                    f"Creados: {result.created}. Actualizados: {result.updated}.",
+                )
+
+    return render(request, "inventory/bulk_import.html", {
+        "form": form,
+        "entity": entity,
+        "entity_label": label,
+        "error_token": error_token,
+    })
+
+
+def bulk_import_template(request, entity: str):
+    if not request.user.is_authenticated:
+        return redirect("login")
+
+    if entity not in ENTITY_LABELS:
+        messages.error(request, "Tipo de importacion no valido.")
+        return redirect("inventory:product_list")
+
+    if entity in {"categories", "brands", "products"}:
+        _, err = _require_company(request)
+        if err:
+            return err
+
+    content = build_import_template_workbook(entity)
+    response = HttpResponse(
+        content,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="plantilla_{entity}.xlsx"'
+    return response
+
+
+def bulk_import_errors(request, token: str):
+    if not request.user.is_authenticated:
+        return redirect("login")
+
+    key = f"inventory_bulk_errors_{token}"
+    csv_content = request.session.get(key)
+    if not csv_content:
+        messages.error(request, "El reporte de errores ya no esta disponible.")
+        return redirect("inventory:product_list")
+
+    del request.session[key]
+    response = HttpResponse(csv_content, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="import_errors.csv"'
+    return response
 
 
 # ══════════════════════════════════════════════════════════════════════════════

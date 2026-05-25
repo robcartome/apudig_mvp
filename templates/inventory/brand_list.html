@@ -14,6 +14,9 @@
       </nav>
     </div>
     <div class="col-auto">
+      <a href="{% url 'inventory:bulk_import' 'brands' %}" class="btn btn-outline-primary me-2">
+        <i class="ti ti-upload me-1"></i>Importar Excel
+      </a>
       <a href="{% url 'inventory:brand_create' %}" class="btn btn-primary">
         <i class="ti ti-plus me-1"></i>Nueva marca
       </a>

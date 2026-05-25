@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Importacion masiva — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Importacion masiva de {{ entity_label|title }}</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item"><a href="javascript:history.back()">Inventario</a></li>
+          <li class="breadcrumb-item active">Importacion masiva</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">Subir archivo</h3>
+      </div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="{% url 'inventory:bulk_import_template' entity %}" class="btn btn-outline-primary btn-sm">
+            <i class="ti ti-file-download me-1"></i>Descargar plantilla
+          </a>
+          {% if error_token %}
+          <a href="{% url 'inventory:bulk_import_errors' error_token %}" class="btn btn-outline-danger btn-sm">
+            <i class="ti ti-alert-circle me-1"></i>Descargar errores
+          </a>
+          {% endif %}
+        </div>
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label required">{{ form.file.label }}</label>
+            {{ form.file }}
+            {% if form.file.help_text %}<div class="form-hint">{{ form.file.help_text }}</div>{% endif %}
+            {% if form.file.errors %}<div class="text-danger small mt-1">{{ form.file.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-3 form-check">
+            {{ form.dry_run }}
+            <label class="form-check-label" for="{{ form.dry_run.id_for_label }}">{{ form.dry_run.label }}</label>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="ti ti-upload me-1"></i>Procesar importacion
+            </button>
+            <a href="javascript:history.back()" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">Formato esperado</h3>
+      </div>
+      <div class="card-body">
+        {% if entity == 'categories' %}
+        <p class="text-muted mb-2">Columnas recomendadas:</p>
+        <ul class="mb-0">
+          <li>codigo (obligatoria)</li>
+          <li>nombre (obligatoria)</li>
+          <li>activo (opcional: si/no, true/false, 1/0)</li>
+        </ul>
+        {% elif entity == 'brands' %}
+        <p class="text-muted mb-2">Columnas recomendadas:</p>
+        <ul class="mb-0">
+          <li>nombre (obligatoria)</li>
+          <li>activo (opcional: si/no, true/false, 1/0)</li>
+        </ul>
+        {% elif entity == 'units' %}
+        <p class="text-muted mb-2">Columnas recomendadas:</p>
+        <ul class="mb-0">
+          <li>codigo (obligatoria)</li>
+          <li>nombre (obligatoria)</li>
+        </ul>
+        {% else %}
+        <p class="text-muted mb-2">Columnas recomendadas:</p>
+        <ul class="mb-0">
+          <li>sku (obligatoria)</li>
+          <li>nombre (obligatoria)</li>
+          <li>unidad_codigo (obligatoria, si no existe se crea)</li>
+          <li>unidad_nombre (opcional)</li>
+          <li>categoria_codigo, categoria (opcionales)</li>
+          <li>marca (opcional)</li>
+          <li>precio_compra, precio_venta (opcionales)</li>
+          <li>codigo_barras, descripcion, modelo, activo (opcionales)</li>
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

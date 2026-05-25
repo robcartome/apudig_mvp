@@ -22,8 +22,6 @@
 <form method="post" novalidate id="movement-form">
 {% csrf_token %}
 <div class="row g-3">
-
-  <!-- ── Cabecera ─────────────────────────────────────────────────────── -->
   <div class="col-12">
     <div class="card mb-3">
       <div class="card-header">
@@ -169,7 +167,6 @@
     </div>
   </div>
 
-  <!-- ── Detalle de productos ──────────────────────────────────────────── -->
   <div class="col-12">
     <div class="card">
       <div class="card-header">
@@ -270,7 +267,6 @@
     </div>
   </div>
 
-  <!-- ── Información adicional ──────────────────────────────────────────── -->
   <div class="col-12">
     <div class="card">
       <div class="card-header"><h3 class="card-title mb-0">Información adicional</h3></div>
@@ -283,8 +279,6 @@
 </div>{# /row #}
 </form>
 
-
-<!-- ── Config para movement-form.js y ProductPicker ─────────────────────── -->
 <div id="inv-form-config" hidden
      data-search-url="{% url 'inventory:api_product_search' %}"
      data-stock-url="{% url 'inventory:api_product_stock' %}"
@@ -294,7 +288,6 @@
      data-movement-type="{{ movement_type }}"></div>
 
 
-<!-- ── Modal: Crear producto rápido ──────────────────────────────────────── -->
 <div class="modal fade" id="quickCreateModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">

@@ -25,8 +25,6 @@ def _require_auth(request):
     return not request.user.is_authenticated
 
 
-# ── Product search ─────────────────────────────────────────────────────────────
-
 @require_GET
 def product_search(request):
     """Return up to 50 products matching `q`, scoped to the active company."""
@@ -36,6 +34,7 @@ def product_search(request):
     q            = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse", "").strip()
     company_id   = _get_company_id(request)
+    store_id     = _get_store_id(request)
 
     qs = Product.objects.filter(active=True).select_related("unit")
     if company_id:
@@ -46,7 +45,6 @@ def product_search(request):
         )
         products = list(qs.order_by("name")[:50])
     else:
-        # No query → return the 50 most recently created products
         products = list(qs.order_by("-created_at")[:50])
 
     # Build stock map for this warehouse in a single query
@@ -58,12 +56,15 @@ def product_search(request):
         ):
             stock_map[str(s.product_id)] = float(s.quantity)
 
-    # Build total stock map (all warehouses)
     total_stock_map: dict[str, float] = {}
     if products:
-        for s in StockByWarehouse.objects.filter(
+        total_stock_qs = StockByWarehouse.objects.filter(
             product_id__in=[p.pk for p in products],
-        ).values('product_id').annotate(total=Sum('quantity')):
+        )
+        if store_id:
+            total_stock_qs = total_stock_qs.filter(warehouse__store_id=store_id)
+
+        for s in total_stock_qs.values('product_id').annotate(total=Sum('quantity')):
             total_stock_map[str(s['product_id'])] = float(s['total'])
 
     return JsonResponse({

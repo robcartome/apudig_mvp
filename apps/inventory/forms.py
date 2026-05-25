@@ -365,3 +365,17 @@ class ProductPriceForm(forms.Form):
 ProductPriceFormSet = forms.formset_factory(
     ProductPriceForm, extra=1, min_num=0, validate_min=False, can_delete=True
 )
+
+
+class BulkImportForm(forms.Form):
+    file = forms.FileField(
+        label="Archivo",
+        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": ".xlsx,.csv"}),
+        help_text="Formatos permitidos: .xlsx, .csv",
+    )
+    dry_run = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Solo validar (no guardar)",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )

@@ -9,6 +9,9 @@ from .api import (
 )
 from .masters import (
     admin_panel,
+    bulk_import,
+    bulk_import_errors,
+    bulk_import_template,
     brand_create, brand_delete, brand_list, brand_update,
     category_create, category_delete, category_list, category_update,
     product_create, product_delete, product_list, product_update,
@@ -40,6 +43,9 @@ from .pricelists import (
 
 __all__ = [
     "product_search", "product_stock", "product_quick_create",
+    "bulk_import",
+    "bulk_import_template",
+    "bulk_import_errors",
     "brand_create", "brand_delete", "brand_list", "brand_update",
     "category_create", "category_delete", "category_list", "category_update",
     "product_create", "product_delete", "product_list", "product_update",
