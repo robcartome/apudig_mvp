@@ -12,13 +12,18 @@ from apps.core.models import TimeStampedModel
 
 class Category(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="categories", null=True, blank=True,
+    )
+    code = models.CharField(max_length=50)
     name = models.CharField(max_length=255)
     active = models.BooleanField(default=True)
 
     class Meta:
         db_table = "categories"
         ordering = ["name"]
+        unique_together = (("company", "code"),)
 
     def __str__(self) -> str:
         return self.name
@@ -26,12 +31,17 @@ class Category(TimeStampedModel):
 
 class Brand(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255, unique=True)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="brands", null=True, blank=True,
+    )
+    name = models.CharField(max_length=255)
     active = models.BooleanField(default=True)
 
     class Meta:
         db_table = "brands"
         ordering = ["name"]
+        unique_together = (("company", "name"),)
 
     def __str__(self) -> str:
         return self.name
@@ -52,6 +62,10 @@ class Unit(models.Model):
 
 class PriceList(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="price_lists", null=True, blank=True,
+    )
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=500, blank=True)
     active = models.BooleanField(default=True)
@@ -66,8 +80,12 @@ class PriceList(TimeStampedModel):
 
 class Product(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="products", null=True, blank=True,
+    )
     name = models.CharField(max_length=500)
-    sku = models.CharField(max_length=100, unique=True)
+    sku = models.CharField(max_length=100)
     barcode = models.CharField(max_length=100, blank=True)
     description = models.CharField(max_length=1000, blank=True)
     model = models.CharField(max_length=200, blank=True)
@@ -82,6 +100,7 @@ class Product(TimeStampedModel):
     class Meta:
         db_table = "products"
         ordering = ["name"]
+        unique_together = (("company", "sku"),)
 
     def __str__(self) -> str:
         return f"[{self.sku}] {self.name}"

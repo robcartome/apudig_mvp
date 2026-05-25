@@ -90,6 +90,10 @@ class QuotationHeaderForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
+        if company_id:
+            self.fields["customer"].queryset = self.fields["customer"].queryset.filter(company_id=company_id)
+        else:
+            self.fields["customer"].queryset = CoreCustomer.objects.none()
         self.fields["customer"].widget.attrs.update(_select)
         if company_id and store_id:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
@@ -194,6 +198,10 @@ class SaleOrderHeaderForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
+        if company_id:
+            self.fields["customer"].queryset = self.fields["customer"].queryset.filter(company_id=company_id)
+        else:
+            self.fields["customer"].queryset = CoreCustomer.objects.none()
         self.fields["customer"].widget.attrs.update(_select)
         self.fields["document_type"].queryset = BusinessDocumentType.objects.filter(active=True).order_by("code")
         self.fields["document_type"].widget.attrs.update(_select)
@@ -328,6 +336,10 @@ class VoucherHeaderForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, store_id=None, voucher_type=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
+        if company_id:
+            self.fields["customer"].queryset = self.fields["customer"].queryset.filter(company_id=company_id)
+        else:
+            self.fields["customer"].queryset = CoreCustomer.objects.none()
         self.fields["customer"].widget.attrs.update(_select)
         self.fields["voucher_type"].widget.attrs.update(_select)
         if company_id and store_id and voucher_type:

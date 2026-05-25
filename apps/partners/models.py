@@ -28,6 +28,10 @@ class CoreCustomer(TimeStampedModel):
     """core_customers - cliente canónico (source of truth)"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="customers", null=True, blank=True,
+    )
     document_type = models.CharField(max_length=2)  # 6=RUC, 1=DNI, etc.
     document_number = models.CharField(max_length=20)
     legal_name = models.CharField(max_length=300)
@@ -41,7 +45,7 @@ class CoreCustomer(TimeStampedModel):
     class Meta:
         db_table = "core_customers"
         ordering = ["legal_name"]
-        unique_together = ("document_type", "document_number")
+        unique_together = (("company", "document_type", "document_number"),)
 
     def __str__(self) -> str:
         return f"{self.document_number} - {self.legal_name}"
@@ -87,8 +91,12 @@ class Supplier(TimeStampedModel):
     """suppliers"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="suppliers", null=True, blank=True,
+    )
     name = models.CharField(max_length=255)
-    document_number = models.CharField(max_length=20, unique=True)
+    document_number = models.CharField(max_length=20)
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)
     email = models.CharField(max_length=120, blank=True)
@@ -98,6 +106,7 @@ class Supplier(TimeStampedModel):
     class Meta:
         db_table = "suppliers"
         ordering = ["name"]
+        unique_together = (("company", "document_number"),)
 
     def __str__(self) -> str:
         return self.name
@@ -107,6 +116,10 @@ class Carrier(TimeStampedModel):
     """carriers - transportistas"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE,
+        related_name="carriers", null=True, blank=True,
+    )
     business_name = models.CharField(max_length=255)
     document_number = models.CharField(max_length=11)
     license_plate = models.CharField(max_length=20, blank=True)
@@ -118,6 +131,7 @@ class Carrier(TimeStampedModel):
     class Meta:
         db_table = "carriers"
         ordering = ["business_name"]
+        unique_together = (("company", "document_number"),)
 
     def __str__(self) -> str:
         return self.business_name

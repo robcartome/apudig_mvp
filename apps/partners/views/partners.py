@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect, render
+from apps.companies.models import Company
 
 from ..forms import CarrierForm, CustomerContactForm, CustomerForm, CustomerProfileForm, SupplierForm
 from ..models import Carrier, CoreCustomer, SalesCustomerContact, SalesCustomerProfile, Supplier
@@ -29,6 +30,21 @@ def _require_auth(request):
     return None
 
 
+def _require_company(request):
+    company_id = (
+        getattr(request, "active_company_id", None)
+        or request.session.get("active_company_id")
+    )
+    if not company_id:
+        messages.error(request, "Selecciona una empresa antes de continuar.")
+        return None, redirect("select_company")
+    try:
+        return Company.objects.get(pk=company_id), None
+    except Company.DoesNotExist:
+        messages.error(request, "Empresa no encontrada.")
+        return None, redirect("select_company")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CUSTOMERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -37,9 +53,12 @@ def customer_list(request):
     r = _require_auth(request)
     if r:
         return r
+    company, err = _require_company(request)
+    if err:
+        return err
     query = request.GET.get("q", "")
     show_inactive = request.GET.get("inactive", "") == "1"
-    qs = search_customers(query, active_only=not show_inactive)
+    qs = search_customers(query, company_id=company.pk, active_only=not show_inactive)
     page_obj = _paginate(request, qs)
     return render(request, "partners/customer_list.html", {
         "page_obj": page_obj, "query": query, "show_inactive": show_inactive,
@@ -50,8 +69,11 @@ def customer_create(request):
     r = _require_auth(request)
     if r:
         return r
-    form = CustomerForm(request.POST or None)
-    profile_form = CustomerProfileForm(request.POST or None)
+    company, err = _require_company(request)
+    if err:
+        return err
+    form = CustomerForm(request.POST or None, company=company)
+    profile_form = CustomerProfileForm(request.POST or None, company_id=company.pk)
     if request.method == "POST" and form.is_valid() and profile_form.is_valid():
         try:
             customer = form.save()
@@ -74,7 +96,10 @@ def customer_detail(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    customer = get_object_or_404(CoreCustomer, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
     profile = getattr(customer, "sales_profile", None)
     contacts = customer.contacts.all()
     return render(request, "partners/customer_detail.html", {
@@ -88,10 +113,13 @@ def customer_update(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    customer = get_object_or_404(CoreCustomer, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
     profile, _ = SalesCustomerProfile.objects.get_or_create(core_customer=customer)
-    form = CustomerForm(request.POST or None, instance=customer)
-    profile_form = CustomerProfileForm(request.POST or None, instance=profile)
+    form = CustomerForm(request.POST or None, instance=customer, company=company)
+    profile_form = CustomerProfileForm(request.POST or None, instance=profile, company_id=company.pk)
     if request.method == "POST" and form.is_valid() and profile_form.is_valid():
         try:
             form.save()
@@ -114,7 +142,10 @@ def customer_delete(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    customer = get_object_or_404(CoreCustomer, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
     if request.method == "POST":
         try:
             name = customer.legal_name
@@ -136,7 +167,10 @@ def contact_create(request, customer_pk):
     r = _require_auth(request)
     if r:
         return r
-    customer = get_object_or_404(CoreCustomer, pk=customer_pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    customer = get_object_or_404(CoreCustomer, pk=customer_pk, company=company)
     form = CustomerContactForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         contact = form.save(commit=False)
@@ -155,7 +189,10 @@ def contact_delete(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    contact = get_object_or_404(SalesCustomerContact, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    contact = get_object_or_404(SalesCustomerContact, pk=pk, customer__company=company)
     customer_pk = contact.customer_id
     if request.method == "POST":
         contact.delete()
@@ -171,9 +208,12 @@ def supplier_list(request):
     r = _require_auth(request)
     if r:
         return r
+    company, err = _require_company(request)
+    if err:
+        return err
     query = request.GET.get("q", "")
     show_inactive = request.GET.get("inactive", "") == "1"
-    qs = search_suppliers(query, active_only=not show_inactive)
+    qs = search_suppliers(query, company_id=company.pk, active_only=not show_inactive)
     page_obj = _paginate(request, qs)
     return render(request, "partners/supplier_list.html", {
         "page_obj": page_obj, "query": query, "show_inactive": show_inactive,
@@ -184,7 +224,10 @@ def supplier_create(request):
     r = _require_auth(request)
     if r:
         return r
-    form = SupplierForm(request.POST or None)
+    company, err = _require_company(request)
+    if err:
+        return err
+    form = SupplierForm(request.POST or None, company=company)
     if request.method == "POST" and form.is_valid():
         try:
             supplier = form.save()
@@ -201,8 +244,11 @@ def supplier_update(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    supplier = get_object_or_404(Supplier, pk=pk)
-    form = SupplierForm(request.POST or None, instance=supplier)
+    company, err = _require_company(request)
+    if err:
+        return err
+    supplier = get_object_or_404(Supplier, pk=pk, company=company)
+    form = SupplierForm(request.POST or None, instance=supplier, company=company)
     if request.method == "POST" and form.is_valid():
         try:
             form.save()
@@ -219,7 +265,10 @@ def supplier_delete(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    supplier = get_object_or_404(Supplier, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    supplier = get_object_or_404(Supplier, pk=pk, company=company)
     if request.method == "POST":
         try:
             name = supplier.name
@@ -242,9 +291,12 @@ def carrier_list(request):
     r = _require_auth(request)
     if r:
         return r
+    company, err = _require_company(request)
+    if err:
+        return err
     query = request.GET.get("q", "")
     show_inactive = request.GET.get("inactive", "") == "1"
-    qs = search_carriers(query, active_only=not show_inactive)
+    qs = search_carriers(query, company_id=company.pk, active_only=not show_inactive)
     page_obj = _paginate(request, qs)
     return render(request, "partners/carrier_list.html", {
         "page_obj": page_obj, "query": query, "show_inactive": show_inactive,
@@ -255,7 +307,10 @@ def carrier_create(request):
     r = _require_auth(request)
     if r:
         return r
-    form = CarrierForm(request.POST or None)
+    company, err = _require_company(request)
+    if err:
+        return err
+    form = CarrierForm(request.POST or None, company=company)
     if request.method == "POST" and form.is_valid():
         carrier = form.save()
         messages.success(request, f"Transportista «{carrier.business_name}» creado correctamente.")
@@ -269,8 +324,11 @@ def carrier_update(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    carrier = get_object_or_404(Carrier, pk=pk)
-    form = CarrierForm(request.POST or None, instance=carrier)
+    company, err = _require_company(request)
+    if err:
+        return err
+    carrier = get_object_or_404(Carrier, pk=pk, company=company)
+    form = CarrierForm(request.POST or None, instance=carrier, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Transportista actualizado correctamente.")
@@ -284,7 +342,10 @@ def carrier_delete(request, pk):
     r = _require_auth(request)
     if r:
         return r
-    carrier = get_object_or_404(Carrier, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    carrier = get_object_or_404(Carrier, pk=pk, company=company)
     if request.method == "POST":
         try:
             name = carrier.business_name

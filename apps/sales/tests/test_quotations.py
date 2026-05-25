@@ -54,6 +54,7 @@ class QuotationServiceTest(TestCase):
         self.company = Company.objects.create(name="Empresa Test", ruc="20000000099")
         self.store = Store.objects.create(company=self.company, name="Tienda 1")
         self.customer = CoreCustomer.objects.create(
+            company=self.company,
             document_type="6",
             document_number="20999999999",
             legal_name="Cliente SAC",
@@ -153,6 +154,7 @@ class QuotationViewsTest(TestCase):
         self.company = Company.objects.create(name="Demo", ruc="20000000001")
         self.store = Store.objects.create(company=self.company, name="T1")
         self.customer = CoreCustomer.objects.create(
+            company=self.company,
             document_type="6", document_number="20111111111", legal_name="Cliente Demo SAC"
         )
         self.series = DocumentSeries.objects.create(

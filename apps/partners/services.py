@@ -7,11 +7,12 @@ from .models import CoreCustomer, SalesCustomerProfile, Supplier
 
 
 @transaction.atomic
-def create_customer(document_type: str, document_number: str, legal_name: str, **kwargs) -> CoreCustomer:
+def create_customer(document_type: str, document_number: str, legal_name: str, company_id=None, **kwargs) -> CoreCustomer:
     """
     Crea un cliente canónico. Si ya existe por documento, lanza IntegrityError.
     """
     return CoreCustomer.objects.create(
+        company_id=company_id,
         document_type=document_type,
         document_number=document_number,
         legal_name=legal_name,
@@ -28,7 +29,7 @@ def update_customer(customer: CoreCustomer, **fields) -> CoreCustomer:
 
 
 @transaction.atomic
-def create_supplier(name: str, document_number: str, **kwargs) -> Supplier:
+def create_supplier(name: str, document_number: str, company_id=None, **kwargs) -> Supplier:
     return Supplier.objects.create(
-        name=name, document_number=document_number, **kwargs
+        name=name, document_number=document_number, company_id=company_id, **kwargs
     )

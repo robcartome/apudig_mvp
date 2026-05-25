@@ -60,6 +60,7 @@ class VoucherServiceTest(TestCase):
         self.company = Company.objects.create(name="Empresa Vch", ruc="20333333333")
         self.store = Store.objects.create(company=self.company, name="Tienda Vch")
         self.customer = CoreCustomer.objects.create(
+            company=self.company,
             document_type="6",
             document_number="20444444444",
             legal_name="Cliente Vch SAC",
@@ -204,6 +205,7 @@ class VoucherViewsTest(TestCase):
         self.company = Company.objects.create(name="Empresa Views Vch", ruc="20555555555")
         self.store = Store.objects.create(company=self.company, name="Tienda Views Vch")
         self.customer = CoreCustomer.objects.create(
+            company=self.company,
             document_type="6",
             document_number="20666666666",
             legal_name="Cliente Views Vch SAC",

@@ -16,6 +16,7 @@ class QuotationServiceTest(TestCase):
         self.company = Company.objects.create(name="Demo", ruc="20000000002")
         self.store = Store.objects.create(company=self.company, name="Tienda 1")
         self.customer = CoreCustomer.objects.create(
+            company=self.company,
             document_type="6",
             document_number="20888888888",
             legal_name="Cliente Test SAC",

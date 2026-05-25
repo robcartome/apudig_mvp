@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView
 
 from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
-from apps.companies.models import Store
+from apps.companies.models import Company, Store
 
 from ..forms import BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
 from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation
@@ -40,6 +40,22 @@ def _paginate(request, qs, per_page: int = 25):
     return paginator.get_page(page)
 
 
+def _require_company(request):
+    """Returns (Company instance, None) or (None, redirect_response) if no active company."""
+    company_id = (
+        getattr(request, "active_company_id", None)
+        or request.session.get("active_company_id")
+    )
+    if not company_id:
+        messages.error(request, "Selecciona una empresa antes de continuar.")
+        return None, redirect("select_company")
+    try:
+        return Company.objects.get(pk=company_id), None
+    except Company.DoesNotExist:
+        messages.error(request, "Empresa no encontrada.")
+        return None, redirect("select_company")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CATEGORIES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -48,8 +64,11 @@ def category_list(request):
     if not request.user.is_authenticated:
         from django.shortcuts import redirect as _r
         return _r("login")
+    company, err = _require_company(request)
+    if err:
+        return err
     query = request.GET.get("q", "")
-    qs = search_categories(query) if query else get_categories()
+    qs = search_categories(query, company_id=company.pk) if query else get_categories(company_id=company.pk)
     page_obj = _paginate(request, qs)
     return render(request, "inventory/category_list.html", {
         "page_obj": page_obj, "query": query,
@@ -59,7 +78,10 @@ def category_list(request):
 def category_create(request):
     if not request.user.is_authenticated:
         return redirect("login")
-    form = CategoryForm(request.POST or None)
+    company, err = _require_company(request)
+    if err:
+        return err
+    form = CategoryForm(request.POST or None, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Categoría creada correctamente.")
@@ -72,8 +94,11 @@ def category_create(request):
 def category_update(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
-    obj = get_object_or_404(Category, pk=pk)
-    form = CategoryForm(request.POST or None, instance=obj)
+    company, err = _require_company(request)
+    if err:
+        return err
+    obj = get_object_or_404(Category, pk=pk, company=company)
+    form = CategoryForm(request.POST or None, instance=obj, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Categoría actualizada.")
@@ -86,7 +111,10 @@ def category_update(request, pk):
 def category_delete(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
-    obj = get_object_or_404(Category, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    obj = get_object_or_404(Category, pk=pk, company=company)
     if request.method == "POST":
         obj.delete()
         messages.success(request, "Categoría eliminada.")
@@ -103,8 +131,11 @@ def category_delete(request, pk):
 def brand_list(request):
     if not request.user.is_authenticated:
         return redirect("login")
+    company, err = _require_company(request)
+    if err:
+        return err
     query = request.GET.get("q", "")
-    qs = search_brands(query) if query else get_brands()
+    qs = search_brands(query, company_id=company.pk) if query else get_brands(company_id=company.pk)
     page_obj = _paginate(request, qs)
     return render(request, "inventory/brand_list.html", {
         "page_obj": page_obj, "query": query,
@@ -114,7 +145,10 @@ def brand_list(request):
 def brand_create(request):
     if not request.user.is_authenticated:
         return redirect("login")
-    form = BrandForm(request.POST or None)
+    company, err = _require_company(request)
+    if err:
+        return err
+    form = BrandForm(request.POST or None, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Marca creada correctamente.")
@@ -127,8 +161,11 @@ def brand_create(request):
 def brand_update(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
-    obj = get_object_or_404(Brand, pk=pk)
-    form = BrandForm(request.POST or None, instance=obj)
+    company, err = _require_company(request)
+    if err:
+        return err
+    obj = get_object_or_404(Brand, pk=pk, company=company)
+    form = BrandForm(request.POST or None, instance=obj, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Marca actualizada.")
@@ -141,7 +178,10 @@ def brand_update(request, pk):
 def brand_delete(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
-    obj = get_object_or_404(Brand, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    obj = get_object_or_404(Brand, pk=pk, company=company)
     if request.method == "POST":
         obj.delete()
         messages.success(request, "Marca eliminada.")
@@ -286,8 +326,11 @@ def warehouse_delete(request, pk):
 def product_list(request):
     if not request.user.is_authenticated:
         return redirect("login")
+    company, err = _require_company(request)
+    if err:
+        return err
     query = request.GET.get("q", "")
-    qs = search_products(query) if query else get_products()
+    qs = search_products(query, company_id=company.pk) if query else get_products(company_id=company.pk)
     page_obj = _paginate(request, qs)
     return render(request, "inventory/product_list.html", {
         "page_obj": page_obj, "query": query,
@@ -297,7 +340,10 @@ def product_list(request):
 def product_create(request):
     if not request.user.is_authenticated:
         return redirect("login")
-    form = ProductForm(request.POST or None)
+    company, err = _require_company(request)
+    if err:
+        return err
+    form = ProductForm(request.POST or None, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Producto creado correctamente.")
@@ -310,8 +356,11 @@ def product_create(request):
 def product_update(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
-    obj = get_object_or_404(Product, pk=pk)
-    form = ProductForm(request.POST or None, instance=obj)
+    company, err = _require_company(request)
+    if err:
+        return err
+    obj = get_object_or_404(Product, pk=pk, company=company)
+    form = ProductForm(request.POST or None, instance=obj, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Producto actualizado.")
@@ -324,7 +373,10 @@ def product_update(request, pk):
 def product_delete(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
-    obj = get_object_or_404(Product, pk=pk)
+    company, err = _require_company(request)
+    if err:
+        return err
+    obj = get_object_or_404(Product, pk=pk, company=company)
     if request.method == "POST":
         try:
             obj.delete()

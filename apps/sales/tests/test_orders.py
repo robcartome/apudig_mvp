@@ -60,6 +60,8 @@ class SaleOrderServiceTest(TestCase):
         self.company = Company.objects.create(name="Empresa OV", ruc="20000000001")
         self.store = Store.objects.create(company=self.company, name="Tienda OV")
         self.customer = CoreCustomer.objects.create(
+            company=self.company,
+            company=self.company,
             document_type="6",
             document_number="20111111111",
             legal_name="Cliente OV SAC",

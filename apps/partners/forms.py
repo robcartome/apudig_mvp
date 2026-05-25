@@ -35,8 +35,9 @@ class CustomerForm(forms.ModelForm):
             "active": forms.CheckboxInput(attrs=_check),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self._company = company
         self.fields["document_type"].widget = forms.Select(
             attrs=_select,
             choices=[
@@ -53,6 +54,30 @@ class CustomerForm(forms.ModelForm):
         self.fields["phone"].required = False
         self.fields["email"].required = False
 
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
+
+    def clean(self):
+        cleaned_data = super().clean()
+        document_type = cleaned_data.get("document_type")
+        document_number = cleaned_data.get("document_number")
+        if self._company and document_type and document_number:
+            qs = CoreCustomer.objects.filter(
+                company=self._company,
+                document_type=document_type,
+                document_number=document_number,
+            )
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                self.add_error("document_number", "Ya existe un cliente con ese tipo y número de documento.")
+        return cleaned_data
+
 
 class CustomerProfileForm(forms.ModelForm):
     class Meta:
@@ -68,6 +93,13 @@ class CustomerProfileForm(forms.ModelForm):
             "notes": forms.Textarea(attrs=_textarea),
             "active": forms.CheckboxInput(attrs=_check),
         }
+
+    def __init__(self, *args, company_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if company_id:
+            self.fields["price_list"].queryset = self.fields["price_list"].queryset.filter(
+                company_id=company_id
+            )
 
 
 class CustomerContactForm(forms.ModelForm):
@@ -96,6 +128,28 @@ class SupplierForm(forms.ModelForm):
             "active": forms.CheckboxInput(attrs=_check),
         }
 
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._company = company
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
+
+    def clean_document_number(self):
+        document_number = self.cleaned_data["document_number"]
+        if self._company:
+            qs = Supplier.objects.filter(company=self._company, document_number=document_number)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError("Ya existe un proveedor con ese número de documento.")
+        return document_number
+
 
 class CarrierForm(forms.ModelForm):
     class Meta:
@@ -111,3 +165,25 @@ class CarrierForm(forms.ModelForm):
             "phone": forms.TextInput(attrs=_text),
             "active": forms.CheckboxInput(attrs=_check),
         }
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._company = company
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
+
+    def clean_document_number(self):
+        document_number = self.cleaned_data["document_number"]
+        if self._company:
+            qs = Carrier.objects.filter(company=self._company, document_number=document_number)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError("Ya existe un transportista con ese número de documento.")
+        return document_number

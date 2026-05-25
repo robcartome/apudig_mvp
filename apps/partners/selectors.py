@@ -4,15 +4,19 @@ partners/selectors.py — Consultas de lectura de clientes, proveedores y transp
 from .models import Carrier, CoreCustomer, Supplier
 
 
-def get_customers(active_only: bool = True):
+def get_customers(company_id=None, active_only: bool = True):
     qs = CoreCustomer.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("legal_name")
 
 
-def search_customers(query: str = "", active_only: bool = True):
+def search_customers(query: str = "", company_id=None, active_only: bool = True):
     qs = CoreCustomer.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     if query:
@@ -24,22 +28,29 @@ def search_customers(query: str = "", active_only: bool = True):
     return qs.order_by("legal_name")
 
 
-def get_customer_by_document(document_type: str, document_number: str):
-    return CoreCustomer.objects.filter(
+def get_customer_by_document(document_type: str, document_number: str, company_id=None):
+    qs = CoreCustomer.objects.filter(
         document_type=document_type,
         document_number=document_number,
-    ).first()
+    )
+    if company_id:
+        qs = qs.filter(company_id=company_id)
+    return qs.first()
 
 
-def get_suppliers(active_only: bool = True):
+def get_suppliers(company_id=None, active_only: bool = True):
     qs = Supplier.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
 
 
-def search_suppliers(query: str = "", active_only: bool = True):
+def search_suppliers(query: str = "", company_id=None, active_only: bool = True):
     qs = Supplier.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     if query:
@@ -47,15 +58,19 @@ def search_suppliers(query: str = "", active_only: bool = True):
     return qs.order_by("name")
 
 
-def get_carriers(active_only: bool = True):
+def get_carriers(company_id=None, active_only: bool = True):
     qs = Carrier.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("business_name")
 
 
-def search_carriers(query: str = "", active_only: bool = True):
+def search_carriers(query: str = "", company_id=None, active_only: bool = True):
     qs = Carrier.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     if query:

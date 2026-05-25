@@ -15,6 +15,8 @@ from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
+from apps.companies.models import Company
+
 from ..forms import PriceListForm, ProductPriceFormSet
 from ..models import PriceList, Product, ProductPrice
 from ..selectors import get_pricelist_detail, get_price_lists, search_price_lists
@@ -32,6 +34,22 @@ def _require_auth(request):
     return None
 
 
+def _get_active_company(request):
+    """Returns (Company, None) or (None, redirect_response)."""
+    company_id = (
+        getattr(request, "active_company_id", None)
+        or request.session.get("active_company_id")
+    )
+    if not company_id:
+        messages.error(request, "Selecciona una empresa antes de continuar.")
+        return None, redirect("select_company")
+    try:
+        return Company.objects.get(pk=company_id), None
+    except Company.DoesNotExist:
+        messages.error(request, "Empresa no encontrada.")
+        return None, redirect("select_company")
+
+
 # ── Listado ───────────────────────────────────────────────────────────────────
 
 def pricelist_list(request):
@@ -39,8 +57,12 @@ def pricelist_list(request):
     if r:
         return r
 
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
     q = request.GET.get("q", "").strip()
-    qs = search_price_lists(q) if q else get_price_lists()
+    qs = search_price_lists(q, company_id=company.pk) if q else get_price_lists(company_id=company.pk)
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get("page"))
 
@@ -57,6 +79,10 @@ def pricelist_create(request):
     if r:
         return r
 
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
     if request.method == "POST":
         form = PriceListForm(request.POST)
         if form.is_valid():
@@ -64,6 +90,7 @@ def pricelist_create(request):
                 name=form.cleaned_data["name"],
                 description=form.cleaned_data.get("description", ""),
                 active=form.cleaned_data.get("active", True),
+                company_id=company.pk,
             )
             messages.success(request, f"Lista «{pl.name}» creada.")
             return redirect("inventory:pricelist_detail", pk=pl.pk)
@@ -83,14 +110,21 @@ def pricelist_detail(request, pk):
     if r:
         return r
 
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
     try:
         pl = get_pricelist_detail(pk)
     except PriceList.DoesNotExist:
         raise Http404
+    # Guard: only own company's lists
+    if pl.company_id and str(pl.company_id) != str(company.pk):
+        raise Http404
 
     # Formset para agregar/editar precios en bulk
     if request.method == "POST":
-        formset = ProductPriceFormSet(request.POST, prefix="prices")
+        formset = ProductPriceFormSet(request.POST, prefix="prices", form_kwargs={"company_id": company.pk})
         if formset.is_valid():
             saved = 0
             for f in formset:
@@ -107,7 +141,7 @@ def pricelist_detail(request, pk):
             messages.success(request, f"{saved} precio(s) actualizados.")
             return redirect("inventory:pricelist_detail", pk=pk)
     else:
-        formset = ProductPriceFormSet(prefix="prices")
+        formset = ProductPriceFormSet(prefix="prices", form_kwargs={"company_id": company.pk})
 
     return render(request, "inventory/pricelist_detail.html", {
         "pl": pl,
@@ -122,7 +156,11 @@ def pricelist_update(request, pk):
     if r:
         return r
 
-    pl = get_object_or_404(PriceList, pk=pk)
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
+    pl = get_object_or_404(PriceList, pk=pk, company=company)
 
     if request.method == "POST":
         form = PriceListForm(request.POST, instance=pl)

@@ -21,6 +21,18 @@ class CategoryForm(forms.ModelForm):
             "active": forms.CheckboxInput(attrs=_check),
         }
 
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._company = company
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
+
 
 class BrandForm(forms.ModelForm):
     class Meta:
@@ -30,6 +42,18 @@ class BrandForm(forms.ModelForm):
             "name": forms.TextInput(attrs={**_text, "placeholder": "Nombre de marca"}),
             "active": forms.CheckboxInput(attrs=_check),
         }
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._company = company
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
 
 
 class UnitForm(forms.ModelForm):
@@ -110,6 +134,25 @@ class ProductForm(forms.ModelForm):
             "active": forms.CheckboxInput(attrs=_check),
         }
 
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._company = company
+        if company is not None:
+            self.fields["category"].queryset = Category.objects.filter(
+                company=company, active=True
+            ).order_by("name")
+            self.fields["brand"].queryset = Brand.objects.filter(
+                company=company, active=True
+            ).order_by("name")
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
+
 _date = {"class": "form-control", "type": "datetime-local"}
 _date_format = "%Y-%m-%dT%H:%M"
 _date_input_formats = (
@@ -142,10 +185,15 @@ class MovementHeaderForm(forms.ModelForm):
             "document_type": forms.Select(attrs=_select),
         }
 
-    def __init__(self, *args, store_id=None, movement_type="ENTRY", **kwargs):
+    def __init__(self, *args, store_id=None, company_id=None, movement_type="ENTRY", **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["date"].input_formats = _date_input_formats
         self.fields["date"].required = True
+        self.fields["warehouse"].required = movement_type in (
+            MovementType.ENTRY,
+            MovementType.EXIT,
+            MovementType.ADJUSTMENT,
+        )
         self.fields["reason"].required = False
         self.fields["series"].required = False
         self.fields["number"].required = False
@@ -167,6 +215,14 @@ class MovementHeaderForm(forms.ModelForm):
         self.fields["supplier"].queryset = Supplier.objects.filter(active=True).order_by("name")
         self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
         self.fields["carrier"].queryset = Carrier.objects.filter(active=True).order_by("business_name")
+        if company_id:
+            self.fields["supplier"].queryset = self.fields["supplier"].queryset.filter(company_id=company_id)
+            self.fields["customer"].queryset = self.fields["customer"].queryset.filter(company_id=company_id)
+            self.fields["carrier"].queryset = self.fields["carrier"].queryset.filter(company_id=company_id)
+        else:
+            self.fields["supplier"].queryset = Supplier.objects.none()
+            self.fields["customer"].queryset = CoreCustomer.objects.none()
+            self.fields["carrier"].queryset = Carrier.objects.none()
         self.fields["document_type"].queryset = DocumentType.objects.filter(active=True).order_by("code")
 
         # Show/hide fields by type
@@ -193,6 +249,8 @@ class MovementTransferForm(forms.ModelForm):
     def __init__(self, *args, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["date"].input_formats = _date_input_formats
+        self.fields["warehouse_origin"].required = True
+        self.fields["warehouse_dest"].required = True
         self.fields["reason"].required = False
         self.fields["reference_doc"].required = False
         self.fields["description"].required = False
@@ -236,6 +294,16 @@ class MovementDetailForm(forms.Form):
         widget=forms.HiddenInput(),
         label="Ubicación",
     )
+
+    def __init__(self, *args, company_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if company_id:
+            self.fields["product"].queryset = (
+                Product.objects
+                .filter(active=True, company_id=company_id)
+                .select_related("unit")
+                .order_by("name")
+            )
 
     def clean_unit_price(self):
         val = self.cleaned_data.get("unit_price")
@@ -282,6 +350,16 @@ class ProductPriceForm(forms.Form):
         initial="PEN",
         widget=forms.Select(attrs=_select),
     )
+
+    def __init__(self, *args, company_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if company_id:
+            self.fields["product"].queryset = (
+                Product.objects
+                .filter(active=True, company_id=company_id)
+                .select_related("unit")
+                .order_by("name")
+            )
 
 
 ProductPriceFormSet = forms.formset_factory(

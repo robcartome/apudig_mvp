@@ -77,7 +77,10 @@ def user_list(request):
     company = _get_active_company(request)
     search = request.GET.get("q", "").strip()
 
-    if company:
+    if request.user.is_superuser:
+        # Superadmin siempre ve todos los usuarios del sistema.
+        qs = User.objects.all()
+    elif company:
         # Usuarios visibles por empresa activa:
         # - con roles en la empresa
         # - o con acceso explícito a la empresa (user_companies)
@@ -89,7 +92,8 @@ def user_list(request):
         if not qs.exists() and request.user.is_authenticated:
             qs = User.objects.filter(pk=request.user.pk)
     else:
-        qs = User.objects.all()
+        # Sin empresa activa, un admin no-super solo debe verse a sí mismo.
+        qs = User.objects.filter(pk=request.user.pk)
 
     if search:
         qs = qs.filter(Q(name__icontains=search) | Q(email__icontains=search))
@@ -128,6 +132,11 @@ def user_create(request):
         return err
 
     company = _get_active_company(request)
+
+    if not request.user.is_superuser and not company:
+        messages.error(request, "Debes seleccionar una empresa activa antes de crear usuarios.")
+        return redirect("select_company")
+
     form = UserCreateForm(request.POST or None)
 
     if request.method == "POST" and form.is_valid():

@@ -8,29 +8,33 @@ from .models import Brand, Category, Movement, PriceList, Product, ProductPrice,
 
 # ── Maestros ──────────────────────────────────────────────────────────────────
 
-def get_categories(active_only: bool = False):
+def get_categories(company_id=None, active_only: bool = False):
     qs = Category.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
 
 
-def search_categories(query: str, active_only: bool = False):
-    qs = get_categories(active_only=active_only)
+def search_categories(query: str, company_id=None, active_only: bool = False):
+    qs = get_categories(company_id=company_id, active_only=active_only)
     if query:
         qs = qs.filter(Q(name__icontains=query) | Q(code__icontains=query))
     return qs
 
 
-def get_brands(active_only: bool = False):
+def get_brands(company_id=None, active_only: bool = False):
     qs = Brand.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
 
 
-def search_brands(query: str, active_only: bool = False):
-    qs = get_brands(active_only=active_only)
+def search_brands(query: str, company_id=None, active_only: bool = False):
+    qs = get_brands(company_id=company_id, active_only=active_only)
     if query:
         qs = qs.filter(name__icontains=query)
     return qs
@@ -65,15 +69,17 @@ def search_warehouses(store_id: str, query: str, active_only: bool = False):
 
 # ── Productos ─────────────────────────────────────────────────────────────────
 
-def get_products(active_only: bool = False):
+def get_products(company_id=None, active_only: bool = False):
     qs = Product.objects.select_related("category", "brand", "unit")
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
 
 
-def search_products(query: str, active_only: bool = False):
-    qs = get_products(active_only=active_only)
+def search_products(query: str, company_id=None, active_only: bool = False):
+    qs = get_products(company_id=company_id, active_only=active_only)
     if query:
         qs = qs.filter(
             Q(name__icontains=query) | Q(sku__icontains=query) | Q(barcode__icontains=query)
@@ -83,15 +89,17 @@ def search_products(query: str, active_only: bool = False):
 
 # ── Listas de precio ─────────────────────────────────────────────────────────
 
-def get_price_lists(active_only: bool = False):
+def get_price_lists(company_id=None, active_only: bool = False):
     qs = PriceList.objects.all()
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
 
 
-def search_price_lists(query: str, active_only: bool = False):
-    qs = get_price_lists(active_only=active_only)
+def search_price_lists(query: str, company_id=None, active_only: bool = False):
+    qs = get_price_lists(company_id=company_id, active_only=active_only)
     if query:
         qs = qs.filter(Q(name__icontains=query) | Q(description__icontains=query))
     return qs

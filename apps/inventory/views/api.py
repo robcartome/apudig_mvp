@@ -13,6 +13,10 @@ from apps.partners.models import CoreCustomer, Supplier
 from ..models import Product, StockByWarehouse, Unit, WarehouseLocation
 
 
+def _get_company_id(request):
+    return getattr(request, "active_company_id", None) or request.session.get("active_company_id")
+
+
 def _get_store_id(request):
     return getattr(request, "active_store_id", None) or request.session.get("active_store_id")
 
@@ -25,14 +29,17 @@ def _require_auth(request):
 
 @require_GET
 def product_search(request):
-    """Return up to 50 products matching `q`, with stock for the given warehouse."""
+    """Return up to 50 products matching `q`, scoped to the active company."""
     if _require_auth(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
     q            = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse", "").strip()
+    company_id   = _get_company_id(request)
 
     qs = Product.objects.filter(active=True).select_related("unit")
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if q:
         qs = qs.filter(
             Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q)
@@ -106,7 +113,10 @@ def supplier_search(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
     q = request.GET.get("q", "").strip()
+    company_id = _get_company_id(request)
     qs = Supplier.objects.filter(active=True)
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(document_number__icontains=q))
     qs = qs.order_by("name")[:50]
@@ -133,7 +143,10 @@ def customer_search(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
     q = request.GET.get("q", "").strip()
+    company_id = _get_company_id(request)
     qs = CoreCustomer.objects.filter(active=True)
+    if company_id:
+        qs = qs.filter(company_id=company_id)
     if q:
         qs = qs.filter(
             Q(legal_name__icontains=q)
@@ -186,12 +199,15 @@ def product_quick_create(request):
     if not sku:
         sku = "P-" + str(uuid_lib.uuid4())[:8].upper()
 
+    company_id = _get_company_id(request)
+
     try:
         product = Product.objects.create(
             name=name,
             sku=sku,
             unit=unit,
             active=True,
+            company_id=company_id or None,
         )
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=400)

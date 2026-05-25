@@ -29,6 +29,18 @@ def _get_store_id(request):
     return getattr(request, "active_store_id", None) or request.session.get("active_store_id")
 
 
+def _get_company_id(request):
+    return getattr(request, "active_company_id", None) or request.session.get("active_company_id")
+
+
+def _require_active_store(request):
+    store_id = _get_store_id(request)
+    if not store_id:
+        messages.error(request, "Debes seleccionar una sucursal activa para registrar movimientos.")
+        return None, redirect("select_company")
+    return store_id, None
+
+
 def _paginate(request, qs, per_page: int = 25):
     return Paginator(qs, per_page).get_page(request.GET.get("page", 1))
 
@@ -100,7 +112,7 @@ def _get_movement_for_store_or_404(pk, store_id):
     )
 
 
-def _movement_forms(request, store_id, movement):
+def _movement_forms(request, store_id, movement, company_id=None):
     initial_lines = [
         {
             "product":      d.product_id,
@@ -118,11 +130,15 @@ def _movement_forms(request, store_id, movement):
         form = MovementHeaderForm(
             request.POST or None,
             store_id=store_id,
+            company_id=company_id,
             movement_type=movement.type,
             instance=movement,
         )
 
-    formset = MovementDetailEditFormSet(request.POST or None, initial=initial_lines, prefix="lines")
+    form_kwargs = {"company_id": company_id} if company_id else {}
+    formset = MovementDetailEditFormSet(
+        request.POST or None, initial=initial_lines, prefix="lines", form_kwargs=form_kwargs
+    )
     return form, formset
 
 
@@ -138,7 +154,8 @@ def movement_edit(request, pk):
         messages.error(request, movement.lock_reason or "Movimiento bloqueado para edición.")
         return redirect("inventory:movement_list")
 
-    form, formset = _movement_forms(request, store_id, movement)
+    company_id = _get_company_id(request)
+    form, formset = _movement_forms(request, store_id, movement, company_id=company_id)
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = _parse_lines(formset)
@@ -269,12 +286,18 @@ def entry_create(request):
     r = _require_auth(request)
     if r:
         return r
-    store_id = _get_store_id(request)
+    store_id, err = _require_active_store(request)
+    if err:
+        return err
+    company_id = _get_company_id(request)
     form = MovementHeaderForm(
-        request.POST or None, store_id=store_id, movement_type=MovementType.ENTRY,
+        request.POST or None, store_id=store_id, company_id=company_id, movement_type=MovementType.ENTRY,
         initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
-    formset = MovementDetailFormSet(request.POST or None, prefix="lines")
+    formset = MovementDetailFormSet(
+        request.POST or None, prefix="lines",
+        form_kwargs={"company_id": company_id} if company_id else {},
+    )
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = _parse_lines(formset)
@@ -282,22 +305,26 @@ def entry_create(request):
             messages.error(request, "Debe agregar al menos un producto.")
         else:
             cd = form.cleaned_data
-            register_entry(
-                store_id=store_id,
-                warehouse_id=str(cd["warehouse"].pk),
-                date=cd["date"],
-                lines=lines,
-                created_by=request.user,
-                reason=cd.get("reason", ""),
-                reference_doc=cd.get("reference_doc", ""),
-                description=cd.get("description", ""),
-                series=cd.get("series", ""),
-                number=cd.get("number", ""),
-                supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
-                document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
-            )
-            messages.success(request, "Entrada registrada correctamente.")
-            return redirect("inventory:movement_list")
+            warehouse = cd.get("warehouse")
+            if not warehouse:
+                form.add_error("warehouse", "Debe seleccionar un almacén.")
+            else:
+                register_entry(
+                    store_id=store_id,
+                    warehouse_id=str(warehouse.pk),
+                    date=cd["date"],
+                    lines=lines,
+                    created_by=request.user,
+                    reason=cd.get("reason", ""),
+                    reference_doc=cd.get("reference_doc", ""),
+                    description=cd.get("description", ""),
+                    series=cd.get("series", ""),
+                    number=cd.get("number", ""),
+                    supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
+                    document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
+                )
+                messages.success(request, "Entrada registrada correctamente.")
+                return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
         "form": form,
@@ -317,12 +344,18 @@ def exit_create(request):
     r = _require_auth(request)
     if r:
         return r
-    store_id = _get_store_id(request)
+    store_id, err = _require_active_store(request)
+    if err:
+        return err
+    company_id = _get_company_id(request)
     form = MovementHeaderForm(
-        request.POST or None, store_id=store_id, movement_type=MovementType.EXIT,
+        request.POST or None, store_id=store_id, company_id=company_id, movement_type=MovementType.EXIT,
         initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
-    formset = MovementDetailFormSet(request.POST or None, prefix="lines")
+    formset = MovementDetailFormSet(
+        request.POST or None, prefix="lines",
+        form_kwargs={"company_id": company_id} if company_id else {},
+    )
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = _parse_lines(formset)
@@ -330,22 +363,26 @@ def exit_create(request):
             messages.error(request, "Debe agregar al menos un producto.")
         else:
             cd = form.cleaned_data
-            register_exit(
-                store_id=store_id,
-                warehouse_id=str(cd["warehouse"].pk),
-                date=cd["date"],
-                lines=lines,
-                created_by=request.user,
-                reason=cd.get("reason", ""),
-                reference_doc=cd.get("reference_doc", ""),
-                description=cd.get("description", ""),
-                series=cd.get("series", ""),
-                number=cd.get("number", ""),
-                customer_id=cd["customer"].pk if cd.get("customer") else None,
-                document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
-            )
-            messages.success(request, "Salida registrada correctamente.")
-            return redirect("inventory:movement_list")
+            warehouse = cd.get("warehouse")
+            if not warehouse:
+                form.add_error("warehouse", "Debe seleccionar un almacén.")
+            else:
+                register_exit(
+                    store_id=store_id,
+                    warehouse_id=str(warehouse.pk),
+                    date=cd["date"],
+                    lines=lines,
+                    created_by=request.user,
+                    reason=cd.get("reason", ""),
+                    reference_doc=cd.get("reference_doc", ""),
+                    description=cd.get("description", ""),
+                    series=cd.get("series", ""),
+                    number=cd.get("number", ""),
+                    customer_id=cd["customer"].pk if cd.get("customer") else None,
+                    document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
+                )
+                messages.success(request, "Salida registrada correctamente.")
+                return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
         "form": form,
@@ -365,12 +402,18 @@ def transfer_create(request):
     r = _require_auth(request)
     if r:
         return r
-    store_id = _get_store_id(request)
+    store_id, err = _require_active_store(request)
+    if err:
+        return err
+    company_id = _get_company_id(request)
     form = MovementTransferForm(
         request.POST or None, store_id=store_id,
         initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M")},
     )
-    formset = MovementDetailFormSet(request.POST or None, prefix="lines")
+    formset = MovementDetailFormSet(
+        request.POST or None, prefix="lines",
+        form_kwargs={"company_id": company_id} if company_id else {},
+    )
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = _parse_lines(formset)
@@ -378,19 +421,26 @@ def transfer_create(request):
             messages.error(request, "Debe agregar al menos un producto.")
         else:
             cd = form.cleaned_data
-            register_transfer(
-                store_id=store_id,
-                warehouse_origin_id=str(cd["warehouse_origin"].pk),
-                warehouse_dest_id=str(cd["warehouse_dest"].pk),
-                date=cd["date"],
-                lines=lines,
-                created_by=request.user,
-                reason=cd.get("reason", ""),
-                reference_doc=cd.get("reference_doc", ""),
-                description=cd.get("description", ""),
-            )
-            messages.success(request, "Transferencia registrada correctamente.")
-            return redirect("inventory:movement_list")
+            warehouse_origin = cd.get("warehouse_origin")
+            warehouse_dest = cd.get("warehouse_dest")
+            if not warehouse_origin:
+                form.add_error("warehouse_origin", "Debe seleccionar almacén de origen.")
+            if not warehouse_dest:
+                form.add_error("warehouse_dest", "Debe seleccionar almacén de destino.")
+            if warehouse_origin and warehouse_dest:
+                register_transfer(
+                    store_id=store_id,
+                    warehouse_origin_id=str(warehouse_origin.pk),
+                    warehouse_dest_id=str(warehouse_dest.pk),
+                    date=cd["date"],
+                    lines=lines,
+                    created_by=request.user,
+                    reason=cd.get("reason", ""),
+                    reference_doc=cd.get("reference_doc", ""),
+                    description=cd.get("description", ""),
+                )
+                messages.success(request, "Transferencia registrada correctamente.")
+                return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
         "form": form,
@@ -410,14 +460,21 @@ def adjustment_create(request):
     r = _require_auth(request)
     if r:
         return r
-    store_id = _get_store_id(request)
+    store_id, err = _require_active_store(request)
+    if err:
+        return err
+    company_id = _get_company_id(request)
     form = MovementHeaderForm(
         request.POST or None,
         store_id=store_id,
+        company_id=company_id,
         movement_type=MovementType.ADJUSTMENT,
         initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "reason": "Saldo inicial"},
     )
-    formset = MovementDetailFormSet(request.POST or None, prefix="lines")
+    formset = MovementDetailFormSet(
+        request.POST or None, prefix="lines",
+        form_kwargs={"company_id": company_id} if company_id else {},
+    )
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = _parse_lines(formset)
@@ -425,24 +482,28 @@ def adjustment_create(request):
             messages.error(request, "Debe agregar al menos un producto.")
         else:
             cd = form.cleaned_data
-            register_adjustment(
-                store_id=store_id,
-                warehouse_id=str(cd["warehouse"].pk),
-                date=cd["date"],
-                lines=lines,
-                created_by=request.user,
-                reason=cd.get("reason", ""),
-                reference_doc=cd.get("reference_doc", ""),
-                description=cd.get("description", ""),
-                series="",
-                number="",
-                supplier_id=None,
-                customer_id=None,
-                document_type_id=None,
-                carrier_id=None,
-            )
-            messages.success(request, "Ajuste registrado correctamente.")
-            return redirect("inventory:movement_list")
+            warehouse = cd.get("warehouse")
+            if not warehouse:
+                form.add_error("warehouse", "Debe seleccionar un almacén.")
+            else:
+                register_adjustment(
+                    store_id=store_id,
+                    warehouse_id=str(warehouse.pk),
+                    date=cd["date"],
+                    lines=lines,
+                    created_by=request.user,
+                    reason=cd.get("reason", ""),
+                    reference_doc=cd.get("reference_doc", ""),
+                    description=cd.get("description", ""),
+                    series="",
+                    number="",
+                    supplier_id=None,
+                    customer_id=None,
+                    document_type_id=None,
+                    carrier_id=None,
+                )
+                messages.success(request, "Ajuste registrado correctamente.")
+                return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
         "form": form,

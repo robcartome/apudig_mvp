@@ -398,9 +398,8 @@ def _close_related_confirmed_movements(movement: Movement, changed_by=None) -> N
     if movement.created_at:
         prev_date_q |= Q(date=movement.date, created_at__lt=movement.created_at)
 
-    candidates = (
+    candidate_ids = list(
         Movement.objects
-        .select_for_update()
         .filter(store_id=movement.store_id, status=MovementStatus.CONFIRMED)
         .exclude(pk=movement.pk)
         .filter(details__product_id__in=product_ids)
@@ -410,7 +409,14 @@ def _close_related_confirmed_movements(movement: Movement, changed_by=None) -> N
             | Q(warehouse_origin_id__in=warehouse_ids)
             | Q(warehouse_dest_id__in=warehouse_ids)
         )
+        .values_list("pk", flat=True)
         .distinct()
+    )
+
+    candidates = (
+        Movement.objects
+        .select_for_update()
+        .filter(pk__in=candidate_ids)
     )
 
     for prev in candidates:
@@ -545,8 +551,8 @@ def delete_product_price(pricelist_id, product_id) -> None:
 
 
 @transaction.atomic
-def create_price_list(name: str, description: str = "", active: bool = True) -> PriceList:
-    return PriceList.objects.create(name=name, description=description, active=active)
+def create_price_list(name: str, description: str = "", active: bool = True, company_id=None) -> PriceList:
+    return PriceList.objects.create(name=name, description=description, active=active, company_id=company_id)
 
 
 def toggle_price_list(pricelist: PriceList) -> PriceList:
