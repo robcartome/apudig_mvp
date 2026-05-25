@@ -23,6 +23,7 @@ class MovementViewsTest(TestCase):
         self.unit = Unit.objects.create(code="UND", name="Unidad")
         self.warehouse = Warehouse.objects.create(store=self.store, name="Almacén A")
         self.product = Product.objects.create(
+            company=self.company,
             name="Producto Test", sku="TEST-01", unit=self.unit,
             price_purchase=Decimal("10"), price_sale=Decimal("15"),
         )

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Carrier, CoreCustomer, DocumentType, SalesCustomerContact, SalesCustomerProfile, Supplier
+from .models import Carrier, Customer, DocumentType, SalesCustomerContact, SalesCustomerProfile, Supplier
 
 
 @admin.register(DocumentType)
@@ -9,8 +9,8 @@ class DocumentTypeAdmin(admin.ModelAdmin):
     search_fields = ("code", "name")
 
 
-@admin.register(CoreCustomer)
-class CoreCustomerAdmin(admin.ModelAdmin):
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
     list_display = ("document_number", "legal_name", "document_type", "phone", "email", "active")
     list_filter = ("document_type", "active")
     search_fields = ("document_number", "legal_name", "trade_name")
@@ -18,7 +18,7 @@ class CoreCustomerAdmin(admin.ModelAdmin):
 
 @admin.register(SalesCustomerProfile)
 class SalesCustomerProfileAdmin(admin.ModelAdmin):
-    list_display = ("core_customer", "payment_term_days", "is_retention_agent", "active")
+    list_display = ("customer", "payment_term_days", "is_retention_agent", "active")
     list_filter = ("active", "is_retention_agent")
 
 

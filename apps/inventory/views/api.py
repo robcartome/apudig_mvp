@@ -8,7 +8,7 @@ from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
-from apps.partners.models import CoreCustomer, Supplier
+from apps.partners.models import Customer, Supplier
 
 from ..models import Product, StockByWarehouse, Unit, WarehouseLocation
 
@@ -144,7 +144,7 @@ def customer_search(request):
 
     q = request.GET.get("q", "").strip()
     company_id = _get_company_id(request)
-    qs = CoreCustomer.objects.filter(active=True)
+    qs = Customer.objects.filter(active=True)
     if company_id:
         qs = qs.filter(company_id=company_id)
     if q:

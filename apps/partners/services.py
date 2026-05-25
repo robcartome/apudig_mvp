@@ -3,15 +3,15 @@ partners/services.py — Lógica de negocio de clientes y proveedores.
 """
 from django.db import transaction
 
-from .models import CoreCustomer, SalesCustomerProfile, Supplier
+from .models import Customer, SalesCustomerProfile, Supplier
 
 
 @transaction.atomic
-def create_customer(document_type: str, document_number: str, legal_name: str, company_id=None, **kwargs) -> CoreCustomer:
+def create_customer(document_type: str, document_number: str, legal_name: str, company_id=None, **kwargs) -> Customer:
     """
     Crea un cliente canónico. Si ya existe por documento, lanza IntegrityError.
     """
-    return CoreCustomer.objects.create(
+    return Customer.objects.create(
         company_id=company_id,
         document_type=document_type,
         document_number=document_number,
@@ -21,7 +21,7 @@ def create_customer(document_type: str, document_number: str, legal_name: str, c
 
 
 @transaction.atomic
-def update_customer(customer: CoreCustomer, **fields) -> CoreCustomer:
+def update_customer(customer: Customer, **fields) -> Customer:
     for attr, value in fields.items():
         setattr(customer, attr, value)
     customer.save()

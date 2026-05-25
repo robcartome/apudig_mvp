@@ -3,7 +3,7 @@ partners/tests/test_services.py — Tests de servicios de partners.
 """
 from django.test import TestCase
 
-from apps.partners.models import CoreCustomer
+from apps.partners.models import Customer
 from apps.partners.services import create_customer
 from apps.partners.selectors import get_customer_by_document, search_customers
 

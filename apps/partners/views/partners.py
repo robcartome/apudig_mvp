@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.companies.models import Company
 
 from ..forms import CarrierForm, CustomerContactForm, CustomerForm, CustomerProfileForm, SupplierForm
-from ..models import Carrier, CoreCustomer, SalesCustomerContact, SalesCustomerProfile, Supplier
+from ..models import Carrier, Customer, SalesCustomerContact, SalesCustomerProfile, Supplier
 from ..selectors import (
     get_carriers,
     get_customers,
@@ -78,7 +78,7 @@ def customer_create(request):
         try:
             customer = form.save()
             profile = profile_form.save(commit=False)
-            profile.core_customer = customer
+            profile.customer = customer
             profile.save()
             messages.success(request, f"Cliente «{customer.legal_name}» creado correctamente.")
             return redirect("partners:customer_detail", pk=customer.pk)
@@ -99,7 +99,7 @@ def customer_detail(request, pk):
     company, err = _require_company(request)
     if err:
         return err
-    customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
+    customer = get_object_or_404(Customer, pk=pk, company=company)
     profile = getattr(customer, "sales_profile", None)
     contacts = SalesCustomerContact.objects.for_company(company.pk).filter(customer=customer)
     return render(request, "partners/customer_detail.html", {
@@ -116,8 +116,8 @@ def customer_update(request, pk):
     company, err = _require_company(request)
     if err:
         return err
-    customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
-    profile, _ = SalesCustomerProfile.objects.get_or_create(core_customer=customer)
+    customer = get_object_or_404(Customer, pk=pk, company=company)
+    profile, _ = SalesCustomerProfile.objects.get_or_create(customer=customer)
     form = CustomerForm(request.POST or None, instance=customer, company=company)
     profile_form = CustomerProfileForm(request.POST or None, instance=profile, company_id=company.pk)
     if request.method == "POST" and form.is_valid() and profile_form.is_valid():
@@ -145,7 +145,7 @@ def customer_delete(request, pk):
     company, err = _require_company(request)
     if err:
         return err
-    customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
+    customer = get_object_or_404(Customer, pk=pk, company=company)
     if request.method == "POST":
         try:
             name = customer.legal_name
@@ -170,7 +170,7 @@ def contact_create(request, customer_pk):
     company, err = _require_company(request)
     if err:
         return err
-    customer = get_object_or_404(CoreCustomer, pk=customer_pk, company=company)
+    customer = get_object_or_404(Customer, pk=customer_pk, company=company)
     form = CustomerContactForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         contact = form.save(commit=False)

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from apps.partners.models import Carrier, CoreCustomer, DocumentType, Supplier
+from apps.partners.models import Carrier, Customer, DocumentType, Supplier
 
 from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, Unit, Warehouse, WarehouseLocation
 
@@ -213,7 +213,7 @@ class MovementHeaderForm(forms.ModelForm):
             self.fields["warehouse"].queryset = Warehouse.objects.none()
 
         self.fields["supplier"].queryset = Supplier.objects.filter(active=True).order_by("name")
-        self.fields["customer"].queryset = CoreCustomer.objects.filter(active=True).order_by("legal_name")
+        self.fields["customer"].queryset = Customer.objects.filter(active=True).order_by("legal_name")
         self.fields["carrier"].queryset = Carrier.objects.filter(active=True).order_by("business_name")
         if company_id:
             self.fields["supplier"].queryset = self.fields["supplier"].queryset.filter(company_id=company_id)
@@ -221,7 +221,7 @@ class MovementHeaderForm(forms.ModelForm):
             self.fields["carrier"].queryset = self.fields["carrier"].queryset.filter(company_id=company_id)
         else:
             self.fields["supplier"].queryset = Supplier.objects.none()
-            self.fields["customer"].queryset = CoreCustomer.objects.none()
+            self.fields["customer"].queryset = Customer.objects.none()
             self.fields["carrier"].queryset = Carrier.objects.none()
         self.fields["document_type"].queryset = DocumentType.objects.filter(active=True).order_by("code")
 

@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
-from apps.partners.models import CoreCustomer
+from apps.partners.models import Customer
 from apps.sales.models import DocumentSeries, SalesQuotation
 from apps.sales.services import (
     approve_quotation,
@@ -53,7 +53,7 @@ class QuotationServiceTest(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Empresa Test", ruc="20000000099")
         self.store = Store.objects.create(company=self.company, name="Tienda 1")
-        self.customer = CoreCustomer.objects.create(
+        self.customer = Customer.objects.create(
             company=self.company,
             document_type="6",
             document_number="20999999999",
@@ -153,7 +153,7 @@ class QuotationViewsTest(TestCase):
         self.user = User.objects.create_user(email="test@demo.com", password="pass1234")
         self.company = Company.objects.create(name="Demo", ruc="20000000001")
         self.store = Store.objects.create(company=self.company, name="T1")
-        self.customer = CoreCustomer.objects.create(
+        self.customer = Customer.objects.create(
             company=self.company,
             document_type="6", document_number="20111111111", legal_name="Cliente Demo SAC"
         )

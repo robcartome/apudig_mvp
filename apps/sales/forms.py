@@ -8,7 +8,7 @@ from django import forms
 from apps.core.managers import filter_by_company
 from apps.companies.models import Store
 from apps.inventory.models import Product
-from apps.partners.models import CoreCustomer
+from apps.partners.models import Customer
 
 from .models import (
     BusinessDocumentType,
@@ -91,7 +91,7 @@ class QuotationHeaderForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = filter_by_company(
-            CoreCustomer.objects.filter(active=True), company_id
+            Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget.attrs.update(_select)
         if company_id and store_id:
@@ -197,7 +197,7 @@ class SaleOrderHeaderForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = filter_by_company(
-            CoreCustomer.objects.filter(active=True), company_id
+            Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget.attrs.update(_select)
         self.fields["document_type"].queryset = BusinessDocumentType.objects.filter(active=True).order_by("code")
@@ -333,7 +333,7 @@ class VoucherHeaderForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, store_id=None, voucher_type=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = filter_by_company(
-            CoreCustomer.objects.filter(active=True), company_id
+            Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget.attrs.update(_select)
         self.fields["voucher_type"].widget.attrs.update(_select)

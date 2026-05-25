@@ -31,8 +31,8 @@ class BillingInvoice(TimeStampedModel):
     series = models.CharField(max_length=10, blank=True)
     number = models.CharField(max_length=20, blank=True)
     issue_date = models.DateTimeField()
-    core_customer = models.ForeignKey(
-        "partners.CoreCustomer", on_delete=models.SET_NULL, null=True, blank=True, related_name="billing_invoices"
+    customer = models.ForeignKey(
+        "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="billing_invoices"
     )
     customer_name = models.CharField(max_length=255)
     customer_document_number = models.CharField(max_length=20)

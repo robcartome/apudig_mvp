@@ -3,18 +3,18 @@ partners/selectors.py — Consultas de lectura de clientes, proveedores y transp
 """
 from apps.core.managers import filter_by_company
 
-from .models import Carrier, CoreCustomer, Supplier
+from .models import Carrier, Customer, Supplier
 
 
 def get_customers(company_id=None, active_only: bool = True):
-    qs = CoreCustomer.objects.for_company(company_id) if company_id else CoreCustomer.objects.all()
+    qs = Customer.objects.for_company(company_id) if company_id else Customer.objects.all()
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("legal_name")
 
 
 def search_customers(query: str = "", company_id=None, active_only: bool = True):
-    qs = CoreCustomer.objects.for_company(company_id) if company_id else CoreCustomer.objects.all()
+    qs = Customer.objects.for_company(company_id) if company_id else Customer.objects.all()
     if active_only:
         qs = qs.filter(active=True)
     if query:
@@ -27,7 +27,7 @@ def search_customers(query: str = "", company_id=None, active_only: bool = True)
 
 
 def get_customer_by_document(document_type: str, document_number: str, company_id=None):
-    qs = CoreCustomer.objects.filter(
+    qs = Customer.objects.filter(
         document_type=document_type,
         document_number=document_number,
     )

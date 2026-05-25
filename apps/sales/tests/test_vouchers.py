@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
-from apps.partners.models import CoreCustomer
+from apps.partners.models import Customer
 from apps.sales.models import (
     DocumentSeries,
     SaleOrder,
@@ -59,7 +59,7 @@ class VoucherServiceTest(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Empresa Vch", ruc="20333333333")
         self.store = Store.objects.create(company=self.company, name="Tienda Vch")
-        self.customer = CoreCustomer.objects.create(
+        self.customer = Customer.objects.create(
             company=self.company,
             document_type="6",
             document_number="20444444444",
@@ -204,7 +204,7 @@ class VoucherViewsTest(TestCase):
         self.client = Client()
         self.company = Company.objects.create(name="Empresa Views Vch", ruc="20555555555")
         self.store = Store.objects.create(company=self.company, name="Tienda Views Vch")
-        self.customer = CoreCustomer.objects.create(
+        self.customer = Customer.objects.create(
             company=self.company,
             document_type="6",
             document_number="20666666666",

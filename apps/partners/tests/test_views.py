@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.companies.models import Company, Store, UserCompanyAccess
-from apps.partners.models import Carrier, CoreCustomer, Supplier
+from apps.partners.models import Carrier, Customer, Supplier
 from apps.users.models import User
 
 
@@ -25,7 +25,7 @@ class PartnersViewsTest(TestCase):
     # ── Customers ─────────────────────────────────────────────────────────────
 
     def test_customer_list_ok(self):
-        CoreCustomer.objects.create(company=self.company, document_type="6", document_number="20123456789", legal_name="Empresa ABC")
+        Customer.objects.create(company=self.company, document_type="6", document_number="20123456789", legal_name="Empresa ABC")
         resp = self.client.get(reverse("partners:customer_list"))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Empresa ABC")
@@ -52,10 +52,10 @@ class PartnersViewsTest(TestCase):
             "notes": "",
         })
         self.assertEqual(resp.status_code, 302)
-        self.assertTrue(CoreCustomer.objects.filter(document_number="20987654321").exists())
+        self.assertTrue(Customer.objects.filter(document_number="20987654321").exists())
 
     def test_customer_detail_ok(self):
-        cust = CoreCustomer.objects.create(
+        cust = Customer.objects.create(
             company=self.company, document_type="1", document_number="12345678", legal_name="Juan Pérez"
         )
         resp = self.client.get(reverse("partners:customer_detail", args=[cust.pk]))
@@ -63,17 +63,17 @@ class PartnersViewsTest(TestCase):
         self.assertContains(resp, "Juan Pérez")
 
     def test_customer_search(self):
-        CoreCustomer.objects.create(company=self.company, document_type="1", document_number="11111111", legal_name="Alpha Corp")
-        CoreCustomer.objects.create(company=self.company, document_type="1", document_number="22222222", legal_name="Beta Corp")
+        Customer.objects.create(company=self.company, document_type="1", document_number="11111111", legal_name="Alpha Corp")
+        Customer.objects.create(company=self.company, document_type="1", document_number="22222222", legal_name="Beta Corp")
         resp = self.client.get(reverse("partners:customer_list") + "?q=alpha")
         self.assertContains(resp, "Alpha Corp")
         self.assertNotContains(resp, "Beta Corp")
 
     def test_customer_delete(self):
-        cust = CoreCustomer.objects.create(company=self.company, document_type="1", document_number="99999999", legal_name="Borrar")
+        cust = Customer.objects.create(company=self.company, document_type="1", document_number="99999999", legal_name="Borrar")
         resp = self.client.post(reverse("partners:customer_delete", args=[cust.pk]))
         self.assertRedirects(resp, reverse("partners:customer_list"))
-        self.assertFalse(CoreCustomer.objects.filter(pk=cust.pk).exists())
+        self.assertFalse(Customer.objects.filter(pk=cust.pk).exists())
 
     # ── Suppliers ─────────────────────────────────────────────────────────────
 

@@ -229,7 +229,7 @@ class Movement(TimeStampedModel):
         "partners.Supplier", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )
     customer = models.ForeignKey(
-        "partners.CoreCustomer", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
+        "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )
     carrier = models.ForeignKey(
         "partners.Carrier", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"

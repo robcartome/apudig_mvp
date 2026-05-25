@@ -3,7 +3,7 @@ partners/forms.py — Formularios de clientes, proveedores y transportistas.
 """
 from django import forms
 
-from .models import Carrier, CoreCustomer, SalesCustomerContact, SalesCustomerProfile, Supplier
+from .models import Carrier, Customer, SalesCustomerContact, SalesCustomerProfile, Supplier
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -13,7 +13,7 @@ _textarea = {"class": "form-control", "rows": 3}
 
 class CustomerForm(forms.ModelForm):
     class Meta:
-        model = CoreCustomer
+        model = Customer
         fields = (
             "document_type",
             "document_number",
@@ -67,7 +67,7 @@ class CustomerForm(forms.ModelForm):
         document_type = cleaned_data.get("document_type")
         document_number = cleaned_data.get("document_number")
         if self._company and document_type and document_number:
-            qs = CoreCustomer.objects.filter(
+            qs = Customer.objects.filter(
                 company=self._company,
                 document_type=document_type,
                 document_number=document_number,

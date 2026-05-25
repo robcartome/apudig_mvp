@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
-from apps.partners.models import CoreCustomer
+from apps.partners.models import Customer
 from apps.sales.models import (
     BusinessDocumentType,
     DocumentSeries,
@@ -59,8 +59,7 @@ class SaleOrderServiceTest(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Empresa OV", ruc="20000000001")
         self.store = Store.objects.create(company=self.company, name="Tienda OV")
-        self.customer = CoreCustomer.objects.create(
-            company=self.company,
+        self.customer = Customer.objects.create(
             company=self.company,
             document_type="6",
             document_number="20111111111",
@@ -188,7 +187,8 @@ class SaleOrderViewsTest(TestCase):
         self.client = Client()
         self.company = Company.objects.create(name="Empresa Views OV", ruc="20000000002")
         self.store = Store.objects.create(company=self.company, name="Tienda Views OV")
-        self.customer = CoreCustomer.objects.create(
+        self.customer = Customer.objects.create(
+            company=self.company,
             document_type="6",
             document_number="20222222222",
             legal_name="Cliente Views OV SAC",

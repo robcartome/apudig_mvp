@@ -21,10 +21,11 @@ User = get_user_model()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_product(name="Prod PL", sku="SKU_PL1"):
+def _make_product(name="Prod PL", sku="SKU_PL1", company=None):
     unit, _ = Unit.objects.get_or_create(name="Unidad PL", defaults={"code": "UPLX"})
     return Product.objects.create(
-        name=name, sku=sku, unit=unit, price_sale=Decimal("10.00"), active=True
+        name=name, sku=sku, unit=unit, price_sale=Decimal("10.00"), active=True,
+        company=company,
     )
 
 
@@ -76,14 +77,14 @@ class PriceListViewsTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.user = User.objects.create_user(email="pl@demo.com", password="pass1234")
-        company = Company.objects.create(name="Empresa PL", ruc="20777777777")
-        store = Store.objects.create(company=company, name="Tienda PL")
+        self.company = Company.objects.create(name="Empresa PL", ruc="20777777777")
+        store = Store.objects.create(company=self.company, name="Tienda PL")
         session = self.client.session
-        session["active_company_id"] = str(company.pk)
+        session["active_company_id"] = str(self.company.pk)
         session["active_store_id"] = str(store.pk)
         session.save()
-        self.pl = create_price_list(name="Lista Test")
-        self.product = _make_product()
+        self.pl = create_price_list(name="Lista Test", company_id=self.company.pk)
+        self.product = _make_product(company=self.company)
 
     def _login(self):
         self.client.login(username="pl@demo.com", password="pass1234")

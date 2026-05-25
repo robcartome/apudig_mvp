@@ -37,8 +37,8 @@ class DocumentType(models.Model):
         return f"{self.code} - {self.name}"
 
 
-class CoreCustomer(TimeStampedModel):
-    """core_customers - cliente canónico (source of truth)"""
+class Customer(TimeStampedModel):
+    """customers - cliente canónico (source of truth)"""
 
     objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -57,7 +57,7 @@ class CoreCustomer(TimeStampedModel):
     active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = "core_customers"
+        db_table = "customers"
         ordering = ["legal_name"]
         unique_together = (("company", "document_type", "document_number"),)
 
@@ -69,7 +69,7 @@ class SalesCustomerProfile(TimeStampedModel):
     """sales_customer_profiles - perfil comercial del cliente"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    core_customer = models.OneToOneField(CoreCustomer, on_delete=models.CASCADE, related_name="sales_profile")
+    customer = models.OneToOneField(Customer, on_delete=models.CASCADE, related_name="sales_profile")
     taxpayer_status = models.CharField(max_length=40, blank=True)
     taxpayer_condition = models.CharField(max_length=20, blank=True)
     is_retention_agent = models.BooleanField(default=False)
@@ -89,7 +89,7 @@ class SalesCustomerContact(models.Model):
 
     objects = SalesCustomerContactManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    customer = models.ForeignKey(CoreCustomer, on_delete=models.CASCADE, related_name="contacts")
+    customer = models.ForeignKey("Customer", on_delete=models.CASCADE, related_name="contacts")
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=30, blank=True)
     email = models.CharField(max_length=200, blank=True)

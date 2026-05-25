@@ -139,7 +139,7 @@ class SalesQuotation(TimeStampedModel):
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
     )
     customer = models.ForeignKey(
-        "partners.CoreCustomer", on_delete=models.PROTECT, related_name="quotations"
+        "partners.Customer", on_delete=models.PROTECT, related_name="quotations"
     )
     customer_document_type = models.CharField(max_length=2)
     customer_document_number = models.CharField(max_length=15)
@@ -194,7 +194,7 @@ class SaleOrder(TimeStampedModel):
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="sale_orders"
     )
-    customer = models.ForeignKey("partners.CoreCustomer", on_delete=models.PROTECT, related_name="sale_orders")
+    customer = models.ForeignKey("partners.Customer", on_delete=models.PROTECT, related_name="sale_orders")
     customer_document_type = models.CharField(max_length=2)
     customer_document_number = models.CharField(max_length=15)
     customer_legal_name = models.CharField(max_length=300)
@@ -256,7 +256,7 @@ class Voucher(TimeStampedModel):
     voucher_type = models.CharField(max_length=10, choices=VOUCHER_TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=VOUCHER_STATUS_CHOICES, default="DRAFT")
     customer = models.ForeignKey(
-        "partners.CoreCustomer", on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+        "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
     )
     customer_document_type = models.CharField(max_length=2)
     customer_document_number = models.CharField(max_length=15)
