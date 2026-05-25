@@ -85,7 +85,7 @@ def user_list(request):
         # - con roles en la empresa
         # - o con acceso explícito a la empresa (user_companies)
         role_user_ids = UserRole.objects.filter(company=company).values_list("user_id", flat=True)
-        company_access_user_ids = UserCompanyAccess.objects.filter(company=company).values_list("user_id", flat=True)
+        company_access_user_ids = UserCompanyAccess.objects.for_company(company.pk).values_list("user_id", flat=True)
         qs = User.objects.filter(Q(id__in=role_user_ids) | Q(id__in=company_access_user_ids)).distinct()
 
         # Evita el caso confuso de quedar sin ningún usuario visible estando logueado.
@@ -103,7 +103,7 @@ def user_list(request):
     # Enriquecer con datos de empresa y roles
     users_data = []
     for u in qs:
-        company_count = UserCompanyAccess.objects.filter(user=u).values("company").distinct().count()
+        company_count = UserCompanyAccess.objects.for_user(u).values("company").distinct().count()
         roles = []
         if company:
             roles = list(
@@ -230,7 +230,7 @@ def user_detail(request, pk):
     accesos_por_empresa = []
     if request.user.is_superuser:
         user_access_pairs = set(
-            UserCompanyAccess.objects.filter(user=target)
+            UserCompanyAccess.objects.for_user(target)
             .values_list("company_id", "store_id")
         )
         # Normalizar: store_id None queda como None, UUID como str
@@ -264,7 +264,7 @@ def user_detail(request, pk):
 
         with transaction.atomic():
             # Eliminar los accesos que ya no están seleccionados
-            for access in UserCompanyAccess.objects.filter(user=target).select_related("company", "store"):
+            for access in UserCompanyAccess.objects.for_user(target).select_related("company", "store"):
                 key = (str(access.company_id), str(access.store_id) if access.store_id else None)
                 if key not in desired:
                     access.delete()

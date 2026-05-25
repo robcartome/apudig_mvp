@@ -5,12 +5,14 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
+from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
 
 
 # ── Maestros ──────────────────────────────────────────────────────────────────
 
 class Category(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
@@ -30,6 +32,7 @@ class Category(TimeStampedModel):
 
 
 class Brand(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
@@ -61,6 +64,7 @@ class Unit(models.Model):
 
 
 class PriceList(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
@@ -79,6 +83,7 @@ class PriceList(TimeStampedModel):
 
 
 class Product(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
@@ -122,6 +127,7 @@ class ProductPrice(models.Model):
 # ── Operativo ─────────────────────────────────────────────────────────────────
 
 class Warehouse(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey("companies.Store", on_delete=models.CASCADE, related_name="warehouses")
     name = models.CharField(max_length=255)
@@ -195,6 +201,7 @@ class MovementStatus(models.TextChoices):
 
 
 class Movement(TimeStampedModel):
+    objects = CompanyScopedManager()
     MOVEMENT_TYPES = MovementType.choices
     STATUS_CHOICES = MovementStatus.choices
 

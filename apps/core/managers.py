@@ -46,3 +46,14 @@ class CompanyScopedManager(models.Manager):
 
     def active(self) -> CompanyScopedQuerySet:
         return self.get_queryset().active()
+
+
+def filter_by_company(qs: models.QuerySet, company_id: str | None):
+    """Apply company scoping only when a company_id is provided.
+
+    Centralizing this keeps multi-tenant filters consistent and avoids
+    repeating the same conditional in selectors, forms, and views.
+    """
+    if company_id is None:
+        return qs
+    return qs.filter(company_id=company_id)

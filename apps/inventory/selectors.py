@@ -9,9 +9,7 @@ from .models import Brand, Category, Movement, PriceList, Product, ProductPrice,
 # ── Maestros ──────────────────────────────────────────────────────────────────
 
 def get_categories(company_id=None, active_only: bool = False):
-    qs = Category.objects.all()
-    if company_id:
-        qs = qs.filter(company_id=company_id)
+    qs = Category.objects.for_company(company_id) if company_id else Category.objects.all()
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
@@ -25,9 +23,7 @@ def search_categories(query: str, company_id=None, active_only: bool = False):
 
 
 def get_brands(company_id=None, active_only: bool = False):
-    qs = Brand.objects.all()
-    if company_id:
-        qs = qs.filter(company_id=company_id)
+    qs = Brand.objects.for_company(company_id) if company_id else Brand.objects.all()
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
@@ -54,7 +50,7 @@ def search_units(query: str):
 # ── Almacenes ─────────────────────────────────────────────────────────────────
 
 def get_warehouses_for_store(store_id: str, active_only: bool = False):
-    qs = Warehouse.objects.filter(store_id=store_id)
+    qs = Warehouse.objects.for_store(store_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.select_related("store").order_by("name")
@@ -72,7 +68,7 @@ def search_warehouses(store_id: str, query: str, active_only: bool = False):
 def get_products(company_id=None, active_only: bool = False):
     qs = Product.objects.select_related("category", "brand", "unit")
     if company_id:
-        qs = qs.filter(company_id=company_id)
+        qs = qs.for_company(company_id)
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
@@ -90,9 +86,7 @@ def search_products(query: str, company_id=None, active_only: bool = False):
 # ── Listas de precio ─────────────────────────────────────────────────────────
 
 def get_price_lists(company_id=None, active_only: bool = False):
-    qs = PriceList.objects.all()
-    if company_id:
-        qs = qs.filter(company_id=company_id)
+    qs = PriceList.objects.for_company(company_id) if company_id else PriceList.objects.all()
     if active_only:
         qs = qs.filter(active=True)
     return qs.order_by("name")
@@ -136,11 +130,10 @@ def get_stock_by_warehouse(store_id: str):
 
 def get_movements_for_store(store_id: str, movement_type: str | None = None):
     qs = (
-        Movement.objects
+        Movement.objects.for_store(store_id)
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
                         "supplier", "customer", "document_type", "created_by")
         .prefetch_related("details__product__unit")
-        .filter(store_id=store_id)
     )
     if movement_type:
         qs = qs.filter(type=movement_type)

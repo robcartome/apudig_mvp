@@ -12,20 +12,20 @@ from apps.users.models import User
 class MasterViewsTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="test@demo.com", password="testpass")
-        company = Company.objects.create(name="Demo SA", ruc="20999999901")
-        store = Store.objects.create(company=company, name="Principal")
-        UserCompanyAccess.objects.create(user=self.user, company=company, store=store, is_default=True)
+        self.company = Company.objects.create(name="Demo SA", ruc="20999999901")
+        self.store = Store.objects.create(company=self.company, name="Principal")
+        UserCompanyAccess.objects.create(user=self.user, company=self.company, store=self.store, is_default=True)
 
         self.client.login(username="test@demo.com", password="testpass")
         session = self.client.session
-        session["active_company_id"] = str(company.id)
-        session["active_store_id"] = str(store.id)
+        session["active_company_id"] = str(self.company.id)
+        session["active_store_id"] = str(self.store.id)
         session.save()
 
     # ── Categories ────────────────────────────────────────────────────────────
 
     def test_category_list_ok(self):
-        Category.objects.create(code="CAT1", name="Electrónica")
+        Category.objects.create(company=self.company, code="CAT1", name="Electrónica")
         resp = self.client.get(reverse("inventory:category_list"))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Electrónica")
@@ -43,7 +43,7 @@ class MasterViewsTest(TestCase):
         self.assertTrue(Category.objects.filter(code="TECH").exists())
 
     def test_category_update(self):
-        cat = Category.objects.create(code="OLD", name="Viejo")
+        cat = Category.objects.create(company=self.company, code="OLD", name="Viejo")
         resp = self.client.post(
             reverse("inventory:category_update", args=[cat.pk]),
             {"code": "OLD", "name": "Nuevo nombre", "active": True},
@@ -53,14 +53,14 @@ class MasterViewsTest(TestCase):
         self.assertEqual(cat.name, "Nuevo nombre")
 
     def test_category_delete(self):
-        cat = Category.objects.create(code="DEL", name="Borrar")
+        cat = Category.objects.create(company=self.company, code="DEL", name="Borrar")
         resp = self.client.post(reverse("inventory:category_delete", args=[cat.pk]))
         self.assertRedirects(resp, reverse("inventory:category_list"))
         self.assertFalse(Category.objects.filter(pk=cat.pk).exists())
 
     def test_category_list_search(self):
-        Category.objects.create(code="A", name="Alpha")
-        Category.objects.create(code="B", name="Beta")
+        Category.objects.create(company=self.company, code="A", name="Alpha")
+        Category.objects.create(company=self.company, code="B", name="Beta")
         resp = self.client.get(reverse("inventory:category_list") + "?q=alpha")
         self.assertContains(resp, "Alpha")
         self.assertNotContains(resp, "Beta")

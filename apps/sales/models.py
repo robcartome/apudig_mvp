@@ -3,6 +3,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
 
 
@@ -83,6 +84,7 @@ class BusinessDocumentType(models.Model):
 
 
 class DocumentSeries(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="document_series")
     store = models.ForeignKey(
@@ -131,6 +133,7 @@ class SaleLineBase(models.Model):
 # ── Cotizaciones ──────────────────────────────────────────────────────────────
 
 class SalesQuotation(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
@@ -186,6 +189,7 @@ class SalesQuotationLine(SaleLineBase):
 # ── Órdenes de venta ──────────────────────────────────────────────────────────
 
 class SaleOrder(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="sale_orders"
@@ -244,6 +248,7 @@ class SaleOrderLine(SaleLineBase):
 # ── Comprobantes ──────────────────────────────────────────────────────────────
 
 class Voucher(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"

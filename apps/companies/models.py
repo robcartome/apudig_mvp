@@ -3,7 +3,21 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from apps.core.managers import CompanyScopedManager, CompanyScopedQuerySet
 from apps.core.models import TimeStampedModel
+
+
+class UserCompanyAccessQuerySet(CompanyScopedQuerySet):
+    def for_user(self, user):
+        return self.filter(user=user)
+
+
+class UserCompanyAccessManager(CompanyScopedManager):
+    def get_queryset(self):
+        return UserCompanyAccessQuerySet(self.model, using=self._db)
+
+    def for_user(self, user):
+        return self.get_queryset().for_user(user)
 
 
 class Company(TimeStampedModel):
@@ -43,6 +57,7 @@ class CompanyBranding(TimeStampedModel):
 
 
 class Store(TimeStampedModel):
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="stores")
     name = models.CharField(max_length=255)
@@ -61,6 +76,7 @@ class Store(TimeStampedModel):
 class UserCompanyAccess(TimeStampedModel):
     """Tabla auxiliar de sesión para seleccionar empresa/sucursal activa."""
 
+    objects = UserCompanyAccessManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="company_accesses")
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="user_accesses")

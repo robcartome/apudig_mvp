@@ -14,4 +14,4 @@ def get_active_companies():
 
 
 def get_stores_for_company(company_id: str):
-    return Store.objects.filter(company_id=company_id, active=True).order_by("name")
+    return Store.objects.for_company(company_id).filter(active=True).order_by("name")

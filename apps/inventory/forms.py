@@ -256,7 +256,7 @@ class MovementTransferForm(forms.ModelForm):
         self.fields["description"].required = False
         qs = Warehouse.objects.none()
         if store_id:
-            qs = Warehouse.objects.filter(store_id=store_id, active=True).order_by("name")
+            qs = Warehouse.objects.for_store(store_id).filter(active=True).order_by("name")
         self.fields["warehouse_origin"].queryset = qs
         self.fields["warehouse_dest"].queryset = qs
 

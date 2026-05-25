@@ -101,7 +101,7 @@ def customer_detail(request, pk):
         return err
     customer = get_object_or_404(CoreCustomer, pk=pk, company=company)
     profile = getattr(customer, "sales_profile", None)
-    contacts = customer.contacts.all()
+    contacts = SalesCustomerContact.objects.for_company(company.pk).filter(customer=customer)
     return render(request, "partners/customer_detail.html", {
         "customer": customer,
         "profile": profile,
@@ -192,7 +192,7 @@ def contact_delete(request, pk):
     company, err = _require_company(request)
     if err:
         return err
-    contact = get_object_or_404(SalesCustomerContact, pk=pk, customer__company=company)
+    contact = get_object_or_404(SalesCustomerContact.objects.for_company(company.pk), pk=pk)
     customer_pk = contact.customer_id
     if request.method == "POST":
         contact.delete()

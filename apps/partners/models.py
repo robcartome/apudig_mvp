@@ -1,8 +1,21 @@
 import uuid
 
 from django.db import models
-
+from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
+
+
+class SalesCustomerContactQuerySet(models.QuerySet):
+    def for_company(self, company_id):
+        return self.filter(customer__company_id=company_id)
+
+
+class SalesCustomerContactManager(models.Manager):
+    def get_queryset(self):
+        return SalesCustomerContactQuerySet(self.model, using=self._db)
+
+    def for_company(self, company_id):
+        return self.get_queryset().for_company(company_id)
 
 
 class DocumentType(models.Model):
@@ -27,6 +40,7 @@ class DocumentType(models.Model):
 class CoreCustomer(TimeStampedModel):
     """core_customers - cliente canónico (source of truth)"""
 
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
@@ -73,6 +87,7 @@ class SalesCustomerProfile(TimeStampedModel):
 class SalesCustomerContact(models.Model):
     """sales_customer_contacts"""
 
+    objects = SalesCustomerContactManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer = models.ForeignKey(CoreCustomer, on_delete=models.CASCADE, related_name="contacts")
     name = models.CharField(max_length=200)
@@ -90,6 +105,7 @@ class SalesCustomerContact(models.Model):
 class Supplier(TimeStampedModel):
     """suppliers"""
 
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
@@ -115,6 +131,7 @@ class Supplier(TimeStampedModel):
 class Carrier(TimeStampedModel):
     """carriers - transportistas"""
 
+    objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,

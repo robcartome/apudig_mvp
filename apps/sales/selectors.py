@@ -7,9 +7,8 @@ from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SaleOr
 
 def get_quotations_for_store(store_id: str, status: str | None = None):
     qs = (
-        SalesQuotation.objects
+        SalesQuotation.objects.for_store(store_id)
         .select_related("customer", "series")
-        .filter(store_id=store_id)
         .order_by("-created_at")
     )
     if status:
@@ -22,9 +21,8 @@ def search_quotations(store_id: str, query: str | None = None, status: str | Non
     Búsqueda de cotizaciones por texto (nombre cliente, nº cotización) y/o estado.
     """
     qs = (
-        SalesQuotation.objects
+        SalesQuotation.objects.for_store(store_id)
         .select_related("customer", "series")
-        .filter(store_id=store_id)
         .order_by("-created_at")
     )
     if status:
@@ -50,9 +48,8 @@ def get_quotation_detail(pk):
 
 def get_sale_orders_for_store(store_id: str, status: str | None = None):
     qs = (
-        SaleOrder.objects
+        SaleOrder.objects.for_store(store_id)
         .select_related("customer", "document_type", "series")
-        .filter(store_id=store_id)
         .order_by("-created_at")
     )
     if status:
@@ -62,9 +59,8 @@ def get_sale_orders_for_store(store_id: str, status: str | None = None):
 
 def search_orders(store_id: str, query: str | None = None, status: str | None = None):
     qs = (
-        SaleOrder.objects
+        SaleOrder.objects.for_store(store_id)
         .select_related("customer", "document_type", "series")
-        .filter(store_id=store_id)
         .order_by("-created_at")
     )
     if status:
@@ -90,11 +86,7 @@ def get_order_detail(pk):
 
 
 def get_series_for_store(company_id: str, store_id: str, voucher_type: str | None = None):
-    qs = DocumentSeries.objects.filter(
-        company_id=company_id,
-        store_id=store_id,
-        active=True,
-    )
+    qs = DocumentSeries.objects.for_company(company_id).for_store(store_id).filter(active=True)
     if voucher_type:
         qs = qs.filter(voucher_type=voucher_type)
     return qs
@@ -106,9 +98,8 @@ def get_active_document_types():
 
 def get_vouchers_for_store(store_id: str, status: str | None = None):
     qs = (
-        Voucher.objects
+        Voucher.objects.for_store(store_id)
         .select_related("customer", "series")
-        .filter(store_id=store_id)
         .order_by("-issue_date", "-created_at")
     )
     if status:
@@ -118,9 +109,8 @@ def get_vouchers_for_store(store_id: str, status: str | None = None):
 
 def search_vouchers(store_id: str, query: str | None = None, status: str | None = None):
     qs = (
-        Voucher.objects
+        Voucher.objects.for_store(store_id)
         .select_related("customer", "series")
-        .filter(store_id=store_id)
         .order_by("-issue_date", "-created_at")
     )
     if status:

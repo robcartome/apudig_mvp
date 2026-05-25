@@ -22,7 +22,7 @@ def select_company(request):
                     defaults={"is_default": False},
                 )
 
-    accesses = UserCompanyAccess.objects.select_related("company", "store").filter(user=request.user)
+    accesses = UserCompanyAccess.objects.for_user(request.user).select_related("company", "store")
     accesses = accesses.order_by("-is_default", "company__name", "store__name")
 
     # If there is only one possible context, auto-select it and continue.
