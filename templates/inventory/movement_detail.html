@@ -20,16 +20,16 @@
         <dl class="row mb-0 small">
           <dt class="col-5 text-muted">Tipo</dt>
           <dd class="col-7">
-            {% if movement.type == "ENTRY" %}<span class="badge bg-success-lt">Entrada</span>
-            {% elif movement.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
-            {% elif movement.type == "TRANSFER" %}<span class="badge bg-warning-lt">Transferencia</span>
-            {% else %}<span class="badge bg-secondary-lt">Ajuste</span>{% endif %}
+            {% if movement.type == "ENTRY" %}<span class="badge bg-success-lt text-success">Entrada</span>
+            {% elif movement.type == "EXIT" %}<span class="badge bg-danger-lt text-danger">Salida</span>
+            {% elif movement.type == "TRANSFER" %}<span class="badge bg-info-lt text-info">Transferencia</span>
+            {% else %}<span class="badge bg-warning-lt text-warning">Ajuste</span>{% endif %}
           </dd>
           <dt class="col-5 text-muted">Estado</dt>
           <dd class="col-7">
-            {% if movement.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
-            {% elif movement.status == "CONFIRMED" %}<span class="badge bg-success-lt">Confirmado</span>
-            {% else %}<span class="badge bg-dark-lt">Cerrado</span>{% endif %}
+            {% if movement.status == "DRAFT" %}<span class="badge bg-secondary-lt text-secondary">Borrador</span>
+            {% elif movement.status == "CONFIRMED" %}<span class="badge bg-success-lt text-success">Confirmado</span>
+            {% else %}<span class="badge bg-dark-lt text-dark">Cerrado</span>{% endif %}
           </dd>
           <dt class="col-5 text-muted">Fecha</dt>
           <dd class="col-7">{{ movement.date|date:"d/m/Y H:i" }}</dd>
@@ -165,7 +165,7 @@
         {% for log in movement.audit_logs.all %}
         <tr>
           <td class="text-muted small">{{ log.changed_at|date:"d/m/Y H:i:s" }}</td>
-          <td><span class="badge bg-azure-lt">{{ log.get_action_display }}</span></td>
+          <td><span class="badge bg-azure-lt text-azure">{{ log.get_action_display }}</span></td>
           <td>{{ log.changed_by|default:"Sistema" }}</td>
           <td class="text-muted small">{{ log.message|default:"-" }}</td>
         </tr>

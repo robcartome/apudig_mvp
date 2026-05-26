@@ -14,16 +14,16 @@
       </nav>
     </div>
     <div class="col-auto d-flex gap-2">
-      <a href="{% url 'inventory:entry_create' %}" class="btn btn-success btn-sm">
+      <a href="{% url 'inventory:entry_create' %}" class="btn btn-outline-success btn-sm">
         <i class="ti ti-arrow-down me-1"></i>Entrada
       </a>
-      <a href="{% url 'inventory:exit_create' %}" class="btn btn-danger btn-sm">
+      <a href="{% url 'inventory:exit_create' %}" class="btn btn-outline-danger btn-sm">
         <i class="ti ti-arrow-up me-1"></i>Salida
       </a>
-      <a href="{% url 'inventory:transfer_create' %}" class="btn btn-warning btn-sm">
+      <a href="{% url 'inventory:transfer_create' %}" class="btn btn-outline-info btn-sm">
         <i class="ti ti-arrows-exchange me-1"></i>Transferencia
       </a>
-      <a href="{% url 'inventory:adjustment_create' %}" class="btn btn-yellow btn-sm">
+      <a href="{% url 'inventory:adjustment_create' %}" class="btn btn-outline-secondary btn-sm">
         <i class="ti ti-adjustments me-1"></i>Ajuste
       </a>
     </div>
@@ -65,16 +65,16 @@
           <td class="text-muted">{{ obj.date|date:"d/m/Y, H:i" }}</td>
 
           <td>
-            {% if obj.type == "ENTRY" %}<span class="badge bg-green text-white">Entrada</span>
-            {% elif obj.type == "EXIT" %}<span class="badge bg-red text-white">Salida</span>
-            {% elif obj.type == "TRANSFER" %}<span class="badge bg-blue text-white">Transferencia</span>
-            {% else %}<span class="badge bg-yellow text-dark">Ajuste</span>{% endif %}
+            {% if obj.type == "ENTRY" %}<span class="badge bg-teal-lt">Entrada</span>
+            {% elif obj.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
+            {% elif obj.type == "TRANSFER" %}<span class="badge bg-info-lt">Transferencia</span>
+            {% else %}<span class="badge bg-yellow-lt">Ajuste</span>{% endif %}
           </td>
 
           <td>
-            {% if obj.status == "DRAFT" %}<span class="badge bg-secondary text-white">Borrador</span>
-            {% elif obj.status == "CONFIRMED" %}<span class="badge bg-success text-white">Confirmado</span>
-            {% else %}<span class="badge bg-dark text-white">Cerrado</span>{% endif %}
+            {% if obj.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
+            {% elif obj.status == "CONFIRMED" %}<span class="badge bg-teal-lt">Confirmado</span>
+            {% else %}<span class="badge bg-dark text-dark-fg">Cerrado</span>{% endif %}
           </td>
 
           <td class="text-muted">
@@ -183,10 +183,10 @@
       <div class="modal-header">
         <h5 class="modal-title d-flex align-items-center gap-2">
           <span>Detalles del Movimiento</span>
-          {% if obj.type == "ENTRY" %}<span class="badge bg-green text-white">Entrada</span>
-          {% elif obj.type == "EXIT" %}<span class="badge bg-red text-white">Salida</span>
-          {% elif obj.type == "TRANSFER" %}<span class="badge bg-blue text-white">Transferencia</span>
-          {% else %}<span class="badge bg-yellow text-dark">Ajuste</span>{% endif %}
+          {% if obj.type == "ENTRY" %}<span class="badge bg-success-lt text-success">Entrada</span>
+          {% elif obj.type == "EXIT" %}<span class="badge bg-danger-lt text-danger">Salida</span>
+          {% elif obj.type == "TRANSFER" %}<span class="badge bg-info-lt text-info">Transferencia</span>
+          {% else %}<span class="badge bg-warning-lt text-warning">Ajuste</span>{% endif %}
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
@@ -199,9 +199,9 @@
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Estado</div>
                 <div class="fw-semibold">
-                  {% if obj.status == "DRAFT" %}Borrador
-                  {% elif obj.status == "CONFIRMED" %}Confirmado
-                  {% else %}Cerrado{% endif %}
+                  {% if obj.status == "DRAFT" %}<span class="badge bg-secondary-lt text-secondary">Borrador</span>
+                  {% elif obj.status == "CONFIRMED" %}<span class="badge bg-success-lt text-success">Confirmado</span>
+                  {% else %}<span class="badge bg-dark-lt text-dark">Cerrado</span>{% endif %}
                 </div>
               </div>
 

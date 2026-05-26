@@ -2,27 +2,56 @@
    APUDIG Sidebar — Tabler light mode, left side
    ══════════════════════════════════════════════════════════ */
 
-/* ── Tabler primary brand color ── */
-:root {
-  --tblr-primary:     #0ca678;
-  --tblr-primary-rgb: 12, 166, 120;
+/* ── Flex app layout (replaces margin-left hacks) ── */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-/* ── Sidebar width: Tabler beta20 hardcodes 15rem (240px); override to 220px ──
-   Also add margin transition for smooth collapse animation                    */
+.main-layout {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-layout .page-body {
+  flex: 1;
+}
+
 @media (min-width: 992px) {
   #sidebar {
-    width: 220px;
+    width: 232px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
     transition: width .22s cubic-bezier(.4,0,.2,1);
-  }
-  .navbar-vertical.navbar-expand-lg ~ .page-wrapper {
-    margin-left: 220px !important;
-    transition: margin-left .22s cubic-bezier(.4,0,.2,1);
+    background: var(--tblr-bg-surface, #fff);
+    border-right: 1px solid var(--tblr-border-color, #e6e8ef);
+    box-shadow: 0 2px 18px rgba(15, 23, 42, .04);
   }
 }
 
 /* overflow-x hidden prevents content peeking during collapse */
 #sidebar { overflow-x: hidden; }
+
+#sidebar .container-fluid {
+  padding-top: .75rem;
+  padding-bottom: .75rem;
+}
+
+#sidebar .navbar-brand-autodark {
+  padding: .20rem 0.5rem .5rem .85rem;
+  margin-bottom: .5rem;
+  border-bottom: 1px solid var(--tblr-border-color, #e6e8ef);
+}
+
+#sidebar .navbar-brand-image {
+  width: auto;
+  height: 2rem;
+}
 
 /* ── Brand variants ── */
 .sidebar-brand-full  { display: inline-block; line-height: 1; }
@@ -31,7 +60,7 @@
 /* ── Section sub-labels (Almacen / Productos) ── */
 .sidebar-section-label {
   display: block;
-  padding: .25rem .5rem;
+  padding: .2rem .55rem;
   font-size: .6rem;
   font-weight: 700;
   letter-spacing: .08em;
@@ -60,6 +89,106 @@
   #sidebar-toggle-btn { display: flex; align-items: center; }
 }
 
+#sidebar .nav-item {
+  margin-bottom: .15rem;
+}
+
+#sidebar .nav-link {
+  border-radius: .8rem;
+  padding: .7rem .85rem;
+  font-weight: 500;
+  color: var(--tblr-body-color);
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+#sidebar .nav-link:hover {
+  background: var(--tblr-bg-surface-secondary, #f6f8fb);
+  color: var(--tblr-body-color);
+}
+
+/* Standalone items (no collapse toggle) — light primary tint */
+#sidebar .nav-link:not([data-bs-toggle]).active {
+  background: color-mix(in srgb, var(--company-primary) 11%, #fff) !important;
+  color: var(--company-primary) !important;
+  box-shadow: inset 3px 0 0 var(--company-primary);
+}
+#sidebar .nav-link:not([data-bs-toggle]).active .nav-link-icon {
+  color: var(--company-primary) !important;
+}
+
+/* Parent collapsible items — company primary bg when expanded or active section */
+#sidebar .nav-link[data-bs-toggle="collapse"].active,
+#sidebar .nav-link[data-bs-toggle="collapse"][aria-expanded="true"] {
+  background: color-mix(in srgb, var(--company-primary) 11%, #fff) !important;
+
+  box-shadow: none;
+}
+
+#sidebar .nav-link[data-bs-toggle="collapse"].active .nav-link-icon,
+#sidebar .nav-link[data-bs-toggle="collapse"][aria-expanded="true"] .nav-link-icon {
+  color: var(--company-primary) !important;
+}
+
+/* ─── Chevron arrow: pure CSS (replaces Tabler's fixed-color SVG) ─── */
+#sidebar .nav-link-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  transition: transform .22s ease;
+  background-image: none !important;       /* kill Tabler's SVG */
+}
+#sidebar .nav-link-arrow::before {
+  content: '' !important;
+  display: block;
+  width: .45rem;
+  height: .45rem;
+  border-top: 1.75px solid currentColor;
+  border-right: 1.75px solid currentColor;
+  transform: rotate(45deg) translate(-1px, 1px);
+  background-image: none !important;
+  opacity: .75;
+}
+/* Expand = rotate the container 90°; the ::before follows */
+#sidebar .nav-link[aria-expanded="true"] .nav-link-arrow {
+  transform: rotate(90deg);
+}
+
+#sidebar .nav-link-title {
+  font-weight: 600;
+}
+
+#sidebar .nav-link-icon {
+  color: var(--tblr-secondary);
+}
+
+#sidebar .nav-link:hover .nav-link-icon {
+  color: var(--company-primary);
+}
+
+#sidebar .collapse .nav-link {
+  font-size: .8125rem;
+  padding: .42rem .8rem;
+  font-weight: 500;
+  color: var(--tblr-secondary);
+}
+
+#sidebar .collapse > .navbar-nav {
+  padding-left: .45rem !important;
+  margin-top: .2rem;
+  margin-bottom: .2rem;
+}
+
+#sidebar .collapse .nav-link.active {
+  background: color-mix(in srgb, var(--company-primary) 12%, #fff) !important;
+  box-shadow: inset 3px 0 0 var(--company-primary);
+  color: var(--company-primary) !important;
+  font-weight: 700;
+}
+
 /* ── Expand button (visible only when collapsed) ── */
 .sidebar-expand-btn {
   display: none;
@@ -86,9 +215,7 @@
 @media (min-width: 992px) {
   #sidebar.sidebar-collapsed {
     width: 3.5rem !important;
-  }
-  body.sidebar-collapsed-body .page-wrapper {
-    margin-left: 3.5rem !important;
+    /* flex: 1 on .main-layout expands automatically — no margin hack needed */
   }
 
   #sidebar.sidebar-collapsed .sidebar-brand-full { display: none; }
@@ -103,8 +230,11 @@
   #sidebar.sidebar-collapsed .nav-link-icon { margin-right: 0 !important; }
   #sidebar.sidebar-collapsed .nav-link {
     justify-content: center !important;
+    width: 2.8rem;
     padding-left:  0 !important;
     padding-right: 0 !important;
+    margin-left: auto;
+    margin-right: auto;
   }
   #sidebar.sidebar-collapsed .navbar-nav.ps-lg-3          { display: none !important; }
   #sidebar.sidebar-collapsed .navbar-collapse .collapse   { display: none !important; }
@@ -118,7 +248,7 @@
   position:       fixed;
   left:           calc(3.5rem + 6px);
   right:          auto;
-  background:     #fff;
+  background:     var(--tblr-bg-surface, #fff);
   border:         1px solid var(--tblr-border-color, #e5e7eb);
   border-radius:  .5rem;
   box-shadow:     0 8px 24px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06);
@@ -155,14 +285,14 @@
   transition:      background .12s, color .12s;
 }
 .apudig-flyout a:hover  { background: rgba(0,0,0,.04); }
-.apudig-flyout a.active { background: rgba(12,166,120,.12); color: #0ca678; font-weight: 600; }
+.apudig-flyout a.active { background: color-mix(in srgb, var(--company-primary) 11%, #fff); color: var(--company-primary); font-weight: 700; }
 
 /* ── Leaf tooltip (right of collapsed rail) ── */
 .apudig-sidebar-tooltip {
   position:     fixed;
   left:         calc(3.5rem + 8px);
   right:        auto;
-  background:   #1e293b;
+  background:   #111827;
   color:        rgba(255,255,255,.92);
   padding:      .35rem .85rem;
   border-radius:.4rem;
@@ -184,7 +314,7 @@
   top:       50%;
   transform: translateY(-50%);
   border:    5px solid transparent;
-  border-right-color: #1e293b;
+  border-right-color: #111827;
 }
 .apudig-sidebar-tooltip.visible { opacity: 1; transform: translateY(-50%) translateX(0); }
 
@@ -212,10 +342,11 @@
     left:       0;
     height:     100vh;
     z-index:    1040;
-    width:      220px !important;
+    width:      232px !important;
     transform:  translateX(-100%);
     transition: transform .3s cubic-bezier(.4,0,.2,1);
     overflow-y: auto;
+    border-right: 1px solid var(--tblr-border-color, #e6e8ef);
   }
   #sidebar.sidebar-mobile-open {
     transform: translateX(0);
@@ -225,10 +356,7 @@
     display:        flex !important;
     flex-direction: column;
   }
-  /* Page wrapper uses full width on mobile — sidebar is fixed, not in flow */
-  .navbar-vertical.navbar-expand-lg ~ .page-wrapper {
-    margin-left: 0 !important;
-  }
+  /* .main-layout is flex:1 so it fills remaining width automatically */
   /* Prevent background scroll while sidebar is open */
   body.sidebar-mobile-open-body {
     overflow: hidden;
@@ -257,8 +385,8 @@
 }
 
 /* ══════════════════════════════════════════
-   HEADER — always fills 100 % of page-wrapper
+   HEADER — always fills 100 % of main-layout
    ══════════════════════════════════════════ */
-.page-wrapper > header {
+.main-layout > header {
   width: 100%;
 }

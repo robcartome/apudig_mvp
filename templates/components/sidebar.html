@@ -1,7 +1,5 @@
 <aside id="sidebar" class="navbar navbar-vertical navbar-expand-lg">
   <div class="container-fluid">
-
-    {# ── Brand + desktop collapse button ── #}
     <div class="navbar-brand navbar-brand-autodark d-flex align-items-center w-100">
       <a href="{% url 'dashboard' %}" class="text-decoration-none">
         {# Full logo (sidebar expanded) #}
@@ -20,80 +18,56 @@
       </a>
       {# Collapse button (desktop only, visible when sidebar is expanded) #}
       <button id="sidebar-toggle-btn" class="ms-auto" type="button" title="Colapsar menú">
-        <i class="ti ti-layout-sidebar-left-collapse fs-4" id="sidebar-toggle-icon"></i>
+        <i class="ti ti-layout-sidebar-left-collapse fs-2" id="sidebar-toggle-icon"></i>
       </button>
     </div>
 
-    {# ── Nav items ── #}
     <div class="collapse navbar-collapse" id="navbar-menu">
-      <ul class="navbar-nav pt-lg-3">
+      <ul class="navbar-nav px-2">
 
         {# ─── Dashboard ─── #}
         <li class="nav-item">
           <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
              href="{% url 'dashboard' %}"
              data-tooltip-label="Dashboard">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="ti ti-home fs-2"></i>
-            </span>
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-home fs-2"></i></span>
             <span class="nav-link-title">Dashboard</span>
           </a>
         </li>
 
-        {# ─── Inventario ─── #}
         <li class="nav-item">
-          <a class="nav-link {% if '/inventory/' in request.path %}active{% endif %}"
-             href="#sidebar-inventory"
+          <a class="nav-link {% if '/partners/' in request.path %}active{% endif %}"
+             href="#sidebar-partners"
              data-bs-toggle="collapse"
-             data-section-url="{% url 'inventory:movement_list' %}"
-             data-tooltip-label="Inventario"
-             aria-expanded="{% if '/inventory/' in request.path %}true{% else %}false{% endif %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="ti ti-package fs-2"></i>
-            </span>
-            <span class="nav-link-title">Inventario</span>
+             data-section-url="{% url 'partners:customer_list' %}"
+             data-tooltip-label="Socios"
+             aria-expanded="{% if '/partners/' in request.path %}true{% else %}false{% endif %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-users fs-2"></i></span>
+            <span class="nav-link-title">Socios de Negocio</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if '/inventory/' in request.path %}show{% endif %}" id="sidebar-inventory">
+          <div class="collapse {% if '/partners/' in request.path %}show{% endif %}" id="sidebar-partners">
             <ul class="navbar-nav ps-lg-3">
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Clientes</span></li>
               <li class="nav-item">
-                <a class="nav-link {% if 'product' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:product_list' %}">Productos</a>
+                <a class="nav-link {% if 'customer' in request.resolver_match.url_name|default:'' and 'create' not in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'partners:customer_list' %}">Lista de Clientes</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link {% if 'movement' in request.resolver_match.url_name|default:'' or 'entry' in request.resolver_match.url_name|default:'' or 'exit' in request.resolver_match.url_name|default:'' or 'transfer' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:movement_list' %}">Movimientos</a>
+                <a class="nav-link" href="{% url 'partners:customer_create' %}">+ Nuevo Cliente</a>
+              </li>
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Proveedores</span></li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'supplier' in request.resolver_match.url_name|default:'' and 'create' not in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'partners:supplier_list' %}">Lista de Proveedores</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link {% if request.resolver_match.url_name == 'stock_report' %}active{% endif %}"
-                   href="{% url 'inventory:stock_report' %}">Stock</a>
+                <a class="nav-link" href="{% url 'partners:supplier_create' %}">+ Nuevo Proveedor</a>
               </li>
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Transportistas</span></li>
               <li class="nav-item">
-                <a class="nav-link {% if 'pricelist' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:pricelist_list' %}">Listas de precio</a>
-              </li>
-              <li class="nav-item mt-1">
-                <span class="sidebar-section-label">Maestros</span>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'warehouse' in request.resolver_match.url_name|default:'' and 'location' not in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:warehouse_list' %}">Almacenes</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'warehouse_location' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:warehouse_location_list' %}">Ubicaciones</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'category' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:category_list' %}">Categorías</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'brand' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:brand_list' %}">Marcas</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if 'unit' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'inventory:unit_list' %}">Unidades</a>
+                <a class="nav-link {% if 'carrier' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'partners:carrier_list' %}">Lista de Transportistas</a>
               </li>
             </ul>
           </div>
@@ -107,54 +81,72 @@
              data-section-url="{% url 'sales:order_list' %}"
              data-tooltip-label="Ventas"
              aria-expanded="{% if '/sales/' in request.path %}true{% else %}false{% endif %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="ti ti-receipt fs-2"></i>
-            </span>
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-receipt fs-2"></i></span>
             <span class="nav-link-title">Ventas</span>
             <span class="nav-link-arrow"></span>
           </a>
           <div class="collapse {% if '/sales/' in request.path %}show{% endif %}" id="sidebar-sales">
             <ul class="navbar-nav ps-lg-3">
-              <li class="nav-item"><a class="nav-link {% if 'cotizaciones' in request.path %}active{% endif %}" href="{% url 'sales:quotation_list' %}">Cotizaciones</a></li>
-              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name|slice:':6' == 'order_' %}active{% endif %}" href="{% url 'sales:order_list' %}">Órdenes de Venta</a></li>
-              <li class="nav-item"><a class="nav-link" href="{% url 'sales:voucher_list' %}">Comprobantes</a></li>
-              <li class="nav-item"><a class="nav-link {% if 'series' in request.path %}active{% endif %}" href="{% url 'sales:series_list' %}">Series documentales</a></li>
-              <li class="nav-item"><a class="nav-link {% if 'tipos-documento' in request.path %}active{% endif %}" href="{% url 'sales:doctype_list' %}">Tipos de documento</a></li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'quotation' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'sales:quotation_list' %}">Cotizaciones</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'order' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'sales:order_list' %}">Pedidos de Venta</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'voucher' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'sales:voucher_list' %}">Comprobantes</a>
+              </li>
             </ul>
           </div>
         </li>
 
-        {# ─── Socios ─── #}
+        {# ─── Inventario (movimientos) ─── #}
+        {% with inv_name=request.resolver_match.url_name|default:'' %}
         <li class="nav-item">
-          <a class="nav-link {% if '/partners/' in request.path %}active{% endif %}"
-             href="#sidebar-partners"
+          <a class="nav-link {% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}active{% endif %}"
+             href="#sidebar-inventory"
              data-bs-toggle="collapse"
-             data-section-url="{% url 'partners:customer_list' %}"
-             data-tooltip-label="Socios"
-             aria-expanded="{% if '/partners/' in request.path %}true{% else %}false{% endif %}">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="ti ti-users fs-2"></i>
-            </span>
-            <span class="nav-link-title">Socios</span>
+             data-section-url="{% url 'inventory:movement_list' %}"
+             data-tooltip-label="Inventario"
+             aria-expanded="{% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}true{% else %}false{% endif %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-package fs-2"></i></span>
+            <span class="nav-link-title">Inventario</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if '/partners/' in request.path %}show{% endif %}" id="sidebar-partners">
+          <div class="collapse {% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}show{% endif %}" id="sidebar-inventory">
             <ul class="navbar-nav ps-lg-3">
               <li class="nav-item">
-                <a class="nav-link {% if 'customer' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'partners:customer_list' %}">Clientes</a>
+                <a class="nav-link {% if 'movement' in inv_name %}active{% endif %}"
+                   href="{% url 'inventory:movement_list' %}">Movimientos</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link {% if 'supplier' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'partners:supplier_list' %}">Proveedores</a>
+                <a class="nav-link {% if inv_name == 'entry_create' %}active{% endif %}"
+                   href="{% url 'inventory:entry_create' %}">+ Entrada</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link {% if 'carrier' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'partners:carrier_list' %}">Transportistas</a>
+                <a class="nav-link {% if inv_name == 'exit_create' %}active{% endif %}"
+                   href="{% url 'inventory:exit_create' %}">+ Salida</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if inv_name == 'transfer_create' %}active{% endif %}"
+                   href="{% url 'inventory:transfer_create' %}">+ Transferencia</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if inv_name == 'adjustment_create' %}active{% endif %}"
+                   href="{% url 'inventory:adjustment_create' %}">+ Ajuste</a>
+              </li>
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Reportes</span></li>
+              <li class="nav-item">
+                <a class="nav-link {% if inv_name == 'stock_report' %}active{% endif %}"
+                   href="{% url 'inventory:stock_report' %}">Stock</a>
               </li>
             </ul>
           </div>
         </li>
+        {% endwith %}
 
         {# ─── Administración ERP ─── #}
         {% if user.is_staff %}
@@ -162,9 +154,7 @@
           <a class="nav-link {% if '/gestion/' in request.path %}active{% endif %}"
              href="{% url 'users:admin_panel' %}"
              data-tooltip-label="Administración">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="ti ti-adjustments-cog fs-2"></i>
-            </span>
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-adjustments-cog fs-2"></i></span>
             <span class="nav-link-title">Administración</span>
           </a>
         </li>
@@ -175,9 +165,7 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'admin:index' %}"
              data-tooltip-label="Admin Django">
-            <span class="nav-link-icon d-md-none d-lg-inline-block">
-              <i class="ti ti-tool fs-2"></i>
-            </span>
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-tool fs-2"></i></span>
             <span class="nav-link-title">Admin Django</span>
           </a>
         </li>

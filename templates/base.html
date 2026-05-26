@@ -8,14 +8,17 @@
   <title>{% block title %}APUDIG{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet">
   <link href="{% static 'css/components/sidebar.css' %}" rel="stylesheet"/>
   <style>
     :root {
       --company-primary: {% if active_branding and active_branding.primary_color %}{{ active_branding.primary_color }}{% else %}#066fd1{% endif %};
       --company-secondary: {% if active_branding and active_branding.secondary_color %}{{ active_branding.secondary_color }}{% else %}#4a4a4a{% endif %};
+      --tblr-font-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     }
 
-    /* ── Botones primarios ──────────────────────────────── */
     .btn-primary {
       background-color: var(--company-primary) !important;
       border-color: var(--company-primary) !important;
@@ -26,7 +29,6 @@
       color: #fff !important;
     }
 
-    /* ── Botones outline-primary ────────────────────────── */
     .btn-outline-primary {
       color: var(--company-primary) !important;
       border-color: var(--company-primary) !important;
@@ -40,7 +42,6 @@
       color: #fff !important;
     }
 
-    /* ── Textos y badges primarios ──────────────────────── */
     .text-primary { color: var(--company-primary) !important; }
     .bg-primary, .badge.bg-primary { background-color: var(--company-primary) !important; color: #fff !important; }
 
@@ -54,12 +55,12 @@
   {% block extra_css %}{% endblock %}
 </head>
 <body class="antialiased">
-<div class="wrapper">
+<div class="app-layout">
   <!-- SIDEBAR -->
   {% include 'components/sidebar.html' %}
 
-  <!-- ================================================ PAGE WRAPPER -->
-  <div class="page-wrapper">
+  <!-- ================================================ MAIN LAYOUT -->
+  <div class="main-layout">
 
     <!-- Topbar -->
     <header class="navbar navbar-expand-md d-flex d-print-none">
@@ -120,7 +121,7 @@
               </form>
             </div>
           </div>
-        </div><!-- /d-flex -->
+        </div>
       </div>
     </header>
 
@@ -158,8 +159,8 @@
       </div>
     </footer>
 
-  </div><!-- /page-wrapper -->
-</div><!-- /wrapper -->
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
 <script src="{% static 'js/components/sidebar.js' %}"></script>

@@ -178,17 +178,13 @@
     sidebar.classList.toggle('sidebar-collapsed', collapsed);
     document.body.classList.toggle('sidebar-collapsed-body', collapsed);
 
-    /* Update CSS custom property so Tabler's page-wrapper margin adjusts */
-    document.documentElement.style.setProperty(
-      '--tblr-navbar-vertical-width',
-      collapsed ? SIDEBAR_W : ''
-    );
+    /* Flex layout handles resizing automatically — no CSS var or margin hack needed */
 
     /* Swap toggle icon */
     if (toggleIcon) {
       toggleIcon.className = collapsed
         ? 'ti ti-menu-2 fs-3'
-        : 'ti ti-layout-sidebar-left-collapse fs-3';
+        : 'ti ti-layout-sidebar-left-collapse fs-2';
     }
     if (toggleBtn) toggleBtn.title = collapsed ? 'Expandir menú' : 'Colapsar menú';
     if (toggleBtn) toggleBtn.style.display = collapsed ? 'none' : '';

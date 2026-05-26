@@ -26,10 +26,10 @@
     <div class="card mb-3">
       <div class="card-header">
         <h3 class="card-title">
-          {% if movement_type == "ENTRY" %}<span class="badge bg-success me-2">Entrada</span>
-          {% elif movement_type == "EXIT" %}<span class="badge bg-danger me-2">Salida</span>
-          {% elif movement_type == "TRANSFER" %}<span class="badge bg-warning me-2">Transferencia</span>
-          {% else %}<span class="badge bg-secondary me-2">Ajuste</span>{% endif %}
+          {% if movement_type == "ENTRY" %}<span class="badge bg-success-lt text-success me-2">Entrada</span>
+          {% elif movement_type == "EXIT" %}<span class="badge bg-danger-lt text-danger me-2">Salida</span>
+          {% elif movement_type == "TRANSFER" %}<span class="badge bg-info-lt text-info me-2">Transferencia</span>
+          {% else %}<span class="badge bg-yellow-lt me-2">Ajuste</span>{% endif %}
           Cabecera
         </h3>
       </div>
@@ -170,7 +170,10 @@
   <div class="col-12">
     <div class="card">
       <div class="card-header">
-        <h3 class="card-title mb-0">Detalle del Movimiento</h3>
+        <h3 class="card-title mb-0 d-flex align-items-center gap-2">
+          <span>Detalle del Movimiento</span>
+          <span class="badge bg-azure-lt text-azure">Editable</span>
+        </h3>
       </div>
       <div class="table-responsive">
         {{ formset.management_form }}
