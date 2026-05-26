@@ -43,10 +43,10 @@
           <th></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="small">
         {% for obj in page_obj %}
         <tr>
-          <td class="fw-semibold">{{ obj.code }}</td>
+          <td>{{ obj.code }}</td>
           <td>{{ obj.name }}</td>
           <td class="text-center">
             {% if obj.active %}

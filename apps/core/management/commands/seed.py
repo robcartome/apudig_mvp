@@ -57,19 +57,19 @@ ROLES = [
 ]
 
 CATEGORIES = [
-    ("FERR", "Ferretería General"),
-    ("ELEC", "Eléctrico"),
-    ("PLOM", "Plomería"),
-    ("PINT", "Pintura"),
-    ("HERRA", "Herramientas"),
-    ("CONS", "Construcción"),
-    ("JARD", "Jardinería"),
+    # ("FERR", "Ferretería General"),
+    # ("ELEC", "Eléctrico"),
+    # ("PLOM", "Plomería"),
+    # ("PINT", "Pintura"),
+    # ("HERRA", "Herramientas"),
+    # ("CONS", "Construcción"),
+    # ("JARD", "Jardinería"),
     ("OTROS", "Otros"),
 ]
 
 BRANDS = [
-    "Stanley", "Makita", "Bosch", "3M", "Sodimac", "Truper",
-    "Black & Decker", "Dewalt", "Sin Marca",
+    "Akona", "Poelsan","GreenPlains", "GPA", "LUMO", "Rain", "Ranagua", "Cubull", "VALMAX", "C&A","KNAUF", "Stanley", "Makita", "Bosch", "3M", "Truper",
+    "Black & Decker", "Dewalt""Sin Marca",
 ]
 
 
@@ -147,7 +147,7 @@ class Command(BaseCommand):
         lists = [
             ("PRECIO LISTA", "Precio estándar de lista"),
             ("PRECIO POR MAYOR", "Precio mayorista"),
-            ("PRECIO ESPECIAL", "Precio para clientes especiales"),
+            ("PRECIO DISTRIBUCION", "Precio para clientes especiales"),
         ]
         created = 0
         for name, desc in lists:
@@ -208,6 +208,7 @@ class Command(BaseCommand):
             ("08", "FD01"),   # Nota débito
             ("COT", "C001"),  # Cotización
             ("OV", "O001"),   # Orden venta
+            ("NV", "NV01"),   # Nota venta (interno, no SUNAT)
         ]
         created = 0
         for vtype, series in series_data:

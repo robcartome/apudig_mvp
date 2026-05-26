@@ -42,19 +42,19 @@
           <th></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="small">
         {% for obj in page_obj %}
         <tr>
-          <td class="fw-semibold text-muted small">{{ obj.sku }}</td>
+          <td class="text-muted">{{ obj.sku }}</td>
           <td>
             <div class="fw-semibold">{{ obj.name }}</div>
             {% if obj.barcode %}<small class="text-muted">{{ obj.barcode }}</small>{% endif %}
           </td>
-          <td>{{ obj.category|default:"—" }}</td>
-          <td>{{ obj.brand|default:"—" }}</td>
+          <td class="small">{{ obj.category|default:"—" }}</td>
+          <td class="small">{{ obj.brand|default:"—" }}</td>
           <td class="text-muted small">{{ obj.unit }}</td>
           <td class="text-end fw-semibold">S/ {{ obj.price_sale|floatformat:2 }}</td>
-          <td class="text-center">
+          <td class="text-center small">
             {% if obj.active %}
             <span class="badge bg-success-lt">Activo</span>
             {% else %}

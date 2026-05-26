@@ -27,76 +27,76 @@ from .views import (
 app_name = "inventory"
 
 urlpatterns = [
-    path("importar/<str:entity>/", bulk_import, name="bulk_import"),
-    path("importar/<str:entity>/plantilla/", bulk_import_template, name="bulk_import_template"),
-    path("importar/errores/<str:token>/", bulk_import_errors, name="bulk_import_errors"),
+    path("import/<str:entity>/", bulk_import, name="bulk_import"),
+    path("import/<str:entity>/template/", bulk_import_template, name="bulk_import_template"),
+    path("import/errors/<str:token>/", bulk_import_errors, name="bulk_import_errors"),
 
     # API (AJAX)
-    path("api/productos/",       product_search,       name="api_product_search"),
-    path("api/productos/stock/", product_stock,        name="api_product_stock"),
-    path("api/productos/crear/", product_quick_create, name="api_product_create"),
-    path("api/proveedores/",     supplier_search,      name="api_supplier_search"),
-    path("api/clientes/",        customer_search,      name="api_customer_search"),
-    path("api/ubicaciones/",     location_search,      name="api_location_search"),
+    path("api/products/",        product_search,       name="api_product_search"),
+    path("api/products/stock/",  product_stock,        name="api_product_stock"),
+    path("api/products/create/", product_quick_create, name="api_product_create"),
+    path("api/suppliers/",       supplier_search,      name="api_supplier_search"),
+    path("api/customers/",       customer_search,      name="api_customer_search"),
+    path("api/locations/",       location_search,      name="api_location_search"),
 
     # Stock
     path("stock/", stock_report, name="stock_report"),
 
     # Movements
-    path("movimientos/", movement_list, name="movement_list"),
-    path("movimientos/<uuid:pk>/", movement_detail, name="movement_detail"),
-    path("movimientos/<uuid:pk>/editar/", movement_edit, name="movement_edit"),
-    path("movimientos/<uuid:pk>/confirmar/", movement_confirm, name="movement_confirm"),
-    path("movimientos/<uuid:pk>/eliminar/", movement_delete, name="movement_delete"),
-    path("movimientos/entrada/", entry_create, name="entry_create"),
-    path("movimientos/salida/", exit_create, name="exit_create"),
-    path("movimientos/transferencia/", transfer_create, name="transfer_create"),
-    path("movimientos/ajuste/", adjustment_create, name="adjustment_create"),
+    path("movements/", movement_list, name="movement_list"),
+    path("movements/<uuid:pk>/", movement_detail, name="movement_detail"),
+    path("movements/<uuid:pk>/edit/", movement_edit, name="movement_edit"),
+    path("movements/<uuid:pk>/confirm/", movement_confirm, name="movement_confirm"),
+    path("movements/<uuid:pk>/delete/", movement_delete, name="movement_delete"),
+    path("movements/entry/", entry_create, name="entry_create"),
+    path("movements/exit/", exit_create, name="exit_create"),
+    path("movements/transfer/", transfer_create, name="transfer_create"),
+    path("movements/adjustment/", adjustment_create, name="adjustment_create"),
 
     # Categories
-    path("categorias/", category_list, name="category_list"),
-    path("categorias/nueva/", category_create, name="category_create"),
-    path("categorias/<uuid:pk>/editar/", category_update, name="category_update"),
-    path("categorias/<uuid:pk>/eliminar/", category_delete, name="category_delete"),
+    path("categories/", category_list, name="category_list"),
+    path("categories/new/", category_create, name="category_create"),
+    path("categories/<uuid:pk>/edit/", category_update, name="category_update"),
+    path("categories/<uuid:pk>/delete/", category_delete, name="category_delete"),
 
     # Brands
-    path("marcas/", brand_list, name="brand_list"),
-    path("marcas/nueva/", brand_create, name="brand_create"),
-    path("marcas/<uuid:pk>/editar/", brand_update, name="brand_update"),
-    path("marcas/<uuid:pk>/eliminar/", brand_delete, name="brand_delete"),
+    path("brands/", brand_list, name="brand_list"),
+    path("brands/new/", brand_create, name="brand_create"),
+    path("brands/<uuid:pk>/edit/", brand_update, name="brand_update"),
+    path("brands/<uuid:pk>/delete/", brand_delete, name="brand_delete"),
 
     # Units
-    path("unidades/", unit_list, name="unit_list"),
-    path("unidades/nueva/", unit_create, name="unit_create"),
-    path("unidades/<uuid:pk>/editar/", unit_update, name="unit_update"),
-    path("unidades/<uuid:pk>/eliminar/", unit_delete, name="unit_delete"),
+    path("units/", unit_list, name="unit_list"),
+    path("units/new/", unit_create, name="unit_create"),
+    path("units/<uuid:pk>/edit/", unit_update, name="unit_update"),
+    path("units/<uuid:pk>/delete/", unit_delete, name="unit_delete"),
 
     # Warehouses
-    path("almacenes/", warehouse_list, name="warehouse_list"),
-    path("almacenes/nuevo/", warehouse_create, name="warehouse_create"),
-    path("almacenes/<uuid:pk>/editar/", warehouse_update, name="warehouse_update"),
-    path("almacenes/<uuid:pk>/eliminar/", warehouse_delete, name="warehouse_delete"),
+    path("warehouses/", warehouse_list, name="warehouse_list"),
+    path("warehouses/new/", warehouse_create, name="warehouse_create"),
+    path("warehouses/<uuid:pk>/edit/", warehouse_update, name="warehouse_update"),
+    path("warehouses/<uuid:pk>/delete/", warehouse_delete, name="warehouse_delete"),
 
     # Warehouse Locations
-    path("ubicaciones/", warehouse_location_list, name="warehouse_location_list"),
-    path("ubicaciones/nueva/", warehouse_location_create, name="warehouse_location_create"),
-    path("ubicaciones/<uuid:pk>/editar/", warehouse_location_update, name="warehouse_location_update"),
-    path("ubicaciones/<uuid:pk>/eliminar/", warehouse_location_delete, name="warehouse_location_delete"),
+    path("locations/", warehouse_location_list, name="warehouse_location_list"),
+    path("locations/new/", warehouse_location_create, name="warehouse_location_create"),
+    path("locations/<uuid:pk>/edit/", warehouse_location_update, name="warehouse_location_update"),
+    path("locations/<uuid:pk>/delete/", warehouse_location_delete, name="warehouse_location_delete"),
 
     # Admin panel
-    path("administracion/", admin_panel, name="admin_panel"),
+    path("admin/", admin_panel, name="admin_panel"),
 
     # Products
-    path("productos/", product_list, name="product_list"),
-    path("productos/nuevo/", product_create, name="product_create"),
-    path("productos/<uuid:pk>/editar/", product_update, name="product_update"),
-    path("productos/<uuid:pk>/eliminar/", product_delete, name="product_delete"),
+    path("products/", product_list, name="product_list"),
+    path("products/new/", product_create, name="product_create"),
+    path("products/<uuid:pk>/edit/", product_update, name="product_update"),
+    path("products/<uuid:pk>/delete/", product_delete, name="product_delete"),
 
     # Price lists
-    path("listas-precio/", pricelist_list, name="pricelist_list"),
-    path("listas-precio/nueva/", pricelist_create, name="pricelist_create"),
-    path("listas-precio/<uuid:pk>/", pricelist_detail, name="pricelist_detail"),
-    path("listas-precio/<uuid:pk>/editar/", pricelist_update, name="pricelist_update"),
-    path("listas-precio/<uuid:pk>/toggle/", pricelist_toggle, name="pricelist_toggle"),
-    path("listas-precio/<uuid:pk>/precio/eliminar/", pricelist_del_price, name="pricelist_del_price"),
+    path("price-lists/", pricelist_list, name="pricelist_list"),
+    path("price-lists/new/", pricelist_create, name="pricelist_create"),
+    path("price-lists/<uuid:pk>/", pricelist_detail, name="pricelist_detail"),
+    path("price-lists/<uuid:pk>/edit/", pricelist_update, name="pricelist_update"),
+    path("price-lists/<uuid:pk>/toggle/", pricelist_toggle, name="pricelist_toggle"),
+    path("price-lists/<uuid:pk>/price/delete/", pricelist_del_price, name="pricelist_del_price"),
 ]

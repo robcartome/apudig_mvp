@@ -38,41 +38,41 @@ from .views import (
 app_name = "sales"
 
 urlpatterns = [
-    # Series documentales
+    # Document series
     path("series/", series_list, name="series_list"),
-    path("series/nueva/", series_create, name="series_create"),
-    path("series/<uuid:pk>/editar/", series_update, name="series_update"),
+    path("series/new/", series_create, name="series_create"),
+    path("series/<uuid:pk>/edit/", series_update, name="series_update"),
     path("series/<uuid:pk>/toggle/", series_toggle, name="series_toggle"),
-    # Tipos de documento
-    path("tipos-documento/", doctype_list, name="doctype_list"),
-    path("tipos-documento/nuevo/", doctype_create, name="doctype_create"),
-    path("tipos-documento/<uuid:pk>/editar/", doctype_update, name="doctype_update"),
-    # Cotizaciones
-    path("cotizaciones/", quotation_list, name="quotation_list"),
-    path("cotizaciones/nueva/", quotation_create, name="quotation_create"),
-    path("cotizaciones/<uuid:pk>/", quotation_detail, name="quotation_detail"),
-    path("cotizaciones/<uuid:pk>/editar/", quotation_update, name="quotation_update"),
-    path("cotizaciones/<uuid:pk>/aprobar/", quotation_approve, name="quotation_approve"),
-    path("cotizaciones/<uuid:pk>/rechazar/", quotation_reject, name="quotation_reject"),
-    path("cotizaciones/<uuid:pk>/cancelar/", quotation_cancel, name="quotation_cancel"),
-    path("cotizaciones/<uuid:pk>/pdf/", quotation_pdf, name="quotation_pdf"),
-    path("cotizaciones/<uuid:pk>/crear-orden/", order_from_quot, name="order_from_quot"),
-    # Órdenes de venta
-    path("ordenes/", order_list, name="order_list"),
-    path("ordenes/nueva/", order_create, name="order_create"),
-    path("ordenes/<uuid:pk>/", order_detail, name="order_detail"),
-    path("ordenes/<uuid:pk>/editar/", order_update, name="order_update"),
-    path("ordenes/<uuid:pk>/confirmar/", order_confirm, name="order_confirm"),
-    path("ordenes/<uuid:pk>/cancelar/", order_cancel, name="order_cancel"),
-    path("ordenes/<uuid:pk>/pdf/", order_pdf, name="order_pdf"),
-    path("ordenes/<uuid:pk>/emitir/", voucher_from_ord, name="voucher_from_ord"),
-    # Comprobantes
-    path("comprobantes/", voucher_list, name="voucher_list"),
-    path("comprobantes/nuevo/", voucher_create, name="voucher_create"),
-    path("comprobantes/<uuid:pk>/", voucher_detail, name="voucher_detail"),
-    path("comprobantes/<uuid:pk>/emitir/", voucher_issue, name="voucher_issue"),
-    path("comprobantes/<uuid:pk>/anular/", voucher_void, name="voucher_void"),
-    path("comprobantes/<uuid:pk>/cancelar/", voucher_cancel, name="voucher_cancel"),
-    path("comprobantes/<uuid:pk>/nota-credito/", voucher_credit, name="voucher_credit"),
-    path("comprobantes/<uuid:pk>/pdf/", voucher_pdf, name="voucher_pdf"),
+    # Document types
+    path("document-types/", doctype_list, name="doctype_list"),
+    path("document-types/new/", doctype_create, name="doctype_create"),
+    path("document-types/<uuid:pk>/edit/", doctype_update, name="doctype_update"),
+    # Quotations
+    path("quotations/", quotation_list, name="quotation_list"),
+    path("quotations/new/", quotation_create, name="quotation_create"),
+    path("quotations/<uuid:pk>/", quotation_detail, name="quotation_detail"),
+    path("quotations/<uuid:pk>/edit/", quotation_update, name="quotation_update"),
+    path("quotations/<uuid:pk>/approve/", quotation_approve, name="quotation_approve"),
+    path("quotations/<uuid:pk>/reject/", quotation_reject, name="quotation_reject"),
+    path("quotations/<uuid:pk>/cancel/", quotation_cancel, name="quotation_cancel"),
+    path("quotations/<uuid:pk>/pdf/", quotation_pdf, name="quotation_pdf"),
+    path("quotations/<uuid:pk>/create-order/", order_from_quot, name="order_from_quot"),
+    # Sales orders
+    path("orders/", order_list, name="order_list"),
+    path("orders/new/", order_create, name="order_create"),
+    path("orders/<uuid:pk>/", order_detail, name="order_detail"),
+    path("orders/<uuid:pk>/edit/", order_update, name="order_update"),
+    path("orders/<uuid:pk>/confirm/", order_confirm, name="order_confirm"),
+    path("orders/<uuid:pk>/cancel/", order_cancel, name="order_cancel"),
+    path("orders/<uuid:pk>/pdf/", order_pdf, name="order_pdf"),
+    path("orders/<uuid:pk>/issue/", voucher_from_ord, name="voucher_from_ord"),
+    # Vouchers
+    path("vouchers/", voucher_list, name="voucher_list"),
+    path("vouchers/new/", voucher_create, name="voucher_create"),
+    path("vouchers/<uuid:pk>/", voucher_detail, name="voucher_detail"),
+    path("vouchers/<uuid:pk>/issue/", voucher_issue, name="voucher_issue"),
+    path("vouchers/<uuid:pk>/void/", voucher_void, name="voucher_void"),
+    path("vouchers/<uuid:pk>/cancel/", voucher_cancel, name="voucher_cancel"),
+    path("vouchers/<uuid:pk>/credit-note/", voucher_credit, name="voucher_credit"),
+    path("vouchers/<uuid:pk>/pdf/", voucher_pdf, name="voucher_pdf"),
 ]

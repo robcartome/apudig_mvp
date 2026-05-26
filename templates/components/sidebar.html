@@ -148,10 +148,97 @@
         </li>
         {% endwith %}
 
+        {# ─── Productos ─── #}
+        {% with prod_name=request.resolver_match.url_name|default:'' %}
+        <li class="nav-item">
+          <a class="nav-link {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}active{% endif %}"
+             href="#sidebar-products"
+             data-bs-toggle="collapse"
+             data-section-url="{% url 'inventory:product_list' %}"
+             data-tooltip-label="Artículos"
+             aria-expanded="{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}true{% else %}false{% endif %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-box fs-2"></i></span>
+            <span class="nav-link-title">Artículos</span>
+            <span class="nav-link-arrow"></span>
+          </a>
+          <div class="collapse {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}show{% endif %}" id="sidebar-products">
+            <ul class="navbar-nav ps-lg-3">
+
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Producto (bien o servicio)</span></li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'product_list' %}active{% endif %}"
+                   href="{% url 'inventory:product_list' %}">Lista de Artículos</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'product_create' %}active{% endif %}"
+                   href="{% url 'inventory:product_create' %}">+ Crear Artículo</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'inventory:bulk_import' 'products' %}">&#x2601; Importar Artículos</a>
+              </li>
+
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Precios del producto</span></li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'pricelist_list' %}active{% endif %}"
+                   href="{% url 'inventory:pricelist_list' %}">Lista de Precios</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'pricelist_create' %}active{% endif %}"
+                   href="{% url 'inventory:pricelist_create' %}">+ Crear Lista de Precio</a>
+              </li>
+
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Unidad de medida del producto</span></li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'unit_list' %}active{% endif %}"
+                   href="{% url 'inventory:unit_list' %}">Lista de Unidades de Medida</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'unit_create' %}active{% endif %}"
+                   href="{% url 'inventory:unit_create' %}">+ Crear Unidad de Medida</a>
+              </li>
+
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Categoría del producto</span></li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'category_list' %}active{% endif %}"
+                   href="{% url 'inventory:category_list' %}">Lista de Categorías</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'category_create' %}active{% endif %}"
+                   href="{% url 'inventory:category_create' %}">+ Crear Categoría</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'inventory:bulk_import' 'categories' %}">&#x2601; Importar Categorías</a>
+              </li>
+
+            </ul>
+          </div>
+        </li>
+        {% endwith %}
+
+        {# ─── Reportes ─── #}
+        <li class="nav-item">
+          <a class="nav-link {% if '/reportes/' in request.path %}active{% endif %}"
+             href="#sidebar-reports"
+             data-bs-toggle="collapse"
+             data-tooltip-label="Reportes"
+             aria-expanded="{% if '/reportes/' in request.path %}true{% else %}false{% endif %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-chart-bar fs-2"></i></span>
+            <span class="nav-link-title">Reportes</span>
+            <span class="nav-link-arrow"></span>
+          </a>
+          <div class="collapse {% if '/reportes/' in request.path %}show{% endif %}" id="sidebar-reports">
+            <ul class="navbar-nav ps-lg-3">
+              <li class="nav-item">
+                <span class="nav-link text-muted fst-italic" style="font-size:0.85em;">Próximamente…</span>
+              </li>
+            </ul>
+          </div>
+        </li>
+
         {# ─── Administración ERP ─── #}
         {% if user.is_staff %}
         <li class="nav-item">
-          <a class="nav-link {% if '/gestion/' in request.path %}active{% endif %}"
+          <a class="nav-link {% if '/management/' in request.path %}active{% endif %}"
              href="{% url 'users:admin_panel' %}"
              data-tooltip-label="Administración">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-adjustments-cog fs-2"></i></span>

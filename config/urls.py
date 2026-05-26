@@ -10,7 +10,7 @@ urlpatterns = [
     path("logout/", logout_view, name="logout"),
     path("", include("apps.web.urls")),
     path("companies/", include("apps.companies.urls")),
-    path("gestion/", include("apps.users.urls")),
+    path("management/", include("apps.users.urls")),
     path("partners/", include("apps.partners.urls")),
     path("inventory/", include("apps.inventory.urls")),
     path("sales/", include("apps.sales.urls")),
