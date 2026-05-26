@@ -17,6 +17,15 @@
       --company-primary: {% if active_branding and active_branding.primary_color %}{{ active_branding.primary_color }}{% else %}#066fd1{% endif %};
       --company-secondary: {% if active_branding and active_branding.secondary_color %}{{ active_branding.secondary_color }}{% else %}#4a4a4a{% endif %};
       --tblr-font-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --app-font-size-base: clamp(14px, calc(13.6px + 0.22vw), 16px);
+    }
+
+    html {
+      font-size: var(--app-font-size-base);
+    }
+
+    body {
+      font-size: 1rem;
     }
 
     .btn-primary {
