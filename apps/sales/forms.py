@@ -93,7 +93,8 @@ class QuotationHeaderForm(forms.ModelForm):
         self.fields["customer"].queryset = filter_by_company(
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
-        self.fields["customer"].widget.attrs.update(_select)
+        self.fields["customer"].widget = forms.HiddenInput()
+        self.fields["customer"].required = False
         if company_id and store_id:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
@@ -125,26 +126,27 @@ class QuotationLineForm(forms.Form):
 
     product = forms.ModelChoiceField(
         queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),  # noqa: E501
-        empty_label="— Seleccionar producto —",
-        widget=forms.Select(attrs=_select),
+        empty_label=None,
+        widget=forms.HiddenInput(),
+        required=True,
         error_messages={"required": "Seleccione un producto."},
     )
     description = forms.CharField(
         max_length=500,
         required=False,
-        widget=forms.TextInput(attrs=_text),
+        widget=forms.HiddenInput(),
     )
     quantity = forms.DecimalField(
         min_value=Decimal("0.0001"),
         max_digits=14,
         decimal_places=4,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.0001", "min": "0.0001"}),
+        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.0001", "min": "0.0001"}),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
         decimal_places=6,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0"}),
+        widget=forms.HiddenInput(),
     )
     discount_amount = forms.DecimalField(
         min_value=Decimal("0"),
@@ -152,12 +154,12 @@ class QuotationLineForm(forms.Form):
         decimal_places=2,
         required=False,
         initial=Decimal("0"),
-        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
+        widget=forms.HiddenInput(),
     )
     tax_type = forms.ChoiceField(
         choices=TAX_TYPE_CHOICES,
         initial="10",
-        widget=forms.Select(attrs=_select),
+        widget=forms.Select(attrs={**_select, "class": "form-select form-select-sm"}),
     )
     igv_rate = forms.DecimalField(
         min_value=Decimal("0"),
@@ -165,12 +167,12 @@ class QuotationLineForm(forms.Form):
         decimal_places=2,
         initial=Decimal("18"),
         required=False,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
+        widget=forms.HiddenInput(),
     )
     memo = forms.CharField(
         max_length=1000,
         required=False,
-        widget=forms.TextInput(attrs=_text),
+        widget=forms.HiddenInput(),
     )
 
     def clean_discount_amount(self):

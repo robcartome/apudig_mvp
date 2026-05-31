@@ -10,7 +10,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.partners.models import Customer, Supplier
 
-from ..models import Product, StockByWarehouse, Unit, WarehouseLocation
+from ..models import Product, ProductPrice, StockByWarehouse, Unit, WarehouseLocation
 
 
 def _get_company_id(request):
@@ -76,6 +76,7 @@ def product_search(request):
                 "unit":           p.unit.code if p.unit else "",
                 "unit_id":        str(p.unit_id) if p.unit_id else "",
                 "price_purchase": float(p.price_purchase or 0),
+                "price_sale":     float(p.price_sale or 0),
                 "stock":          stock_map.get(str(p.pk), 0),
                 "total_stock":    total_stock_map.get(str(p.pk), 0),
             }
@@ -221,10 +222,38 @@ def product_quick_create(request):
             "unit":           product.unit.code if product.unit else "",
             "unit_id":        str(product.unit_id) if product.unit_id else "",
             "price_purchase": float(product.price_purchase or 0),
-            "stock":          0,
+                "price_sale":     float(product.price_sale or 0),
         },
         status=201,
     )
+
+
+# ── Price list prices ────────────────────────────────────────────────────────
+
+@require_GET
+def price_list_prices(request, pk):
+    """Return prices for given product IDs in a price list."""
+    if _require_auth(request):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    product_ids = [
+        pid.strip() for pid in request.GET.get("products", "").split(",")
+        if pid.strip()
+    ]
+
+    prices = ProductPrice.objects.filter(
+        price_list_id=pk,
+        active=True,
+    )
+    if product_ids:
+        prices = prices.filter(product_id__in=product_ids)
+
+    return JsonResponse({
+        "prices": {
+            str(pp.product_id): float(pp.amount)
+            for pp in prices
+        }
+    })
 
 
 # ── Location search ───────────────────────────────────────────────────────────

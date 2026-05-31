@@ -85,9 +85,14 @@
             {% else %}<span class="badge bg-muted-lt">{{ q.get_status_display }}</span>{% endif %}
           </td>
           <td>
-            <a href="{% url 'sales:quotation_detail' q.pk %}" class="btn btn-sm btn-outline-secondary">
+            <div class="d-inline-flex gap-1">
+            <a href="{% url 'sales:quotation_detail' q.pk %}" class="btn btn-sm btn-outline-secondary" title="Ver">
               <i class="ti ti-eye"></i>
             </a>
+            <a href="{% url 'sales:quotation_copy' q.pk %}" class="btn btn-sm btn-outline-secondary" title="Copiar cotización">
+              <i class="ti ti-copy"></i>
+            </a>
+            </div>
           </td>
         </tr>
         {% empty %}

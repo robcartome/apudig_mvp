@@ -267,3 +267,77 @@ def order_pdf(request, pk):
         raise Http404
     company = order.store.company if order.store else None
     return render(request, "sales/pdf/order_pdf.html", {"order": order, "company": company})
+
+
+# ── Copiar orden ──────────────────────────────────────────────────────────────
+
+def order_copy(request, pk):
+    redirect_resp = _require_auth(request)
+    if redirect_resp:
+        return redirect_resp
+
+    company_id, store_id = _get_ids(request)
+    source = get_object_or_404(SaleOrder, pk=pk, store_id=store_id)
+
+    initial_lines = [
+        {
+            "product": line.product,
+            "description": line.description,
+            "quantity": line.quantity,
+            "unit_price": line.unit_price,
+            "discount_amount": line.discount_amount,
+            "tax_type": line.tax_type,
+            "igv_rate": line.igv_rate,
+        }
+        for line in source.lines.select_related("product").all()
+    ]
+
+    if request.method == "POST":
+        header_form = SaleOrderHeaderForm(request.POST, company_id=company_id, store_id=store_id)
+        line_formset = SaleOrderLineFormSet(request.POST, prefix="lines")
+
+        if header_form.is_valid() and line_formset.is_valid():
+            lines = _lines_from_formset(line_formset)
+            if not lines:
+                messages.error(request, "La orden debe tener al menos una línea.")
+            else:
+                cd = header_form.cleaned_data
+                try:
+                    order = create_sale_order(
+                        store_id=str(cd["store"].pk),
+                        customer=cd["customer"],
+                        document_type=cd["document_type"],
+                        series=cd["series"],
+                        lines=lines,
+                        created_by=request.user,
+                        issue_date=cd["issue_date"],
+                        due_date=cd.get("due_date"),
+                        currency=cd.get("currency", "PEN"),
+                        payment_term_days=cd.get("payment_term_days", 0),
+                        notes=cd.get("notes", ""),
+                        internal_reference=cd.get("internal_reference", ""),
+                    )
+                    messages.success(request, f"Orden {order.series_code}-{order.number} copiada.")
+                    return redirect("sales:order_detail", pk=order.pk)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+    else:
+        initial_header = {
+            "store": source.store_id,
+            "customer": source.customer,
+            "document_type": source.document_type_id,
+            "series": source.series_id,
+            "issue_date": timezone.now().date(),
+            "currency": source.currency,
+            "payment_term_days": source.payment_term_days,
+            "notes": source.notes,
+            "internal_reference": source.internal_reference,
+        }
+        header_form = SaleOrderHeaderForm(initial=initial_header, company_id=company_id, store_id=store_id)
+        line_formset = SaleOrderLineFormSet(initial=initial_lines, prefix="lines")
+
+    return render(request, "sales/order_form.html", {
+        "header_form": header_form,
+        "line_formset": line_formset,
+        "title": "Copiar orden de venta",
+    })

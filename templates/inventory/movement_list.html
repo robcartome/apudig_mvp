@@ -113,6 +113,9 @@
               >
                 <i class="ti ti-eye"></i>
               </button>
+              <a href="{% url 'inventory:movement_copy' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Copiar movimiento">
+                <i class="ti ti-copy"></i>
+              </a>
               {% if obj.status == "DRAFT" and not obj.is_locked_for_changes %}
               <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Confirmar este movimiento? Luego no será editable.');">
                 {% csrf_token %}
