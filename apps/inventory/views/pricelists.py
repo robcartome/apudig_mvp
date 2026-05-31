@@ -2,22 +2,26 @@
 inventory/views/pricelists.py — CRUD de Listas de Precio y asignación de precios a productos.
 
 Rutas:
-  pricelist_list      GET      /inventario/listas-precio/
-  pricelist_create    GET+POST /inventario/listas-precio/nueva/
-  pricelist_detail    GET      /inventario/listas-precio/<uuid:pk>/
-  pricelist_update    GET+POST /inventario/listas-precio/<uuid:pk>/editar/
-  pricelist_toggle    POST     /inventario/listas-precio/<uuid:pk>/toggle/
-  pricelist_set_price POST     /inventario/listas-precio/<uuid:pk>/precio/
-  pricelist_del_price POST     /inventario/listas-precio/<uuid:pk>/precio/eliminar/
+  pricelist_list              GET      /inventario/listas-precio/
+  pricelist_create            GET+POST /inventario/listas-precio/nueva/
+  pricelist_detail            GET      /inventario/listas-precio/<uuid:pk>/
+  pricelist_update            GET+POST /inventario/listas-precio/<uuid:pk>/editar/
+  pricelist_toggle            POST     /inventario/listas-precio/<uuid:pk>/toggle/
+  pricelist_del_price         POST     /inventario/listas-precio/<uuid:pk>/precio/eliminar/
+  pricelist_bulk_template     GET      /inventario/listas-precio/import/template/
+  pricelist_bulk_import       GET+POST /inventario/listas-precio/import/
+  pricelist_bulk_template_pl  GET      /inventario/listas-precio/<uuid:pk>/import/template/
+  pricelist_bulk_import_pl    GET+POST /inventario/listas-precio/<uuid:pk>/import/
 """
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.text import slugify
 
 from apps.companies.models import Company
 
-from ..forms import PriceListForm, ProductPriceFormSet
+from ..forms import BulkImportForm, PriceListForm, ProductPriceFormSet
 from ..models import PriceList, Product, ProductPrice
 from ..selectors import get_pricelist_detail, get_price_lists, search_price_lists
 from ..services import (
@@ -212,3 +216,221 @@ def pricelist_del_price(request, pk):
         messages.success(request, "Precio eliminado.")
 
     return redirect("inventory:pricelist_detail", pk=pk)
+
+
+# ── Bulk import helpers ───────────────────────────────────────────────────────
+
+def _pricelist_bulk_template(request, pricelist=None):
+    """Download Excel price template (global or per-list)."""
+    r = _require_auth(request)
+    if r:
+        return r
+
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
+    from ..importers import build_pricelist_template_workbook
+
+    try:
+        data = build_pricelist_template_workbook(company=company, pricelist=pricelist)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        if pricelist:
+            return redirect("inventory:pricelist_detail", pk=pricelist.pk)
+        return redirect("inventory:pricelist_list")
+
+    list_name = pricelist.name if pricelist else "todas_listas"
+    safe_name = slugify(list_name) or "precios"
+    filename = f"plantilla_precios_{safe_name}.xlsx"
+    response = HttpResponse(
+        data,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _pricelist_bulk_import(request, pricelist=None):
+    """Upload and process a price Excel file (global or per-list)."""
+    r = _require_auth(request)
+    if r:
+        return r
+
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
+    from ..importers import import_pricelist_excel
+
+    form = BulkImportForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        upload = form.cleaned_data["file"]
+        try:
+            result = import_pricelist_excel(
+                file_obj=upload,
+                filename=upload.name,
+                company=company,
+                pricelist=pricelist,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        except Exception as exc:
+            messages.error(request, f"Error al procesar archivo: {exc}")
+        else:
+            if result.errors:
+                for err_line in result.errors[:20]:
+                    messages.warning(request, err_line)
+                if len(result.errors) > 20:
+                    messages.warning(request, f"... y {len(result.errors) - 20} errores adicionales.")
+                messages.error(
+                    request,
+                    f"Importación con errores — filas procesadas: {result.updated}, "
+                    f"errores: {len(result.errors)}.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Precios actualizados correctamente. "
+                    f"Filas procesadas: {result.updated} de {result.total_rows}.",
+                )
+        if pricelist:
+            return redirect("inventory:pricelist_detail", pk=pricelist.pk)
+        return redirect("inventory:pricelist_list")
+
+    # Determine download URL for template button
+    if pricelist:
+        template_url = f"inventory:pricelist_bulk_template_pl"
+        template_url_kwargs = {"pk": pricelist.pk}
+    else:
+        template_url = "inventory:pricelist_bulk_template"
+        template_url_kwargs = {}
+
+    return render(request, "inventory/pricelist_bulk_import.html", {
+        "form": form,
+        "pl": pricelist,
+        "template_url": template_url,
+        "template_url_kwargs": template_url_kwargs,
+    })
+
+
+# ── Public wrappers ───────────────────────────────────────────────────────────
+
+def pricelist_bulk_template(request):
+    """GET — Download global price template (all lists × all products)."""
+    return _pricelist_bulk_template(request, pricelist=None)
+
+
+def pricelist_bulk_import(request):
+    """GET+POST — Bulk price import (all lists)."""
+    return _pricelist_bulk_import(request, pricelist=None)
+
+
+def pricelist_bulk_template_pl(request, pk):
+    """GET — Download per-list price template."""
+    r = _require_auth(request)
+    if r:
+        return r
+    company, err = _get_active_company(request)
+    if err:
+        return err
+    pl = get_object_or_404(PriceList, pk=pk, company=company)
+    return _pricelist_bulk_template(request, pricelist=pl)
+
+
+def pricelist_bulk_import_pl(request, pk):
+    """GET+POST — Bulk price import for a specific list."""
+    r = _require_auth(request)
+    if r:
+        return r
+    company, err = _get_active_company(request)
+    if err:
+        return err
+    pl = get_object_or_404(PriceList, pk=pk, company=company)
+    return _pricelist_bulk_import(request, pricelist=pl)
+
+
+# ── Reporte consolidado de precios ────────────────────────────────────────────
+
+def price_report(request):
+    """Consolidated price report: all products × all active price lists.
+
+    ?q        — search by SKU, name or barcode
+    ?format   — xlsx | print  (default: HTML)
+    """
+    r = _require_auth(request)
+    if r:
+        return r
+
+    company, err = _get_active_company(request)
+    if err:
+        return err
+
+    from ..selectors import get_price_consolidate
+    from ..importers import build_price_report_workbook
+
+    q = request.GET.get("q", "").strip()
+    fmt = request.GET.get("format", "").strip().lower()
+
+    price_lists, rows = get_price_consolidate(company.pk, query=q)
+
+    # Parse selected columns for Excel export (?cols=compra,venta,<uuid>,...)
+    # All columns shown by default; cols param restricts what goes into Excel.
+    cols_param = request.GET.get("cols", "").strip()
+    if cols_param:
+        selected_cols = set(cols_param.split(","))
+    else:
+        selected_cols = {"compra", "venta"} | {str(pl.pk) for pl in price_lists}
+
+    if fmt == "xlsx":
+        # Filter price_lists and rows to match selected_cols
+        show_compra = "compra" in selected_cols
+        show_venta = "venta" in selected_cols
+        xl_lists = [pl for pl in price_lists if str(pl.pk) in selected_cols]
+
+        # Rebuild rows with only selected pl_amounts
+        xl_rows = []
+        for row in rows:
+            xl_rows.append({
+                "sku": row["sku"],
+                "name": row["name"],
+                "price_purchase": row["price_purchase"] if show_compra else None,
+                "price_sale": row["price_sale"] if show_venta else None,
+                "prices": {str(pl.pk): row["prices"].get(str(pl.pk)) for pl in xl_lists},
+                "_show_compra": show_compra,
+                "_show_venta": show_venta,
+            })
+        try:
+            data = build_price_report_workbook(
+                price_lists=xl_lists,
+                rows=xl_rows,
+                show_compra=show_compra,
+                show_venta=show_venta,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("inventory:price_report")
+        response = HttpResponse(
+            data,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        suffix = f"_{slugify(q)}" if q else ""
+        response["Content-Disposition"] = f'attachment; filename="consolidado_precios{suffix}.xlsx"'
+        return response
+
+    # Transform rows: add pl_amounts list aligned to price_lists order
+    for row in rows:
+        row["pl_amounts"] = [row["prices"].get(str(pl.pk)) for pl in price_lists]
+
+    # Paginate for screen
+    paginator = Paginator(rows, 50)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+
+    return render(request, "inventory/pricelist_report.html", {
+        "price_lists": price_lists,
+        "page_obj": page_obj,
+        "rows": page_obj.object_list,
+        "q": q,
+        "total": len(rows),
+        "selected_cols": selected_cols,
+    })

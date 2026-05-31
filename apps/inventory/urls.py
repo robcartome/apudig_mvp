@@ -13,6 +13,9 @@ from .views import (
     movement_delete, movement_detail, movement_edit, movement_list, movement_confirm,
     pricelist_create, pricelist_del_price, pricelist_detail,
     pricelist_list, pricelist_toggle, pricelist_update,
+    pricelist_bulk_import, pricelist_bulk_template,
+    pricelist_bulk_import_pl, pricelist_bulk_template_pl,
+    price_report,
     product_create, product_delete, product_list, product_update,
     product_quick_create, product_search, product_stock,
     stock_report,
@@ -95,8 +98,13 @@ urlpatterns = [
     # Price lists
     path("price-lists/", pricelist_list, name="pricelist_list"),
     path("price-lists/new/", pricelist_create, name="pricelist_create"),
+    path("price-lists/report/", price_report, name="price_report"),
+    path("price-lists/import/", pricelist_bulk_import, name="pricelist_bulk_import"),
+    path("price-lists/import/template/", pricelist_bulk_template, name="pricelist_bulk_template"),
     path("price-lists/<uuid:pk>/", pricelist_detail, name="pricelist_detail"),
     path("price-lists/<uuid:pk>/edit/", pricelist_update, name="pricelist_update"),
     path("price-lists/<uuid:pk>/toggle/", pricelist_toggle, name="pricelist_toggle"),
     path("price-lists/<uuid:pk>/price/delete/", pricelist_del_price, name="pricelist_del_price"),
+    path("price-lists/<uuid:pk>/import/", pricelist_bulk_import_pl, name="pricelist_bulk_import_pl"),
+    path("price-lists/<uuid:pk>/import/template/", pricelist_bulk_template_pl, name="pricelist_bulk_template_pl"),
 ]

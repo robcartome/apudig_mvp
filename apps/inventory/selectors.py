@@ -117,6 +117,53 @@ def get_product_price(pricelist_id, product_id):
         return None
 
 
+def get_price_consolidate(company_id, query: str = ""):
+    """Returns (price_lists, rows) for the consolidated price report.
+
+    price_lists  — list of PriceList objects ordered by name.
+    rows         — list of dicts:
+        {sku, name, price_purchase, price_sale, prices: {str(pl_pk): Decimal|None}}
+    """
+    price_lists = list(
+        PriceList.objects.filter(company_id=company_id, active=True).order_by("name")
+    )
+    pl_ids = [pl.pk for pl in price_lists]
+
+    qs = Product.objects.filter(company_id=company_id, active=True)
+    if query:
+        qs = qs.filter(
+            Q(sku__icontains=query)
+            | Q(name__icontains=query)
+            | Q(barcode__icontains=query)
+        )
+    qs = qs.order_by("sku")
+    products = list(qs)
+
+    product_ids = [p.pk for p in products]
+    price_map: dict[tuple, object] = {}
+    if product_ids and pl_ids:
+        for pp in ProductPrice.objects.filter(
+            product_id__in=product_ids,
+            price_list_id__in=pl_ids,
+        ).values("product_id", "price_list_id", "amount"):
+            price_map[(str(pp["product_id"]), str(pp["price_list_id"]))] = pp["amount"]
+
+    rows = [
+        {
+            "sku": p.sku,
+            "name": p.name,
+            "price_purchase": p.price_purchase,
+            "price_sale": p.price_sale,
+            "prices": {
+                str(pl.pk): price_map.get((str(p.pk), str(pl.pk)))
+                for pl in price_lists
+            },
+        }
+        for p in products
+    ]
+    return price_lists, rows
+
+
 # ── Stock ─────────────────────────────────────────────────────────────────────
 
 def get_stock_by_warehouse(store_id: str):

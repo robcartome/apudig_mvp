@@ -39,6 +39,11 @@ from .pricelists import (
     pricelist_list,
     pricelist_toggle,
     pricelist_update,
+    pricelist_bulk_import,
+    pricelist_bulk_template,
+    pricelist_bulk_import_pl,
+    pricelist_bulk_template_pl,
+    price_report,
 )
 
 __all__ = [
@@ -57,4 +62,7 @@ __all__ = [
     "entry_create", "exit_create", "transfer_create", "adjustment_create",
     "pricelist_list", "pricelist_create", "pricelist_detail", "pricelist_update",
     "pricelist_toggle", "pricelist_del_price",
+    "pricelist_bulk_import", "pricelist_bulk_template",
+    "pricelist_bulk_import_pl", "pricelist_bulk_template_pl",
+    "price_report",
 ]

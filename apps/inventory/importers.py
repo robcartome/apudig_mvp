@@ -399,3 +399,348 @@ def import_inventory_excel(*, entity: str, file_obj, filename: str, company=None
             transaction.set_rollback(True)
 
     return result
+
+
+# ── Price-list bulk helpers ───────────────────────────────────────────────────
+
+_FIXED_PRICE_COLS = {
+    "sku", "nombre", "name",
+    "precio_compra", "price_purchase", "costo",
+    "precio_venta_general", "precio_venta", "price_sale", "pvp",
+    "codigo_barras", "barcode",
+}
+
+
+def build_pricelist_template_workbook(company, pricelist=None) -> bytes:
+    """Build an Excel file with all active products as rows.
+
+    Fixed columns: sku | nombre | precio_compra | precio_venta_general
+    Dynamic columns: one per active PriceList (filtered to *pricelist* if given).
+    A hidden 'metadata' sheet lists list name → UUID for round-trip matching.
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+    except ImportError as exc:
+        raise ValueError("Falta dependencia openpyxl. Instala openpyxl para generar plantilla.") from exc
+
+    from .models import PriceList, ProductPrice
+
+    if pricelist is not None:
+        price_lists = [pricelist]
+    else:
+        price_lists = list(
+            PriceList.objects.filter(company=company, active=True).order_by("name")
+        )
+
+    fixed_headers = ["sku", "nombre", "precio_compra", "precio_venta_general"]
+    pl_headers = [pl.name for pl in price_lists]
+    all_headers = fixed_headers + pl_headers
+
+    products = list(
+        Product.objects.filter(company=company, active=True).order_by("sku")
+    )
+
+    # Build lookup: (str(product_id), str(pricelist_id)) → amount
+    prices_qs = ProductPrice.objects.filter(
+        product__company=company,
+        price_list__in=price_lists,
+    ).values("product_id", "price_list_id", "amount")
+    price_map = {
+        (str(p["product_id"]), str(p["price_list_id"])): p["amount"]
+        for p in prices_qs
+    }
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "precios"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="2B5AB7")
+    lock_fill = PatternFill(fill_type="solid", fgColor="F0F0F0")
+    center = Alignment(horizontal="center")
+
+    ws.append(all_headers)
+    for col_idx in range(1, len(all_headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    for product in products:
+        row_data = [
+            product.sku,
+            product.name,
+            float(product.price_purchase),
+            float(product.price_sale),
+        ]
+        for pl in price_lists:
+            key = (str(product.pk), str(pl.pk))
+            raw = price_map.get(key)
+            row_data.append(float(raw) if raw is not None else "")
+        ws.append(row_data)
+        row_num = ws.max_row
+        # Gray out read-only info columns
+        for col_idx in (1, 2):
+            ws.cell(row=row_num, column=col_idx).fill = lock_fill
+
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 42
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 22
+    for i in range(len(pl_headers)):
+        col_letter = ws.cell(row=1, column=5 + i).column_letter
+        ws.column_dimensions[col_letter].width = 22
+
+    # Metadata sheet for UUID → name round-trip
+    ws_meta = wb.create_sheet("metadata")
+    ws_meta.append(["lista_nombre", "lista_id"])
+    for pl in price_lists:
+        ws_meta.append([pl.name, str(pl.pk)])
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
+def import_pricelist_excel(
+    *,
+    file_obj,
+    filename: str,
+    company,
+    pricelist=None,
+) -> ImportResult:
+    """Update product base prices and/or price-list amounts from Excel.
+
+    Columns expected:
+      sku | nombre (ignored) | precio_compra | precio_venta_general
+      + one column per price list (matched by name, case-insensitive).
+
+    If *pricelist* is provided only that list's column is processed.
+    Rows with errors are skipped; valid rows are always committed.
+    """
+    from .models import PriceList, ProductPrice
+
+    rows = _read_tabular(file_obj, filename)
+    result = ImportResult(entity="price_lists", total_rows=len(rows))
+
+    if not rows:
+        return result
+
+    # Build company price-list map: normalised_name → PriceList
+    company_pl_map: dict[str, "PriceList"] = {
+        _norm(pl.name): pl
+        for pl in PriceList.objects.filter(company=company)
+    }
+
+    # Determine which extra columns map to a PriceList
+    sample_keys = list(rows[0].keys())
+    pl_column_map: dict[str, "PriceList"] = {}  # original column name → PriceList
+    for col in sample_keys:
+        if _norm(col) in _FIXED_PRICE_COLS:
+            continue
+        pl = company_pl_map.get(_norm(col))
+        if pl is None:
+            continue
+        if pricelist is not None and str(pl.pk) != str(pricelist.pk):
+            continue
+        pl_column_map[col] = pl
+
+    # If caller passed a specific pricelist but no matching column found, try fuzzy
+    if pricelist is not None and not pl_column_map:
+        for col in sample_keys:
+            if _norm(col) == _norm(pricelist.name):
+                pl_column_map[col] = pricelist
+                break
+
+    for index, row in enumerate(rows, start=2):
+        sku = str(_pick(row, ("sku", "codigo", "codigo_articulo")) or "").strip()
+        if not sku:
+            result.errors.append(f"Fila {index}: SKU es obligatorio.")
+            continue
+
+        try:
+            product = Product.objects.get(company=company, sku=sku)
+        except Product.DoesNotExist:
+            result.errors.append(f"Fila {index}: SKU '{sku}' no encontrado.")
+            continue
+
+        # Update base prices on Product
+        pp_raw = _pick(row, ("precio_compra", "price_purchase", "costo"))
+        ps_raw = _pick(row, ("precio_venta_general", "precio_venta", "price_sale", "pvp"))
+        update_fields: list[str] = []
+        if pp_raw is not None and str(pp_raw).strip() != "":
+            product.price_purchase = _as_decimal(pp_raw)
+            update_fields.append("price_purchase")
+        if ps_raw is not None and str(ps_raw).strip() != "":
+            product.price_sale = _as_decimal(ps_raw)
+            update_fields.append("price_sale")
+        if update_fields:
+            update_fields.append("updated_at")
+            product.save(update_fields=update_fields)
+
+        # Update ProductPrice rows
+        for col_name, pl in pl_column_map.items():
+            amount_raw = row.get(col_name)
+            if amount_raw is None or str(amount_raw).strip() == "":
+                continue
+            amount = _as_decimal(amount_raw)
+            pp_obj, created = ProductPrice.objects.get_or_create(
+                product=product,
+                price_list=pl,
+                defaults={"amount": amount, "currency": "PEN", "active": True},
+            )
+            if not created and pp_obj.amount != amount:
+                pp_obj.amount = amount
+                pp_obj.save(update_fields=["amount"])
+
+        result.updated += 1
+
+    result.skipped = max(
+        result.total_rows - (result.created + result.updated + len(result.errors)), 0
+    )
+    return result
+
+
+# ── Price report workbook ─────────────────────────────────────────────────────
+
+def build_price_report_workbook(
+    price_lists: list,
+    rows: list[dict],
+    show_compra: bool = True,
+    show_venta: bool = True,
+) -> bytes:
+    """Build an Excel price report from pre-computed selector data.
+
+    price_lists  — list of PriceList objects to include.
+    rows         — list of dicts with keys: sku, name, price_purchase, price_sale,
+                   prices {str(pl_pk): Decimal|None}.
+    show_compra  — include Precio Compra column.
+    show_venta   — include Precio Venta column.
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+    except ImportError as exc:
+        raise ValueError("Falta dependencia openpyxl.") from exc
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "consolidado_precios"
+
+    headers = ["SKU", "Nombre"]
+    if show_compra:
+        headers.append("Precio Compra")
+    if show_venta:
+        headers.append("Precio Venta")
+    headers += [pl.name for pl in price_lists]
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="2B5AB7")
+    center = Alignment(horizontal="center")
+    right = Alignment(horizontal="right")
+
+    ws.append(headers)
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    for row in rows:
+        row_data: list = [row["sku"], row["name"]]
+        if show_compra:
+            row_data.append(float(row["price_purchase"]) if row["price_purchase"] is not None else "")
+        if show_venta:
+            row_data.append(float(row["price_sale"]) if row["price_sale"] is not None else "")
+        for pl in price_lists:
+            val = row["prices"].get(str(pl.pk))
+            row_data.append(float(val) if val is not None else "")
+        ws.append(row_data)
+        row_num = ws.max_row
+        for col_idx in range(3, len(headers) + 1):
+            ws.cell(row=row_num, column=col_idx).alignment = right
+
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 45
+    for i in range(2, len(headers)):
+        col_letter = get_column_letter(3 + i - 2 + 1)
+        ws.column_dimensions[get_column_letter(3 + i - 2)].width = 18
+
+    ws.freeze_panes = "A2"
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
+# ── Consolidated price report Excel builder ───────────────────────────────────
+
+def build_price_report_workbook(price_lists: list, rows: list[dict]) -> bytes:
+    """Generate a styled Excel workbook from pre-built consolidate data.
+
+    price_lists — list of PriceList objects (ordered).
+    rows        — list of dicts as returned by get_price_consolidate().
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill, numbers
+        from openpyxl.utils import get_column_letter
+    except ImportError as exc:
+        raise ValueError("Falta dependencia openpyxl.") from exc
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "reporte_precios"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="2B5AB7")
+    sku_fill = PatternFill(fill_type="solid", fgColor="F0F0F0")
+    center = Alignment(horizontal="center")
+    right = Alignment(horizontal="right")
+    num_fmt = "#,##0.00"
+
+    headers = (
+        ["SKU", "Nombre", "Precio Compra", "Precio Venta General"]
+        + [pl.name for pl in price_lists]
+    )
+    ws.append(headers)
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    for row in rows:
+        row_data = [
+            row["sku"],
+            row["name"],
+            float(row["price_purchase"]),
+            float(row["price_sale"]),
+        ] + [
+            float(row["prices"].get(str(pl.pk))) if row["prices"].get(str(pl.pk)) is not None else ""
+            for pl in price_lists
+        ]
+        ws.append(row_data)
+        data_row = ws.max_row
+        ws.cell(data_row, 1).fill = sku_fill
+        for col_idx in range(3, len(headers) + 1):
+            c = ws.cell(data_row, col_idx)
+            c.number_format = num_fmt
+            c.alignment = right
+
+    # Column widths
+    ws.column_dimensions["A"].width = 16
+    ws.column_dimensions["B"].width = 44
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 22
+    for i in range(len(price_lists)):
+        col_letter = get_column_letter(5 + i)
+        ws.column_dimensions[col_letter].width = 22
+
+    ws.freeze_panes = "C2"  # freeze SKU+Nombre columns and header row
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()

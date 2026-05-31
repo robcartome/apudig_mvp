@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Importación masiva de precios — APUDIG{% endblock %}
+{% block page_title %}
+  <h2 class="page-title">
+    Importación masiva de precios
+    {% if pl %}<small class="text-muted fw-normal">— {{ pl.name }}</small>{% endif %}
+  </h2>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'inventory:pricelist_list' %}">Listas de Precio</a></li>
+          {% if pl %}
+          <li class="breadcrumb-item"><a href="{% url 'inventory:pricelist_detail' pl.pk %}">{{ pl.name }}</a></li>
+          {% endif %}
+          <li class="breadcrumb-item active">Importación masiva</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="row g-3">
+  {# ── Upload card ── #}
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">Subir archivo de precios</h3>
+      </div>
+      <div class="card-body">
+
+        {# Template download button #}
+        <div class="mb-3">
+          {% if pl %}
+          <a href="{% url 'inventory:pricelist_bulk_template_pl' pl.pk %}" class="btn btn-outline-primary btn-sm">
+            <i class="ti ti-file-spreadsheet me-1"></i>Descargar plantilla — {{ pl.name }}
+          </a>
+          {% else %}
+          <a href="{% url 'inventory:pricelist_bulk_template' %}" class="btn btn-outline-primary btn-sm">
+            <i class="ti ti-file-spreadsheet me-1"></i>Descargar plantilla (todas las listas)
+          </a>
+          {% endif %}
+        </div>
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label required">{{ form.file.label }}</label>
+            {{ form.file }}
+            {% if form.file.help_text %}
+              <div class="form-hint">{{ form.file.help_text }}</div>
+            {% endif %}
+            {% if form.file.errors %}
+              <div class="text-danger small mt-1">{{ form.file.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="ti ti-upload me-1"></i>Importar precios
+            </button>
+            {% if pl %}
+            <a href="{% url 'inventory:pricelist_detail' pl.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+            {% else %}
+            <a href="{% url 'inventory:pricelist_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {# ── Instructions card ── #}
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title mb-0">Instrucciones</h3>
+      </div>
+      <div class="card-body">
+        <ol class="ps-3 mb-0">
+          <li class="mb-2">Descarga la plantilla con el botón de arriba. Contiene todos los productos activos.</li>
+          <li class="mb-2">La plantilla incluye las columnas fijas:
+            <ul class="mt-1">
+              <li><strong>sku</strong> — identificador del producto (no modificar)</li>
+              <li><strong>nombre</strong> — nombre del producto (no modificar)</li>
+              <li><strong>precio_compra</strong> — precio de costo del producto</li>
+              <li><strong>precio_venta_general</strong> — precio de venta estándar</li>
+            </ul>
+          </li>
+          <li class="mb-2">
+            {% if pl %}
+            La columna <strong>{{ pl.name }}</strong> corresponde al precio de esta lista.
+            {% else %}
+            Cada columna adicional corresponde a una lista de precio. Completa el monto para los productos que apliquen.
+            {% endif %}
+          </li>
+          <li class="mb-2">Las celdas vacías en columnas de precio se ignoran (no se borran precios existentes).</li>
+          <li class="mb-2">Guarda el archivo en formato <strong>.xlsx</strong> y súbelo.</li>
+          <li>Los cambios se aplican de forma inmediata fila por fila; las filas con errores se reportan sin detener el resto.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

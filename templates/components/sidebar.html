@@ -151,17 +151,17 @@
         {# ─── Productos ─── #}
         {% with prod_name=request.resolver_match.url_name|default:'' %}
         <li class="nav-item">
-          <a class="nav-link {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}active{% endif %}"
+          <a class="nav-link {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' or prod_name == 'price_report' %}active{% endif %}"
              href="#sidebar-products"
              data-bs-toggle="collapse"
              data-section-url="{% url 'inventory:product_list' %}"
              data-tooltip-label="Artículos"
-             aria-expanded="{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}true{% else %}false{% endif %}">
+             aria-expanded="{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' or prod_name == 'price_report' %}true{% else %}false{% endif %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-box fs-2"></i></span>
             <span class="nav-link-title">Artículos</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}show{% endif %}" id="sidebar-products">
+          <div class="collapse {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' or prod_name == 'price_report' %}show{% endif %}" id="sidebar-products">
             <ul class="navbar-nav ps-lg-3">
 
               <li class="nav-item mt-1"><span class="sidebar-section-label">Producto (bien o servicio)</span></li>
@@ -185,6 +185,14 @@
               <li class="nav-item">
                 <a class="nav-link {% if prod_name == 'pricelist_create' %}active{% endif %}"
                    href="{% url 'inventory:pricelist_create' %}">+ Crear Lista de Precio</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'pricelist_bulk_import' %}active{% endif %}"
+                   href="{% url 'inventory:pricelist_bulk_import' %}">Importar Lista de Precio</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if prod_name == 'price_report' %}active{% endif %}"
+                   href="{% url 'inventory:price_report' %}">Consolidado de Lista de Precios</a>
               </li>
 
               <li class="nav-item mt-1"><span class="sidebar-section-label">Unidad de medida del producto</span></li>
