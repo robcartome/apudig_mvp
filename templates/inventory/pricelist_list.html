@@ -13,7 +13,7 @@
         </ol>
       </nav>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex gap-2">
       <a href="{% url 'inventory:pricelist_create' %}" class="btn btn-primary btn-sm">
         <i class="ti ti-plus me-1"></i>Nueva lista
       </a>
@@ -53,6 +53,7 @@
           <th>Descripción</th>
           <th class="text-center">Estado</th>
           <th class="text-center"># Productos</th>
+          <th class="text-center">Predeterminada</th>
           <th></th>
         </tr>
       </thead>
@@ -71,6 +72,18 @@
             {% endif %}
           </td>
           <td class="text-center text-muted">{{ pl.product_prices.count }}</td>
+          <td class="text-center">
+            {% if pl.is_default %}
+            <span class="badge bg-yellow-lt"><i class="ti ti-star-filled me-1"></i>Default</span>
+            {% else %}
+            <form method="post" action="{% url 'inventory:pricelist_set_default' pl.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-ghost-secondary" title="Marcar como predeterminada">
+                <i class="ti ti-star"></i>
+              </button>
+            </form>
+            {% endif %}
+          </td>
           <td class="text-end">
             <a href="{% url 'inventory:pricelist_detail' pl.pk %}"
                class="btn btn-sm btn-ghost-secondary me-1" title="Ver detalle">
@@ -91,7 +104,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="5" class="text-center text-muted py-4">No se encontraron listas de precio.</td>
+          <td colspan="6" class="text-center text-muted py-4">No se encontraron listas de precio.</td>
         </tr>
         {% endfor %}
       </tbody>

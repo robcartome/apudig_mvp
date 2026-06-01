@@ -33,6 +33,8 @@ def _next_series_number(series: DocumentSeries) -> int:
     Obtiene y reserva el siguiente número de la serie con bloqueo pesimista.
     Siempre llamar dentro de transaction.atomic().
     """
+    if series is None:
+        raise ValueError("Debe seleccionar una serie de cotización activa.")
     locked = DocumentSeries.objects.select_for_update().get(pk=series.pk)
     locked.current_number += 1
     locked.save(update_fields=["current_number"])
@@ -102,6 +104,7 @@ def _calculate_line(line: dict) -> dict:
 
 
 
+@transaction.atomic
 def create_quotation(store_id: str, customer, series: DocumentSeries, lines: list[dict], created_by=None, **kwargs) -> SalesQuotation:
     """
     Crea una cotización, asigna número de serie y calcula totales.

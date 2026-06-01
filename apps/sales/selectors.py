@@ -8,7 +8,7 @@ from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SaleOr
 def get_quotations_for_store(store_id: str, status: str | None = None):
     qs = (
         SalesQuotation.objects.for_store(store_id)
-        .select_related("customer", "series")
+        .select_related("customer", "series", "payment_method", "means_of_payment")
         .order_by("-created_at")
     )
     if status:
@@ -22,7 +22,7 @@ def search_quotations(store_id: str, query: str | None = None, status: str | Non
     """
     qs = (
         SalesQuotation.objects.for_store(store_id)
-        .select_related("customer", "series")
+        .select_related("customer", "series", "payment_method", "means_of_payment")
         .order_by("-created_at")
     )
     if status:
@@ -40,7 +40,7 @@ def get_quotation_detail(pk):
     """Retorna SalesQuotation con líneas y producto prefetcheados."""
     return (
         SalesQuotation.objects
-        .select_related("customer", "series", "store", "created_by")
+        .select_related("customer", "series", "store", "created_by", "payment_method", "means_of_payment")
         .prefetch_related("lines__product__unit")
         .get(pk=pk)
     )

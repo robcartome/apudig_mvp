@@ -10,13 +10,16 @@ Rutas:
   quotation_reject  POST     /ventas/cotizaciones/<uuid:pk>/rechazar/
   quotation_cancel  POST     /ventas/cotizaciones/<uuid:pk>/cancelar/
 """
+from decimal import Decimal
+
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_GET
 
 from apps.sales.forms import QuotationHeaderForm, QuotationLineFormSet
-from apps.sales.models import SalesQuotation, QUOTATION_STATUS_CHOICES
+from apps.sales.models import SalesQuotation, QUOTATION_STATUS_CHOICES, DocumentSeries
 from apps.sales.selectors import search_quotations, get_quotation_detail
 from apps.sales.services import (
     approve_quotation,
@@ -25,6 +28,9 @@ from apps.sales.services import (
     reject_quotation,
     update_quotation,
 )
+from apps.inventory.models import PriceList
+
+DEFAULT_IGV_RATE = 18
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,8 +52,39 @@ def _lines_from_formset(formset) -> list[dict]:
     for form in formset:
         if not form.cleaned_data or form.cleaned_data.get("DELETE"):
             continue
+        if not form.cleaned_data.get("product"):   # fila vacía (extra row sin producto)
+            continue
         lines.append(form.cleaned_data)
     return lines
+
+
+def _build_lines_view(quotation) -> list[dict]:
+    """Arma una vista de líneas con valor unitario sin/con IGV."""
+    lines_view = []
+    for line in quotation.lines.all():
+        unit_price_ex = Decimal(str(line.unit_price or 0))
+        igv_rate = Decimal(str(line.igv_rate or 0))
+        unit_price_inc = (unit_price_ex * (Decimal("1") + (igv_rate / Decimal("100")))).quantize(Decimal("0.01"))
+        lines_view.append({
+            "line": line,
+            "unit_price_ex": unit_price_ex,
+            "unit_price_inc": unit_price_inc,
+        })
+    return lines_view
+
+def _default_quotation_series(company_id, store_id):
+    if not company_id or not store_id:
+        return None
+    return (
+        DocumentSeries.objects.filter(
+            company_id=company_id,
+            store_id=store_id,
+            voucher_type="COT",
+            active=True,
+        )
+        .order_by("series")
+        .first()
+    )
 
 
 # ── Vistas ────────────────────────────────────────────────────────────────────
@@ -79,6 +116,11 @@ def quotation_create(request):
         return redirect_resp
 
     company_id, store_id = _get_ids(request)
+    price_lists = PriceList.objects.filter(
+        company_id=company_id, active=True
+    ).order_by("name") if company_id else PriceList.objects.none()
+    default_pl = PriceList.objects.filter(company_id=company_id, is_default=True, active=True).first() if company_id else None
+    default_series = _default_quotation_series(company_id, store_id)
 
     if request.method == "POST":
         header_form = QuotationHeaderForm(request.POST, company_id=company_id, store_id=store_id)
@@ -90,31 +132,53 @@ def quotation_create(request):
                 messages.error(request, "La cotización debe tener al menos una línea.")
             else:
                 cd = header_form.cleaned_data
+                series = cd.get("series") or _default_quotation_series(company_id, store_id)
+                if not series:
+                    messages.error(request, "No hay una serie activa para cotizaciones en esta sucursal.")
+                    series = None
+                if not series:
+                    return render(request, "sales/quotation_form.html", {
+                        "header_form": header_form,
+                        "line_formset": line_formset,
+                        "title": "Nueva cotización",
+                        "price_lists": price_lists,
+                        "default_price_list_id": str(default_pl.pk) if default_pl else "",
+                        "igv_rate": DEFAULT_IGV_RATE,
+                    })
                 try:
                     q = create_quotation(
                         store_id=str(cd["store"].pk),
                         customer=cd["customer"],
-                        series=cd["series"],
+                        series=series,
                         lines=lines,
                         created_by=request.user,
                         issue_date=cd["issue_date"],
                         valid_until=cd.get("valid_until"),
                         currency=cd.get("currency", "PEN"),
+                        exchange_rate=cd.get("exchange_rate") or 1,
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
+                        payment_method=cd.get("payment_method"),
+                        means_of_payment=cd.get("means_of_payment"),
                     )
                     messages.success(request, f"Cotización {q.series_code}-{q.number:08d} creada.")
                     return redirect("sales:quotation_detail", pk=q.pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
     else:
-        header_form = QuotationHeaderForm(company_id=company_id, store_id=store_id)
+        header_form = QuotationHeaderForm(
+            initial={"store": store_id, "series": default_series.pk if default_series else None},
+            company_id=company_id, store_id=store_id,
+        )
         line_formset = QuotationLineFormSet(prefix="lines")
 
     return render(request, "sales/quotation_form.html", {
         "header_form": header_form,
         "line_formset": line_formset,
         "title": "Nueva cotización",
+        "price_lists": price_lists,
+        "default_price_list_id": str(default_pl.pk) if default_pl else "",
+        "igv_rate": DEFAULT_IGV_RATE,
     })
 
 
@@ -129,7 +193,30 @@ def quotation_detail(request, pk):
     except SalesQuotation.DoesNotExist:
         raise Http404
 
-    return render(request, "sales/quotation_detail.html", {"quotation": quotation})
+    lines_view = _build_lines_view(quotation)
+    return render(request, "sales/quotation_detail.html", {
+        "quotation": quotation,
+        "lines_view": lines_view,
+    })
+
+
+@require_GET
+def quotation_preview(request, pk):
+    """Vista rápida HTML para modal desde la lista de cotizaciones."""
+    redirect_resp = _require_auth(request)
+    if redirect_resp:
+        return redirect_resp
+
+    try:
+        quotation = get_quotation_detail(pk)
+    except SalesQuotation.DoesNotExist:
+        raise Http404
+
+    lines_view = _build_lines_view(quotation)
+    return render(request, "sales/partials/quotation_preview_content.html", {
+        "quotation": quotation,
+        "lines_view": lines_view,
+    })
 
 
 def quotation_update(request, pk):
@@ -154,13 +241,27 @@ def quotation_update(request, pk):
                 messages.error(request, "La cotización debe tener al menos una línea.")
             else:
                 cd = header_form.cleaned_data
+                series = cd.get("series") or _default_quotation_series(company_id, store_id)
+                if not series:
+                    messages.error(request, "No hay una serie activa para cotizaciones en esta sucursal.")
+                    return render(request, "sales/quotation_form.html", {
+                        "header_form": header_form,
+                        "line_formset": line_formset,
+                        "title": "Editar cotización",
+                        "quotation": quotation,
+                        "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
+                        "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
+                        "igv_rate": DEFAULT_IGV_RATE,
+                    })
                 try:
                     update_quotation(
                         quotation_id=pk,
                         lines=lines,
                         issue_date=cd["issue_date"],
-                        valid_until=cd.get("valid_until"),
-                        currency=cd.get("currency", "PEN"),
+                        payment_method=cd.get("payment_method"),
+                        means_of_payment=cd.get("means_of_payment"),
+                        series=series,
+                        exchange_rate=cd.get("exchange_rate", 1),
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                     )
@@ -172,16 +273,20 @@ def quotation_update(request, pk):
         header_form = QuotationHeaderForm(instance=quotation, company_id=company_id, store_id=store_id)
         initial = [
             {
-                "product": line.product,
+                "product": str(line.product_id),
+                "product_name": line.product.name,
+                "product_unit": line.product.unit.code if line.product.unit else "",
+                "product_unit_id": str(line.product.unit_id) if line.product.unit_id else "",
                 "description": line.description,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
+                "price_with_igv": round(float(line.unit_price) * (1 + float(line.igv_rate) / 100), 2),
                 "discount_amount": line.discount_amount,
                 "tax_type": line.tax_type,
                 "igv_rate": line.igv_rate,
                 "memo": line.memo,
             }
-            for line in quotation.lines.select_related("product").all()
+            for line in quotation.lines.select_related("product__unit").all()
         ]
         line_formset = QuotationLineFormSet(initial=initial, prefix="lines")
 
@@ -190,6 +295,9 @@ def quotation_update(request, pk):
         "line_formset": line_formset,
         "title": "Editar cotización",
         "quotation": quotation,
+        "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
+        "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
+        "igv_rate": DEFAULT_IGV_RATE,
     })
 
 
@@ -221,3 +329,114 @@ def quotation_reject(request, pk):
 
 def quotation_cancel(request, pk):
     return _status_transition(request, pk, cancel_quotation, "Cotización cancelada.")
+
+
+# ── Copiar cotización ─────────────────────────────────────────────────────────
+
+def quotation_copy(request, pk):
+    redirect_resp = _require_auth(request)
+    if redirect_resp:
+        return redirect_resp
+
+    company_id, store_id = _get_ids(request)
+    source = get_object_or_404(SalesQuotation, pk=pk, store_id=store_id)
+
+    initial_lines = [
+        {
+            "product": str(line.product_id),
+            "product_name": line.product.name,
+            "product_unit": line.product.unit.code if line.product.unit else "",
+            "product_unit_id": str(line.product.unit_id) if line.product.unit_id else "",
+            "description": line.description,
+            "quantity": line.quantity,
+            "unit_price": line.unit_price,
+            "price_with_igv": round(float(line.unit_price) * (1 + float(line.igv_rate) / 100), 2),
+            "discount_amount": line.discount_amount,
+            "tax_type": line.tax_type,
+            "igv_rate": line.igv_rate,
+            "memo": line.memo,
+        }
+        for line in source.lines.select_related("product__unit").all()
+    ]
+
+    if request.method == "POST":
+        header_form = QuotationHeaderForm(request.POST, company_id=company_id, store_id=store_id)
+        line_formset = QuotationLineFormSet(request.POST, prefix="lines")
+
+        if header_form.is_valid() and line_formset.is_valid():
+            lines = _lines_from_formset(line_formset)
+            if not lines:
+                messages.error(request, "La cotización debe tener al menos una línea.")
+            else:
+                cd = header_form.cleaned_data
+                series = cd.get("series") or _default_quotation_series(company_id, store_id)
+                if not series:
+                    messages.error(request, "No hay una serie activa para cotizaciones en esta sucursal.")
+                    return render(request, "sales/quotation_form.html", {
+                        "header_form": header_form,
+                        "line_formset": line_formset,
+                        "title": "Copiar cotización",
+                        "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
+                        "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
+                        "igv_rate": DEFAULT_IGV_RATE,
+                    })
+                try:
+                    q = create_quotation(
+                        store_id=str(cd["store"].pk),
+                        customer=cd["customer"],
+                        series=series,
+                        lines=lines,
+                        created_by=request.user,
+                        issue_date=cd["issue_date"],
+                        valid_until=cd.get("valid_until"),
+                        currency=cd.get("currency", "PEN"),
+                        notes=cd.get("notes", ""),
+                        internal_reference=cd.get("internal_reference", ""),
+                        payment_method=cd.get("payment_method"),
+                        means_of_payment=cd.get("means_of_payment"),
+                    )
+                    messages.success(request, f"Cotización {q.series_code}-{q.number:08d} copiada.")
+                    return redirect("sales:quotation_detail", pk=q.pk)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+    else:
+        from django.utils import timezone
+        initial_header = {
+            "store": source.store_id,
+            "customer": source.customer_id,
+            "customer_text": f"{source.customer.document_number} — {source.customer.legal_name}" if source.customer_id else "",
+            "series": source.series_id,
+            "issue_date": timezone.now().date(),
+            "currency": source.currency,
+            "notes": source.notes,
+            "internal_reference": source.internal_reference,
+        }
+        header_form = QuotationHeaderForm(initial=initial_header, company_id=company_id, store_id=store_id)
+        line_formset = QuotationLineFormSet(initial=initial_lines, prefix="lines")
+
+    return render(request, "sales/quotation_form.html", {
+        "header_form": header_form,
+        "line_formset": line_formset,
+        "title": "Copiar cotización",
+        "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
+        "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
+        "igv_rate": DEFAULT_IGV_RATE,
+    })
+
+
+# ── API: previsualizar siguiente número de una serie ─────────────────────────
+
+@require_GET
+def api_series_next_number(request, pk):
+    """Devuelve el siguiente número (sin incrementar) para la serie dada."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    try:
+        series = DocumentSeries.objects.get(pk=pk)
+        return JsonResponse({
+            "next_number": series.current_number + 1,
+            "series_code": series.series,
+            "formatted": f"{series.series}-{series.current_number + 1:08d}",
+        })
+    except DocumentSeries.DoesNotExist:
+        return JsonResponse({"error": "Serie no encontrada"}, status=404)

@@ -121,7 +121,8 @@
           <th>Producto</th>
           <th>Descripción</th>
           <th class="text-end">Cantidad</th>
-          <th class="text-end">P. Unit.</th>
+          <th class="text-end">Valor Unit. (sin IGV)</th>
+          <th class="text-end">P. Unit. (con IGV)</th>
           <th class="text-end">Desc.</th>
           <th class="text-end">Subtotal</th>
           <th class="text-end">IGV</th>
@@ -129,7 +130,8 @@
         </tr>
       </thead>
       <tbody>
-        {% for line in quotation.lines.all %}
+        {% for item in lines_view %}
+        {% with line=item.line %}
         <tr>
           <td class="text-muted">{{ forloop.counter }}</td>
           <td>
@@ -138,25 +140,27 @@
           </td>
           <td class="text-muted small">{{ line.description|default:"—" }}</td>
           <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
-          <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
+          <td class="text-end">{{ item.unit_price_ex|floatformat:2 }}</td>
+          <td class="text-end">{{ item.unit_price_inc|floatformat:2 }}</td>
           <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>
           <td class="text-end">{{ line.subtotal|floatformat:2 }}</td>
           <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>
           <td class="text-end fw-semibold">{{ line.total|floatformat:2 }}</td>
         </tr>
+        {% endwith %}
         {% endfor %}
       </tbody>
       <tfoot class="table-light fw-semibold">
         <tr>
-          <td colspan="6" class="text-end">Subtotal:</td>
+          <td colspan="7" class="text-end">Subtotal:</td>
           <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.subtotal|floatformat:2 }}</td>
         </tr>
         <tr>
-          <td colspan="6" class="text-end">IGV (18%):</td>
+          <td colspan="7" class="text-end">IGV (18%):</td>
           <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.igv_total|floatformat:2 }}</td>
         </tr>
         <tr class="fs-5">
-          <td colspan="6" class="text-end">TOTAL:</td>
+          <td colspan="7" class="text-end">TOTAL:</td>
           <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.total|floatformat:2 }}</td>
         </tr>
       </tfoot>

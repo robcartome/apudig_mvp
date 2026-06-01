@@ -2,6 +2,7 @@
 from .api import (
     customer_search,
     location_search,
+    price_list_prices,
     product_quick_create,
     product_search,
     product_stock,
@@ -24,6 +25,7 @@ from .operations import (
     adjustment_create,
     entry_create,
     movement_confirm,
+    movement_copy,
     movement_delete,
     movement_edit,
     exit_create,
@@ -37,8 +39,14 @@ from .pricelists import (
     pricelist_del_price,
     pricelist_detail,
     pricelist_list,
+    pricelist_set_default,
     pricelist_toggle,
     pricelist_update,
+    pricelist_bulk_import,
+    pricelist_bulk_template,
+    pricelist_bulk_import_pl,
+    pricelist_bulk_template_pl,
+    price_report,
 )
 
 __all__ = [
@@ -53,8 +61,11 @@ __all__ = [
     "warehouse_create", "warehouse_delete", "warehouse_list", "warehouse_update",
     "stock_report",
     "movement_list", "movement_detail",
-    "movement_edit", "movement_delete", "movement_confirm",
+    "movement_edit", "movement_delete", "movement_confirm", "movement_copy",
     "entry_create", "exit_create", "transfer_create", "adjustment_create",
     "pricelist_list", "pricelist_create", "pricelist_detail", "pricelist_update",
-    "pricelist_toggle", "pricelist_del_price",
+    "pricelist_toggle", "pricelist_set_default", "pricelist_del_price",
+    "pricelist_bulk_import", "pricelist_bulk_template",
+    "pricelist_bulk_import_pl", "pricelist_bulk_template_pl",
+    "price_report",
 ]

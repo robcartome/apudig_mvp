@@ -1,0 +1,260 @@
+﻿{% extends "base.html" %}
+{% block title %}Consolidado de Lista de Precios — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Consolidado de Lista de Precios</h2>{% endblock %}
+
+{% block content %}
+{# ─── Page header ─── #}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'inventory:pricelist_list' %}">Listas de Precio</a></li>
+          <li class="breadcrumb-item active">Consolidado de Precios</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm"
+              data-bs-toggle="collapse" data-bs-target="#col-selector" aria-expanded="false">
+        <i class="ti ti-columns me-1"></i>Columnas
+      </button>
+      <button type="button" id="btn-export-excel" class="btn btn-outline-success btn-sm">
+        <i class="ti ti-file-spreadsheet me-1"></i>Exportar Excel
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+        <i class="ti ti-printer me-1"></i>Imprimir
+      </button>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3 d-print-none" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+{# ─── Column selector panel ─── #}
+<div class="collapse d-print-none mb-3" id="col-selector">
+  <div class="card card-body">
+    <p class="text-muted small mb-2 fw-semibold">Seleccionar columnas visibles (SKU y Nombre son fijas):</p>
+    <div class="d-flex flex-wrap gap-3">
+      <div class="form-check form-check-inline">
+        <input class="form-check-input col-toggle" type="checkbox" id="col-compra" data-col="compra" checked>
+        <label class="form-check-label" for="col-compra">Precio Compra</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input col-toggle" type="checkbox" id="col-venta" data-col="venta" checked>
+        <label class="form-check-label" for="col-venta">Precio Venta</label>
+      </div>
+      {% for pl in price_lists %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input col-toggle" type="checkbox" id="col-pl-{{ pl.pk }}" data-col="{{ pl.pk }}" checked>
+        <label class="form-check-label" for="col-pl-{{ pl.pk }}">{{ pl.name }}</label>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="mt-2 d-flex gap-2">
+      <button type="button" class="btn btn-sm btn-ghost-primary" id="col-select-all">Todas</button>
+      <button type="button" class="btn btn-sm btn-ghost-secondary" id="col-select-none">Ninguna</button>
+    </div>
+  </div>
+</div>
+
+{# ─── Search bar ─── #}
+<div class="card mb-3 d-print-none">
+  <div class="card-body py-2">
+    <form method="get" id="search-form" class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="ti ti-search"></i></span>
+          <input type="text" name="q" value="{{ q }}" class="form-control"
+                 placeholder="Buscar por SKU, nombre o codigo de barras..." autofocus>
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+        <a href="{% url 'inventory:price_report' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+      </div>
+      <div class="col-auto ms-auto text-muted small">
+        {{ total }} producto{{ total|pluralize }} encontrado{{ total|pluralize }}
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ─── Print-only header ─── #}
+<div class="d-none d-print-block mb-2">
+  <h4 class="mb-0">Consolidado de Lista de Precios</h4>
+  {% if q %}<p class="text-muted mb-0 small">Filtro: {{ q }}</p>{% endif %}
+  <p class="text-muted small mb-0">{{ total }} producto{{ total|pluralize }} - {% now "d/m/Y H:i" %}</p>
+  <hr>
+</div>
+
+{# ─── Price table ─── #}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter table-hover card-table" id="price-table">
+      <thead class="table-light">
+        <tr>
+          <th class="text-nowrap">SKU</th>
+          <th>Nombre</th>
+          <th class="text-end text-nowrap col-dyn" data-col="compra">P. Compra</th>
+          <th class="text-end text-nowrap col-dyn" data-col="venta">P. Venta</th>
+          {% for pl in price_lists %}
+          <th class="text-end text-nowrap col-dyn" data-col="{{ pl.pk }}">{{ pl.name }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="table-body small">
+        {% for row in rows %}
+        <tr>
+          <td class="text-muted small text-nowrap font-monospace">{{ row.sku }}</td>
+          <td>{{ row.name }}</td>
+          <td class="text-end text-muted col-dyn" data-col="compra">{{ row.price_purchase|floatformat:2 }}</td>
+          <td class="text-end fw-semibold col-dyn" data-col="venta">{{ row.price_sale|floatformat:2 }}</td>
+          {% for amount in row.pl_amounts %}
+          <td class="text-end col-dyn" data-col="__pl__{{ forloop.counter0 }}">
+            {% if amount is not None %}{{ amount|floatformat:2 }}{% else %}<span class="text-muted">-</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{{ price_lists|length|add:4 }}" class="text-center text-muted py-4">
+            {% if q %}No se encontraron productos para "{{ q }}".
+            {% else %}No hay productos activos.{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div class="card-footer d-flex align-items-center d-print-none">
+    <p class="m-0 text-muted small">
+      Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} &mdash; {{ total }} producto{{ total|pluralize }}
+    </p>
+    <ul class="pagination m-0 ms-auto">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">
+          <i class="ti ti-chevron-left"></i>
+        </a>
+      </li>
+      {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+          <li class="page-item"><a class="page-link" href="?page={{ num }}{% if q %}&q={{ q|urlencode }}{% endif %}">{{ num }}</a></li>
+        {% elif num == page_obj.number|add:"-3" or num == page_obj.number|add:"3" %}
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q|urlencode }}{% endif %}">
+          <i class="ti ti-chevron-right"></i>
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+
+<p class="text-muted small mt-2 d-print-none">
+  <i class="ti ti-info-circle me-1"></i>
+  Excel exporta <strong>todos</strong> los resultados de la busqueda con las columnas seleccionadas.
+</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  @media print {
+    body { font-size: 9pt; }
+    .sidebar, .navbar, .page-header, .d-print-none { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; }
+    thead th { background-color: #dee2e6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td, th { padding: 3px 6px !important; }
+    /* hidden columns must stay hidden in print / PDF */
+    td[style*="display: none"], th[style*="display: none"] { display: none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const table = document.getElementById('price-table');
+  if (!table) return;
+
+  // Build ordered map of dynamic column keys from header cells
+  const allHeaderCells = Array.from(table.querySelectorAll('thead th'));
+  const dynCols = [];
+  allHeaderCells.forEach(function (th, colIdx) {
+    if (th.classList.contains('col-dyn')) {
+      dynCols.push({ key: th.dataset.col, colIdx: colIdx });
+    }
+  });
+
+  // Tag every body cell with its column key (overrides the Django placeholder)
+  Array.from(table.querySelectorAll('tbody tr')).forEach(function (tr) {
+    dynCols.forEach(function (col) {
+      const td = tr.cells[col.colIdx];
+      if (td) td.dataset.col = col.key;
+    });
+  });
+
+  function applyVisibility() {
+    document.querySelectorAll('.col-toggle').forEach(function (cb) {
+      const key = cb.dataset.col;
+      const display = cb.checked ? '' : 'none';
+      const th = table.querySelector('thead th[data-col="' + key + '"]');
+      if (th) th.style.display = display;
+      table.querySelectorAll('tbody td[data-col="' + key + '"]').forEach(function (td) {
+        td.style.display = display;
+      });
+    });
+  }
+
+  // Bind change handlers
+  document.querySelectorAll('.col-toggle').forEach(function (cb) {
+    cb.addEventListener('change', applyVisibility);
+  });
+
+  // Select all / none
+  const btnAll = document.getElementById('col-select-all');
+  const btnNone = document.getElementById('col-select-none');
+  if (btnAll) btnAll.addEventListener('click', function () {
+    document.querySelectorAll('.col-toggle').forEach(function (cb) { cb.checked = true; });
+    applyVisibility();
+  });
+  if (btnNone) btnNone.addEventListener('click', function () {
+    document.querySelectorAll('.col-toggle').forEach(function (cb) { cb.checked = false; });
+    applyVisibility();
+  });
+
+  // Excel export — sends only checked column keys to the server
+  const btnExcel = document.getElementById('btn-export-excel');
+  if (btnExcel) btnExcel.addEventListener('click', function () {
+    const cols = Array.from(document.querySelectorAll('.col-toggle'))
+      .filter(function (cb) { return cb.checked; })
+      .map(function (cb) { return cb.dataset.col; })
+      .join(',');
+    const url = new URL(window.location.href);
+    url.searchParams.set('format', 'xlsx');
+    if (cols) url.searchParams.set('cols', cols);
+    window.location.href = url.toString();
+  });
+
+  // Apply initial state
+  applyVisibility();
+})();
+</script>
+{% endblock %}
