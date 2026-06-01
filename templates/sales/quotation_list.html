@@ -17,6 +17,10 @@
       <a href="{% url 'sales:quotation_create' %}" class="btn btn-primary btn-sm">
         <i class="ti ti-plus me-1"></i>Nueva cotización
       </a>
+      <a href="{% url 'sales:quotation_xlsx' %}?q={{ query|urlencode }}&status={{ status|urlencode }}"
+         class="btn btn-outline-success btn-sm ms-1">
+        <i class="ti ti-file-spreadsheet me-1"></i>Excel
+      </a>
     </div>
   </div>
 </div>
@@ -57,25 +61,32 @@
     <table class="table table-vcenter table-hover card-table">
       <thead>
         <tr>
-          <th>N° Cotización</th>
-          <th>Cliente</th>
           <th>Fecha emisión</th>
+          <th>Serie</th>
+          <th>Número</th>
+          <th>Cliente</th>
+          <th>Forma de pago</th>
           <th>Válido hasta</th>
+          <th>Moneda</th>
           <th class="text-end">Total</th>
           <th class="text-center">Estado</th>
-          <th></th>
+          <th class="text-center">PDF o Excel</th>
+          <th class="text-center">Operaciones</th>
         </tr>
       </thead>
       <tbody>
         {% for q in page_obj %}
         <tr>
-          <td class="fw-semibold">{{ q.series_code }}-{{ q.number|stringformat:"08d" }}</td>
+          <td class="text-muted small">{{ q.issue_date|date:"d/m/Y" }}</td>
+          <td class="fw-semibold">{{ q.series_code }}</td>
+          <td class="fw-semibold">{{ q.number|stringformat:"08d" }}</td>
           <td>
             <div>{{ q.customer_legal_name }}</div>
             <div class="text-muted small">{{ q.customer_document_number }}</div>
           </td>
-          <td class="text-muted small">{{ q.issue_date|date:"d/m/Y" }}</td>
+          <td class="text-muted small">{{ q.payment_method|default:"—" }}</td>
           <td class="text-muted small">{{ q.valid_until|date:"d/m/Y"|default:"—" }}</td>
+          <td class="text-muted small">{{ q.currency }}</td>
           <td class="text-end fw-semibold">{{ q.currency }} {{ q.total|floatformat:2 }}</td>
           <td class="text-center">
             {% if q.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
@@ -85,19 +96,69 @@
             {% else %}<span class="badge bg-muted-lt">{{ q.get_status_display }}</span>{% endif %}
           </td>
           <td>
-            <div class="d-inline-flex gap-1">
-            <a href="{% url 'sales:quotation_detail' q.pk %}" class="btn btn-sm btn-outline-secondary" title="Ver">
-              <i class="ti ti-eye"></i>
+            <a href="{% url 'sales:quotation_pdf' q.pk %}"
+               class="btn btn-sm btn-outline-secondary"
+               target="_blank"
+               title="Abrir PDF">
+              <i class="ti ti-printer"></i>
             </a>
-            <a href="{% url 'sales:quotation_copy' q.pk %}" class="btn btn-sm btn-outline-secondary" title="Copiar cotización">
-              <i class="ti ti-copy"></i>
-            </a>
+          </td>
+          <td>
+            <div class="d-inline-flex gap-1 align-items-center">
+              <a href="{% url 'sales:quotation_detail' q.pk %}"
+                 data-preview-url="{% url 'sales:quotation_preview' q.pk %}"
+                 class="btn btn-sm btn-outline-secondary js-quotation-preview"
+                 title="Ver detalle">
+                <i class="ti ti-eye"></i>
+              </a>
+
+              {% if q.status == "DRAFT" %}
+              <a href="{% url 'sales:quotation_update' q.pk %}"
+                 class="btn btn-sm btn-outline-primary"
+                 title="Editar cotización">
+                <i class="ti ti-edit"></i>
+              </a>
+              {% endif %}
+
+              <a href="{% url 'sales:quotation_copy' q.pk %}"
+                 class="btn btn-sm btn-outline-secondary"
+                 title="Copiar cotización">
+                <i class="ti ti-copy"></i>
+              </a>
+
+              {% if q.status == "DRAFT" or q.status == "SENT" %}
+              <form method="post" action="{% url 'sales:quotation_approve' q.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar cotización">
+                  <i class="ti ti-circle-check"></i>
+                </button>
+              </form>
+              {% endif %}
+
+              {% if q.status == "DRAFT" or q.status == "SENT" %}
+              <form method="post" action="{% url 'sales:quotation_reject' q.pk %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar cotización">
+                  <i class="ti ti-circle-x"></i>
+                </button>
+              </form>
+              {% endif %}
+
+              {% if q.status != "CANCELLED" and q.status != "REJECTED" %}
+              <form method="post" action="{% url 'sales:quotation_cancel' q.pk %}" class="d-inline"
+                    onsubmit="return confirm('¿Cancelar esta cotización?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancelar cotización">
+                  <i class="ti ti-ban"></i>
+                </button>
+              </form>
+              {% endif %}
             </div>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">No hay cotizaciones.</td>
+          <td colspan="11" class="text-center text-muted py-4">No hay cotizaciones.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -105,4 +166,56 @@
   </div>
   <div class="card-footer">{% include "partials/pagination.html" %}</div>
 </div>
+
+<div class="modal fade" id="quotationPreviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="ti ti-file-description me-1"></i>Detalle de cotización
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="quotation-preview-body">
+        <div class="text-center text-muted py-4">Cargando…</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    'use strict';
+
+    const modalEl = document.getElementById('quotationPreviewModal');
+    const bodyEl = document.getElementById('quotation-preview-body');
+    if (!modalEl || !bodyEl || !window.bootstrap) return;
+
+    const modal = new bootstrap.Modal(modalEl);
+
+    document.querySelectorAll('.js-quotation-preview').forEach(function (btn) {
+      btn.addEventListener('click', async function (e) {
+        e.preventDefault();
+        const url = btn.dataset.previewUrl;
+        if (!url) {
+          window.location.href = btn.getAttribute('href');
+          return;
+        }
+
+        bodyEl.innerHTML = '<div class="text-center text-muted py-4">Cargando…</div>';
+        modal.show();
+
+        try {
+          const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          if (!resp.ok) throw new Error('No se pudo cargar la cotización');
+          bodyEl.innerHTML = await resp.text();
+        } catch (err) {
+          bodyEl.innerHTML = '<div class="alert alert-danger mb-0">No se pudo cargar el detalle. Intenta nuevamente.</div>';
+        }
+      });
+    });
+  }());
+</script>
 {% endblock %}

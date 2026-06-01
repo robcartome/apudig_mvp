@@ -63,6 +63,52 @@ DOC_CATEGORY_CHOICES = [
 
 # ── Catálogos de documento ────────────────────────────────────────────────────
 
+class PaymentMethod(TimeStampedModel):
+    """Formas de pago: Contado, Crédito 30 días, etc."""
+    objects = CompanyScopedManager()
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE, related_name="payment_methods"
+    )
+    name = models.CharField(max_length=100, verbose_name="Nombre")
+    is_cash = models.BooleanField(
+        default=False,
+        verbose_name="Es pago en efectivo",
+        help_text="Marcar si esta condición implica cobro inmediato (no crédito). "
+                  "Cuando esté activo, se podrá seleccionar el Medio de Pago.",
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "payment_methods"
+        ordering = ["name"]
+        unique_together = ("company", "name")
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class MeansOfPayment(TimeStampedModel):
+    """Medios de pago: Efectivo, Yape, Plin, etc."""
+    objects = CompanyScopedManager()
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE, related_name="means_of_payments"
+    )
+    name = models.CharField(max_length=100, verbose_name="Nombre")
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "means_of_payments"
+        ordering = ["name"]
+        unique_together = ("company", "name")
+
+    def __str__(self) -> str:
+        return self.name
+
+
+# ── Catálogos de documento ────────────────────────────────────────────────────
+
 class BusinessDocumentType(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=10, unique=True)
@@ -166,6 +212,14 @@ class SalesQuotation(TimeStampedModel):
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
     internal_reference = models.CharField(max_length=100, blank=True)
+    payment_method = models.ForeignKey(
+        "PaymentMethod", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="quotations", verbose_name="Forma de pago"
+    )
+    means_of_payment = models.ForeignKey(
+        "MeansOfPayment", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="quotations", verbose_name="Medio de pago"
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotations"
     )

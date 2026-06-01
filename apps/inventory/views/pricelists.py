@@ -27,6 +27,7 @@ from ..selectors import get_pricelist_detail, get_price_lists, search_price_list
 from ..services import (
     create_price_list,
     delete_product_price,
+    set_default_price_list,
     set_product_price,
     toggle_price_list,
 )
@@ -199,7 +200,23 @@ def pricelist_toggle(request, pk):
     return redirect("inventory:pricelist_list")
 
 
-# ── Eliminar precio individual ────────────────────────────────────────────────
+# ── Marcar como predeterminada ─────────────────────────────────────────────────────────
+
+def pricelist_set_default(request, pk):
+    r = _require_auth(request)
+    if r:
+        return r
+
+    if request.method != "POST":
+        return redirect("inventory:pricelist_list")
+
+    pl = get_object_or_404(PriceList, pk=pk)
+    set_default_price_list(pl)
+    messages.success(request, f"Lista «{pl.name}» marcada como predeterminada.")
+    return redirect("inventory:pricelist_list")
+
+
+# -- Eliminar precio individual -----------------------------------------------
 
 def pricelist_del_price(request, pk):
     """Elimina un ProductPrice de la lista vía POST con product_id."""

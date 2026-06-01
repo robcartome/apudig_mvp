@@ -7,6 +7,18 @@ from .catalogs import (
     series_list,
     series_toggle,
     series_update,
+    payment_method_list,
+    payment_method_create,
+    payment_method_update,
+    payment_method_delete,
+    api_payment_method_search,
+    api_payment_method_create,
+    means_of_payment_list,
+    means_of_payment_create,
+    means_of_payment_update,
+    means_of_payment_delete,
+    api_means_of_payment_search,
+    api_means_of_payment_create,
 )
 from .quotations import (
     quotation_approve,
@@ -14,9 +26,11 @@ from .quotations import (
     quotation_copy,
     quotation_create,
     quotation_detail,
+    quotation_preview,
     quotation_list,
     quotation_reject,
     quotation_update,
+    api_series_next_number,
 )
 from .orders import (
     order_cancel,
@@ -41,15 +55,21 @@ from .vouchers import (
     voucher_void,
 )
 from .pdf import quotation_pdf
+from .pdf import quotation_xlsx
 
 __all__ = [
     # Series / document types
     "series_list", "series_create", "series_update", "series_toggle",
     "doctype_list", "doctype_create", "doctype_update",
+    # Payment conditions / methods
+    "payment_condition_list", "payment_condition_create", "payment_condition_update", "payment_condition_delete",
+    "api_payment_condition_search", "api_payment_condition_create",
+    "payment_method_list", "payment_method_create", "payment_method_update", "payment_method_delete",
+    "api_payment_method_search", "api_payment_method_create",
     # Quotations
     "quotation_list", "quotation_create", "quotation_detail", "quotation_update",
     "quotation_approve", "quotation_reject", "quotation_cancel", "quotation_copy",
-    "quotation_pdf",
+    "quotation_pdf", "quotation_xlsx", "api_series_next_number", "quotation_preview",
     # Orders
     "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
     "order_confirm", "order_cancel", "order_copy", "order_pdf",

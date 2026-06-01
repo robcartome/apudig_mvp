@@ -73,10 +73,11 @@ class PriceList(TimeStampedModel):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=500, blank=True)
     active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False, verbose_name="Lista por defecto")
 
     class Meta:
         db_table = "price_lists"
-        ordering = ["name"]
+        ordering = ["-is_default", "name"]
 
     def __str__(self) -> str:
         return self.name

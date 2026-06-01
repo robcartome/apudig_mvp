@@ -727,6 +727,7 @@ def configuracion(request):
 
     from django.urls import NoReverseMatch, reverse
     from apps.inventory.models import Brand, Category, Unit, Warehouse, WarehouseLocation
+    from apps.sales.models import PaymentMethod, MeansOfPayment
 
     company = _get_active_company(request)
     item = request.GET.get("item", None)
@@ -772,6 +773,20 @@ def configuracion(request):
             item_add_url = reverse("inventory:unit_create")
             item_edit_url = "inventory:unit_update"
             item_delete_url = "inventory:unit_delete"
+        elif item == "condiciones_pago":
+            item_label = "Formas de Pago"
+            qs = PaymentMethod.objects.filter(company=company).order_by("name") if company else PaymentMethod.objects.none()
+            item_objects = list(qs)
+            item_add_url = reverse("sales:payment_method_create")
+            item_edit_url = "sales:payment_method_update"
+            item_delete_url = "sales:payment_method_delete"
+        elif item == "medios_pago":
+            item_label = "Medios de Pago"
+            qs = MeansOfPayment.objects.filter(company=company).order_by("name") if company else MeansOfPayment.objects.none()
+            item_objects = list(qs)
+            item_add_url = reverse("sales:means_of_payment_create")
+            item_edit_url = "sales:means_of_payment_update"
+            item_delete_url = "sales:means_of_payment_delete"
 
     return render(request, "admin_panel/configuracion.html", {
         "active_tab": "configuracion",

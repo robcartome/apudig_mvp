@@ -165,6 +165,7 @@ def customer_search(request):
                 "document_number": c.document_number,
                 "legal_name": c.legal_name,
                 "trade_name": c.trade_name or "",
+                "address": c.address or "",
             }
             for c in qs
         ]

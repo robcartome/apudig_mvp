@@ -17,12 +17,14 @@
   if (!linesBody) return;
 
   const configEl  = document.getElementById('quot-form-config');
-  const IGV_RATE  = parseFloat(configEl.dataset.igvRate) || 18;
-  const IGV_MULT  = 1 + IGV_RATE / 100;          // e.g. 1.18
+  let IGV_RATE = parseFloat(document.getElementById('id_igv_rate_default')?.value)
+               || parseFloat(configEl.dataset.igvRate) || 18;
+  let IGV_MULT = 1 + IGV_RATE / 100;             // e.g. 1.18
   const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
   // Build the price-list API URL template (replace the placeholder UUID)
   const PRICE_LIST_URL_TPL = configEl.dataset.priceListUrl;
+  const DEFAULT_PRICE_LIST_ID = configEl.dataset.defaultPriceListId || '';
 
   // TAX_TYPE_CHOICES (must match sales/models.py)
   const TAX_TYPES = [
@@ -34,6 +36,15 @@
   ];
 
   const TAXED = new Set(['10', '11']);
+
+  // ── IGV rate header select ────────────────────────────────────────────────
+  document.getElementById('id_igv_rate_default')?.addEventListener('change', function () {
+    IGV_RATE = parseFloat(this.value) || 18;
+    IGV_MULT = 1 + IGV_RATE / 100;
+    configEl.dataset.igvRate = IGV_RATE;
+    linesBody.querySelectorAll('input[name*="-igv_rate"]').forEach(el => { el.value = IGV_RATE; });
+    updateSummary(); // recalcula todas las filas, incl. valor-unit-display
+  });
 
   // ── ProductPicker ──────────────────────────────────────────────────────────
   ProductPicker.configure({
@@ -49,16 +60,8 @@
     saveButtonId: 'qc-btn-save',
   });
 
-  // ── Flatpickr date pickers ────────────────────────────────────────────────
-  if (typeof flatpickr !== 'undefined') {
-    flatpickr.localize(flatpickr.l10ns.es);
-    document.querySelectorAll('input[type=date]').forEach(function (el) {
-      flatpickr(el, {
-        dateFormat: 'Y-m-d',
-        allowInput: true,
-      });
-    });
-  }
+  // ── Flatpickr date pickers (no usado — se usa datetime-local nativo) ──────────────────
+  // Los campos de fecha usan type="datetime-local" con el picker nativo del navegador.
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function setUnitSelect(row, unitId, unitLabel) {
@@ -101,6 +104,10 @@
     if (subCell)  subCell.textContent  = fmt(subtotal);
     if (igvCell)  igvCell.textContent  = fmt(igvAmt);
     if (totCell)  totCell.textContent  = fmt(lineTotal);
+
+    // Actualizar Valor Unit. (precio ex-IGV)
+    const valorCell = row.querySelector('.valor-unit-display');
+    if (valorCell) valorCell.value = fmt(unitPriceEx);
 
     return { subtotal, igvAmt, lineTotal, discount };
   }
@@ -185,11 +192,8 @@
       <td class="num-cell">
         <input type="hidden" name="lines-${index}-igv_rate" id="id_lines-${index}-igv_rate"
                value="${IGV_RATE}">
-        <div class="input-group input-group-sm">
-          <span class="input-group-text">%</span>
-          <input type="text" class="form-control form-control-sm igv-rate-display text-end"
-                 value="${IGV_RATE}" disabled readonly tabindex="-1">
-        </div>
+        <input type="text" class="form-control form-control-sm valor-unit-display text-end"
+               value="0.00" disabled readonly tabindex="-1" title="Precio sin IGV">
       </td>
 
       <td>
@@ -206,8 +210,12 @@
       <td class="num-cell readonly-cell line-igv text-end">0.00</td>
       <td class="num-cell readonly-cell line-total fw-semibold text-end">0.00</td>
 
-      <td class="text-center">
+      <td class="text-center" style="white-space:nowrap">
         <input type="hidden" name="lines-${index}-id" value="">
+        <input type="hidden" name="lines-${index}-memo" id="id_lines-${index}-memo" value="">
+        <button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Agregar memo">
+          <i class="ti ti-notes"></i>
+        </button>
         <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar">
           <i class="ti ti-x"></i>
         </button>
@@ -234,6 +242,21 @@
 
     calcRow(row);
     updateSummary();
+
+    // Auto-apply selected price list price (overrides price_sale if found)
+    const plId = document.getElementById('price-list-select')?.value;
+    if (plId && PRICE_LIST_URL_TPL && product.id) {
+      const url = PRICE_LIST_URL_TPL.replace('00000000-0000-0000-0000-000000000000', plId)
+                  + '?products=' + product.id;
+      window.ApiService.get(url).then(data => {
+        const price = (data.prices || {})[product.id];
+        if (price && priceInput) {
+          priceInput.value = parseFloat(price).toFixed(2);
+          calcRow(row);
+          updateSummary();
+        }
+      }).catch(() => {});
+    }
   });
 
   linesBody.addEventListener('product-picker:cleared', event => {
@@ -319,6 +342,9 @@
     $(el).on('select2:select', function (e) {
       const hidden = document.getElementById(hiddenId);
       if (hidden) hidden.value = e.params.data.id || '';
+      // Fill address display
+      const addressDisplay = document.getElementById('customer-address-display');
+      if (addressDisplay) addressDisplay.value = e.params.data.address || '';
     });
     $(el).on('select2:unselect select2:clear', function () {
       const hidden = document.getElementById(hiddenId);
@@ -328,6 +354,13 @@
 
   // ── Price list ─────────────────────────────────────────────────────────────
   let pendingPriceListId = null;
+
+  // Pre-select default price list if none already chosen
+  const plSelect = document.getElementById('price-list-select');
+  if (plSelect && !plSelect.value && DEFAULT_PRICE_LIST_ID) {
+    plSelect.value = DEFAULT_PRICE_LIST_ID;
+    pendingPriceListId = DEFAULT_PRICE_LIST_ID;
+  }
 
   document.getElementById('price-list-select')?.addEventListener('change', function () {
     const plId = this.value;
@@ -388,6 +421,48 @@
     }
   }
 
+  // ── Barcode search ──────────────────────────────────────────────────────────
+  function searchByBarcode() {
+    const barcode = document.getElementById('barcode-search')?.value?.trim();
+    if (!barcode) return;
+    window.ApiService.get(configEl.dataset.searchUrl + '?q=' + encodeURIComponent(barcode))
+      .then(function (data) {
+        const results = data.results || [];
+        if (!results.length) {
+          alert('No se encontró producto con código: ' + barcode);
+          return;
+        }
+        const product = results[0];
+        const index   = parseInt(totalForms().value, 10);
+        const row     = buildRow(index);
+        linesBody.appendChild(row);
+        totalForms().value = index + 1;
+        renumber();
+        ProductPicker.init(row);
+
+        const productHidden = row.querySelector('input[name*="-product"]');
+        if (productHidden) productHidden.value = product.id;
+
+        const productSelect = row.querySelector('.product-select');
+        if (productSelect) {
+          $(productSelect).append(new Option(product.text || product.name, product.id, true, true)).trigger('change');
+        }
+
+        row.dispatchEvent(new CustomEvent('product-picker:selected', {
+          detail: product,
+          bubbles: true,
+        }));
+
+        document.getElementById('barcode-search').value = '';
+      })
+      .catch(function (err) { console.error('Barcode search error', err); });
+  }
+
+  document.getElementById('barcode-btn')?.addEventListener('click', searchByBarcode);
+  document.getElementById('barcode-search')?.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); searchByBarcode(); }
+  });
+
   // ── Init existing rows (edit / copy) ──────────────────────────────────────
   function initRow(row) {
     const unitLabel = row.dataset.initUnit   || '—';
@@ -410,10 +485,76 @@
     }
 
     calcRow(row);
+    updateMemoBtnStyle(row);
   }
 
   linesBody.querySelectorAll('.line-row').forEach(initRow);
   updateSummary();
   renumber();
+
+  // Auto-agregar primera fila en formularios nuevos (extra=0 no renderiza filas vacías)
+  if (linesBody.querySelectorAll('.line-row').length === 0) {
+    document.getElementById('add-line')?.click();
+  }
+
+  // ── Memo modal ─────────────────────────────────────────────────────────────
+  let _memoRow = null;
+  const memoModal = new bootstrap.Modal(document.getElementById('memoModal'));
+
+  function updateMemoBtnStyle(row) {
+    const memoInput = row.querySelector('input[name*="-memo"]');
+    const btn       = row.querySelector('.memo-btn');
+    if (!btn) return;
+    const hasMemo = memoInput && memoInput.value.trim().length > 0;
+    btn.classList.toggle('btn-secondary',         hasMemo);
+    btn.classList.toggle('btn-outline-secondary', !hasMemo);
+    const icon = btn.querySelector('i');
+    if (icon) {
+      icon.classList.toggle('ti-notes-off', false);
+    }
+  }
+
+  linesBody.addEventListener('click', function (e) {
+    const btn = e.target.closest('.memo-btn');
+    if (!btn) return;
+    _memoRow = btn.closest('.line-row');
+    const memoInput = _memoRow?.querySelector('input[name*="-memo"]');
+    document.getElementById('memo-modal-text').value = memoInput?.value || '';
+    memoModal.show();
+  });
+
+  document.getElementById('memo-modal-save')?.addEventListener('click', function () {
+    if (!_memoRow) return;
+    const memoInput = _memoRow.querySelector('input[name*="-memo"]');
+    const text      = document.getElementById('memo-modal-text').value.trim().slice(0, 1000);
+    if (memoInput) memoInput.value = text;
+    updateMemoBtnStyle(_memoRow);
+    memoModal.hide();
+    _memoRow = null;
+  });
+
+  // ── Número preview ────────────────────────────────────────────────────────
+  const SERIES_NUMBER_URL_TPL = configEl.dataset.seriesNumberUrl || '';
+
+  async function refreshSeriesNumber() {
+    const seriesEl = document.querySelector('select[name="series"]');
+    const seriesId = seriesEl?.value;
+    if (!seriesId || !SERIES_NUMBER_URL_TPL) return;
+    const url = SERIES_NUMBER_URL_TPL.replace('00000000-0000-0000-0000-000000000000', seriesId);
+    try {
+      const data = await window.ApiService.get(url);
+      const preview = document.getElementById('series-number-preview');
+      if (preview) preview.value = data.formatted || data.next_number || '';
+      document.getElementById('series-number-conflict')?.classList.add('d-none');
+    } catch (err) {
+      console.error('Error al obtener número de serie', err);
+    }
+  }
+
+  document.querySelector('select[name="series"]')?.addEventListener('change', refreshSeriesNumber);
+  document.getElementById('refresh-number-btn')?.addEventListener('click', refreshSeriesNumber);
+
+  // Cargar al iniciar si ya hay una serie seleccionada
+  if (document.querySelector('select[name="series"]')?.value) refreshSeriesNumber();
 
 }());

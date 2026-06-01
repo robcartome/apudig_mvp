@@ -13,6 +13,8 @@ from apps.partners.models import Customer
 from .models import (
     BusinessDocumentType,
     DocumentSeries,
+    PaymentMethod,
+    MeansOfPayment,
     SalesQuotation,
     SalesQuotationLine,
     SaleOrder,
@@ -83,10 +85,58 @@ class BusinessDocumentTypeForm(forms.ModelForm):
         return self.cleaned_data["code"].upper().strip()
 
 
+class PaymentMethodForm(forms.ModelForm):
+    class Meta:
+        model = PaymentMethod
+        fields = ("name", "is_cash", "active")
+        widgets = {
+            "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Contado, Crédito 30 días"}),
+            "is_cash": forms.CheckboxInput(attrs=_check),
+            "active": forms.CheckboxInput(attrs=_check),
+        }
+
+
+class MeansOfPaymentForm(forms.ModelForm):
+    class Meta:
+        model = MeansOfPayment
+        fields = ("name", "active")
+        widgets = {
+            "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Efectivo, Yape, Plin"}),
+            "active": forms.CheckboxInput(attrs=_check),
+        }
+
+
 # ── Cotizaciones ──────────────────────────────────────────────────────────────
 
 class QuotationHeaderForm(forms.ModelForm):
     """Cabecera de cotización — campos editables (sin totales ni número de serie)."""
+
+    # ── Campos de solo-UI (no se guardan directamente en el modelo) ───────────
+    igv_rate_default = forms.ChoiceField(
+        label="IGV",
+        choices=[("18", "18%"), ("10", "10%"), ("4", "4%"), ("0", "0%")],
+        initial="18",
+        required=False,
+        widget=forms.Select(attrs=_select),
+    )
+    payment_method = forms.ModelChoiceField(
+        queryset=PaymentMethod.objects.none(),
+        label="Forma de Pago",
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+    means_of_payment = forms.ModelChoiceField(
+        queryset=MeansOfPayment.objects.none(),
+        label="Medio de Pago",
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+    seller_name = forms.CharField(
+        label="Vendedor",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={**_text, "placeholder": "—"}),
+    )
 
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -102,16 +152,36 @@ class QuotationHeaderForm(forms.ModelForm):
                 voucher_type="COT",
                 active=True,
             )
+        if company_id:
+            self.fields["payment_method"].queryset = PaymentMethod.objects.filter(
+                company_id=company_id, active=True
+            )
+            self.fields["means_of_payment"].queryset = MeansOfPayment.objects.filter(
+                company_id=company_id, active=True
+            )
         self.fields["series"].widget.attrs.update(_select)
         self.fields["store"].widget.attrs.update(_select)
         self.fields["currency"].widget.attrs.update(_select)
         self.fields["notes"].widget.attrs.update(_textarea)
-        self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
-        self.fields["valid_until"].widget.attrs.update({"class": "form-control", "type": "date"})
+        self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
+        # Fechas con datetime-local — se crea un nuevo widget para que input_type se aplique
+        # correctamente (DateInput.__init__ hace pop de "type" y lo asigna a input_type)
+        for fname in ("issue_date", "valid_until"):
+            self.fields[fname].widget = forms.DateInput(
+                format='%Y-%m-%dT%H:%M',
+                attrs={"class": "form-control", "type": "datetime-local"},
+            )
+            self.fields[fname].input_formats = [
+                '%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d',
+            ]
 
     class Meta:
         model = SalesQuotation
-        fields = ("store", "customer", "series", "issue_date", "valid_until", "currency", "notes", "internal_reference")
+        fields = (
+            "store", "customer", "series", "issue_date", "valid_until",
+            "currency", "exchange_rate", "notes", "internal_reference",
+            "payment_method", "means_of_payment",
+        )
         widgets = {
             "internal_reference": forms.TextInput(attrs=_text),
             "currency": forms.Select(
@@ -128,7 +198,7 @@ class QuotationLineForm(forms.Form):
         queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),  # noqa: E501
         empty_label=None,
         widget=forms.HiddenInput(),
-        required=True,
+        required=False,
         error_messages={"required": "Seleccione un producto."},
     )
     description = forms.CharField(
@@ -184,7 +254,7 @@ class QuotationLineForm(forms.Form):
 
 QuotationLineFormSet = forms.formset_factory(
     QuotationLineForm,
-    extra=1,
+    extra=0,
     min_num=1,
     validate_min=True,
     can_delete=True,
@@ -337,7 +407,8 @@ class VoucherHeaderForm(forms.ModelForm):
         self.fields["customer"].queryset = filter_by_company(
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
-        self.fields["customer"].widget.attrs.update(_select)
+        self.fields["customer"].widget = forms.HiddenInput()
+        self.fields["customer"].required = False
         self.fields["voucher_type"].widget.attrs.update(_select)
         if company_id and store_id and voucher_type:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
@@ -373,30 +444,35 @@ class VoucherHeaderForm(forms.ModelForm):
 
 
 class VoucherLineForm(forms.Form):
-    """Línea individual de comprobante (usado en formset)."""
+    """Línea individual de comprobante (usado en formset).
+
+    Usa HiddenInput para campos que maneja el ProductPicker JS,
+    igual que QuotationLineForm.
+    """
 
     product = forms.ModelChoiceField(
         queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),
-        empty_label="— Seleccionar producto —",
-        widget=forms.Select(attrs=_select),
+        empty_label=None,
+        widget=forms.HiddenInput(),
+        required=False,
         error_messages={"required": "Seleccione un producto."},
     )
     description = forms.CharField(
         max_length=500,
         required=False,
-        widget=forms.TextInput(attrs=_text),
+        widget=forms.HiddenInput(),
     )
     quantity = forms.DecimalField(
         min_value=Decimal("0.0001"),
         max_digits=14,
         decimal_places=4,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.0001", "min": "0.0001"}),
+        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.0001", "min": "0.0001"}),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
         decimal_places=6,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0"}),
+        widget=forms.HiddenInput(),
     )
     discount_amount = forms.DecimalField(
         min_value=Decimal("0"),
@@ -404,12 +480,12 @@ class VoucherLineForm(forms.Form):
         decimal_places=2,
         required=False,
         initial=Decimal("0"),
-        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
+        widget=forms.HiddenInput(),
     )
     tax_type = forms.ChoiceField(
         choices=TAX_TYPE_CHOICES,
         initial="10",
-        widget=forms.Select(attrs=_select),
+        widget=forms.Select(attrs={**_select, "class": "form-select form-select-sm"}),
     )
     igv_rate = forms.DecimalField(
         min_value=Decimal("0"),
@@ -417,7 +493,12 @@ class VoucherLineForm(forms.Form):
         decimal_places=2,
         initial=Decimal("18"),
         required=False,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
+        widget=forms.HiddenInput(),
+    )
+    memo = forms.CharField(
+        max_length=1000,
+        required=False,
+        widget=forms.HiddenInput(),
     )
 
     def clean_discount_amount(self):
@@ -429,7 +510,7 @@ class VoucherLineForm(forms.Form):
 
 VoucherLineFormSet = forms.formset_factory(
     VoucherLineForm,
-    extra=1,
+    extra=0,
     min_num=1,
     validate_min=True,
     can_delete=True,
