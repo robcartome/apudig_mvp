@@ -2,6 +2,7 @@
 inventory/views/operations.py — Vistas de movimientos de stock y consulta de stock.
 """
 from django.contrib import messages
+from django.db.models import Q
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -66,13 +67,23 @@ def stock_report(request):
     store_id = _get_store_id(request)
     warehouses = get_warehouses_for_store(store_id, active_only=True) if store_id else []
     selected_warehouse = request.GET.get("warehouse", "")
+    search_query = request.GET.get("q", "").strip()
     stocks = get_stock_by_warehouse(store_id) if store_id else []
     if selected_warehouse:
         stocks = stocks.filter(warehouse_id=selected_warehouse)
+    if search_query:
+        stocks = stocks.filter(
+            Q(product__name__icontains=search_query) |
+            Q(product__sku__icontains=search_query) |
+            Q(product__barcode__icontains=search_query)
+        )
+
     return render(request, "inventory/stock_report.html", {
         "stocks": stocks,
         "warehouses": warehouses,
         "selected_warehouse": selected_warehouse,
+        "q": search_query,
+        "total": stocks.count(),
     })
 
 def movement_list(request):

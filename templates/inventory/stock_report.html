@@ -28,6 +28,28 @@
   </div>
 </div>
 
+{# ─── Search bar ─── #}
+<div class="card mb-3 d-print-none">
+  <div class="card-body py-2">
+    <form method="get" id="search-form" class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="ti ti-search"></i></span>
+          <input type="text" name="q" value="{{ q }}" class="form-control"
+                 placeholder="Buscar por SKU, nombre o codigo de barras..." autofocus>
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+        <a href="{% url 'inventory:stock_report' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+      </div>
+      <div class="col-auto ms-auto text-muted small">
+        {{ total }} producto{{ total|pluralize }} encontrado{{ total|pluralize }}
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="table-responsive">
     <table class="table table-vcenter table-hover card-table">
