@@ -68,12 +68,11 @@
   <!-- SIDEBAR -->
   {% include 'components/sidebar.html' %}
 
-  <!-- ================================================ MAIN LAYOUT -->
   <div class="main-layout">
 
     <!-- Topbar -->
     <header class="navbar navbar-expand-md d-flex d-print-none">
-      <div class="container-xl">
+      <div class="container-xxl">
         <!-- Sidebar toggle: opens sidebar on mobile / expands it on desktop when collapsed -->
         <button id="header-sidebar-btn" class="btn btn-ghost-secondary sidebar-header-toggle me-2" type="button" title="Menú" aria-label="Alternar menú lateral">
           <i class="ti ti-menu-2 fs-3"></i>
@@ -136,7 +135,7 @@
 
     <!-- Flash messages -->
     {% if messages %}
-    <div class="container-xl pt-3">
+    <div class="container-xxl pt-3">
       {% for message in messages %}
       <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible" role="alert">
         {{ message }}
@@ -147,15 +146,15 @@
     {% endif %}
 
     <!-- Body -->
-    <div class="page-body">
-      <div class="container-xl">
+    <div class="page-body mt-1">
+      <div class="container-xxl">
         {% block content %}{% endblock %}
       </div>
     </div>
 
     <!-- Footer -->
     <footer class="footer footer-transparent d-print-none">
-      <div class="container-xl">
+      <div class="container-xxl">
         <div class="row text-center align-items-center">
           <div class="col-12 col-lg-auto">
             <ul class="list-inline list-inline-dots mb-0">

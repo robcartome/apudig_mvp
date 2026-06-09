@@ -182,12 +182,12 @@
             <tr>
               <th class="text-center" style="width:38px">#</th>
               <th>Producto</th>
-              <th style="width:140px">Unidad</th>
-              <th style="width:130px">{% if movement_type == "ADJUSTMENT" %}Cantidad Física{% else %}Cantidad{% endif %}</th>
-              <th style="width:130px">STOCK POR ALM</th>
-              <th style="width:180px">Ubicación</th>
+              <th style="width:100px">Unidad</th>
+              <th style="width:100px">{% if movement_type == "ADJUSTMENT" %}Cantidad Física{% else %}Cantidad{% endif %}</th>
+              <th style="width:100px">STOCK POR ALM</th>
+              <th style="width:130px">Ubicación</th>
               {% if movement_type != "ADJUSTMENT" %}
-              <th style="width:130px">P. Unitario</th>
+              <th style="width:100px">P. Unitario</th>
               {% endif %}
               <th style="width:38px"></th>
             </tr>
@@ -201,7 +201,7 @@
                 data-init-unit="{{ f.initial.product_unit|default:'' }}">
 
               <td class="text-center text-muted line-num">{{ forloop.counter }}</td>
-              <td style="min-width:220px">
+              <td style="min-width:600px">
                 {{ f.product }}
                 <select class="product-select w-100">
                   {% if f.initial.product %}
@@ -230,7 +230,7 @@
                 <input type="text" class="form-control form-control-sm product-stock text-end text-muted"
                        value="—" disabled readonly>
               </td>
-              <td style="min-width:160px">
+              <td style="min-width:130px">
                 {{ f.location }}
                 <select class="location-select w-100"
                         data-location-url="{% url 'inventory:api_location_search' %}"

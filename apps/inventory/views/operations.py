@@ -95,6 +95,12 @@ def movement_list(request):
     movement_type = request.GET.get("type", "")
     qs = search_movements(store_id, query, movement_type or None) if store_id else Movement.objects.none()
     page_obj = _paginate(request, qs)
+
+    print("MOVEMENT LIST QS:")
+    for movement in qs:
+        print(f"- {movement.pk} | {movement.get_type_display()} | {movement.date} | {movement.warehouse} | {movement.supplier} | {movement.customer}")
+    print(qs)
+
     return render(request, "inventory/movement_list.html", {
         "page_obj": page_obj,
         "query": query,
