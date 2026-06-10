@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import DecimalField, Q, Sum
+from django.db.models import DecimalField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, permissions
@@ -11,7 +11,7 @@ from apps.api.v1.catalog.serializers import (
     CatalogProductDetailSerializer,
     CatalogProductListSerializer,
 )
-from apps.inventory.models import Product
+from apps.inventory.models import Product, StockByWarehouse
 
 
 class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
@@ -37,12 +37,16 @@ class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
         if category:
             qs = qs.filter(category_id=category)
 
+        stock_subquery = Subquery(
+            StockByWarehouse.objects
+            .filter(product=OuterRef("pk"))
+            .values("product")
+            .annotate(total=Sum("quantity"))
+            .values("total")[:1],
+            output_field=DecimalField(max_digits=14, decimal_places=3),
+        )
         return qs.annotate(
-            stock=Coalesce(
-                Sum("stocks__quantity"),
-                Decimal("0"),
-                output_field=DecimalField(max_digits=14, decimal_places=3),
-            )
+            stock=Coalesce(stock_subquery, Decimal("0"), output_field=DecimalField(max_digits=14, decimal_places=3))
         )
 
     def get_serializer_context(self):
