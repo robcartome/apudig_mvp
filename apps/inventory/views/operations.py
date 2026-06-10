@@ -2,6 +2,7 @@
 inventory/views/operations.py — Vistas de movimientos de stock y consulta de stock.
 """
 from django.contrib import messages
+from django.db.models import Q
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -66,13 +67,23 @@ def stock_report(request):
     store_id = _get_store_id(request)
     warehouses = get_warehouses_for_store(store_id, active_only=True) if store_id else []
     selected_warehouse = request.GET.get("warehouse", "")
+    search_query = request.GET.get("q", "").strip()
     stocks = get_stock_by_warehouse(store_id) if store_id else []
     if selected_warehouse:
         stocks = stocks.filter(warehouse_id=selected_warehouse)
+    if search_query:
+        stocks = stocks.filter(
+            Q(product__name__icontains=search_query) |
+            Q(product__sku__icontains=search_query) |
+            Q(product__barcode__icontains=search_query)
+        )
+
     return render(request, "inventory/stock_report.html", {
         "stocks": stocks,
         "warehouses": warehouses,
         "selected_warehouse": selected_warehouse,
+        "q": search_query,
+        "total": stocks.count(),
     })
 
 def movement_list(request):
@@ -84,6 +95,12 @@ def movement_list(request):
     movement_type = request.GET.get("type", "")
     qs = search_movements(store_id, query, movement_type or None) if store_id else Movement.objects.none()
     page_obj = _paginate(request, qs)
+
+    print("MOVEMENT LIST QS:")
+    for movement in qs:
+        print(f"- {movement.pk} | {movement.get_type_display()} | {movement.date} | {movement.warehouse} | {movement.supplier} | {movement.customer}")
+    print(qs)
+
     return render(request, "inventory/movement_list.html", {
         "page_obj": page_obj,
         "query": query,
@@ -510,6 +527,201 @@ def adjustment_create(request):
         "formset": formset,
         "title": "Nuevo ajuste",
         "movement_type": MovementType.ADJUSTMENT,
+        "cancel_url": "inventory:movement_list",
+        "units": Unit.objects.all().order_by("code"),
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COPY
+# ══════════════════════════════════════════════════════════════════════════════
+
+def movement_copy(request, pk):
+    r = _require_auth(request)
+    if r:
+        return r
+
+    store_id, err = _require_active_store(request)
+    if err:
+        return err
+    company_id = _get_company_id(request)
+
+    source = get_object_or_404(
+        Movement.objects.prefetch_related("details__product__unit"),
+        pk=pk,
+        store_id=store_id,
+    )
+
+    initial_header = {
+        "date": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+        "reason": source.reason,
+        "description": source.description,
+        "reference_doc": "",
+        "series": source.series or "0000",
+        "number": source.number or "0",
+    }
+
+    if source.type == MovementType.TRANSFER:
+        initial_header.update({
+            "warehouse_origin": source.warehouse_origin_id,
+            "warehouse_dest": source.warehouse_dest_id,
+        })
+    elif source.type == MovementType.ADJUSTMENT:
+        initial_header.update({
+            "warehouse": source.warehouse_id,
+            "series": "",
+            "number": "",
+        })
+    else:
+        initial_header.update({
+            "warehouse": source.warehouse_id,
+            "supplier": source.supplier_id,
+            "customer": source.customer_id,
+            "document_type": source.document_type_id,
+            "carrier": source.carrier_id,
+        })
+
+    initial_lines = [
+        {
+            "product": d.product_id,
+            "product_name": d.product.name,
+            "product_unit": d.product.unit.code if d.product.unit else "",
+            "quantity": (
+                d.physical_quantity
+                if source.type == MovementType.ADJUSTMENT and d.physical_quantity is not None
+                else d.quantity
+            ),
+            "unit_price": d.unit_price,
+        }
+        for d in source.details.all()
+    ]
+
+    if source.type == MovementType.TRANSFER:
+        form = MovementTransferForm(request.POST or None, store_id=store_id, initial=initial_header)
+    else:
+        form = MovementHeaderForm(
+            request.POST or None,
+            store_id=store_id,
+            company_id=company_id,
+            movement_type=source.type,
+            initial=initial_header,
+        )
+
+    form_kwargs = {"company_id": company_id} if company_id else {}
+    formset = MovementDetailFormSet(
+        request.POST or None,
+        initial=initial_lines,
+        prefix="lines",
+        form_kwargs=form_kwargs,
+    )
+
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        lines = _parse_lines(formset)
+        if not lines:
+            messages.error(request, "Debe agregar al menos un producto.")
+        else:
+            cd = form.cleaned_data
+            try:
+                if source.type == MovementType.ENTRY:
+                    warehouse = cd.get("warehouse")
+                    if not warehouse:
+                        form.add_error("warehouse", "Debe seleccionar un almacén.")
+                    else:
+                        register_entry(
+                            store_id=store_id,
+                            warehouse_id=str(warehouse.pk),
+                            date=cd["date"],
+                            lines=lines,
+                            created_by=request.user,
+                            reason=cd.get("reason", ""),
+                            reference_doc=cd.get("reference_doc", ""),
+                            description=cd.get("description", ""),
+                            series=cd.get("series", ""),
+                            number=cd.get("number", ""),
+                            supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
+                            document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
+                        )
+                        messages.success(request, "Entrada copiada y registrada correctamente.")
+                        return redirect("inventory:movement_list")
+                elif source.type == MovementType.EXIT:
+                    warehouse = cd.get("warehouse")
+                    if not warehouse:
+                        form.add_error("warehouse", "Debe seleccionar un almacén.")
+                    else:
+                        register_exit(
+                            store_id=store_id,
+                            warehouse_id=str(warehouse.pk),
+                            date=cd["date"],
+                            lines=lines,
+                            created_by=request.user,
+                            reason=cd.get("reason", ""),
+                            reference_doc=cd.get("reference_doc", ""),
+                            description=cd.get("description", ""),
+                            series=cd.get("series", ""),
+                            number=cd.get("number", ""),
+                            customer_id=cd["customer"].pk if cd.get("customer") else None,
+                            document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
+                        )
+                        messages.success(request, "Salida copiada y registrada correctamente.")
+                        return redirect("inventory:movement_list")
+                elif source.type == MovementType.TRANSFER:
+                    warehouse_origin = cd.get("warehouse_origin")
+                    warehouse_dest = cd.get("warehouse_dest")
+                    if not warehouse_origin:
+                        form.add_error("warehouse_origin", "Debe seleccionar almacén de origen.")
+                    if not warehouse_dest:
+                        form.add_error("warehouse_dest", "Debe seleccionar almacén de destino.")
+                    if warehouse_origin and warehouse_dest:
+                        register_transfer(
+                            store_id=store_id,
+                            warehouse_origin_id=str(warehouse_origin.pk),
+                            warehouse_dest_id=str(warehouse_dest.pk),
+                            date=cd["date"],
+                            lines=lines,
+                            created_by=request.user,
+                            reason=cd.get("reason", ""),
+                            reference_doc=cd.get("reference_doc", ""),
+                            description=cd.get("description", ""),
+                        )
+                        messages.success(request, "Transferencia copiada y registrada correctamente.")
+                        return redirect("inventory:movement_list")
+                elif source.type == MovementType.ADJUSTMENT:
+                    warehouse = cd.get("warehouse")
+                    if not warehouse:
+                        form.add_error("warehouse", "Debe seleccionar un almacén.")
+                    else:
+                        register_adjustment(
+                            store_id=store_id,
+                            warehouse_id=str(warehouse.pk),
+                            date=cd["date"],
+                            lines=lines,
+                            created_by=request.user,
+                            reason=cd.get("reason", ""),
+                            reference_doc=cd.get("reference_doc", ""),
+                            description=cd.get("description", ""),
+                            series="",
+                            number="",
+                            supplier_id=None,
+                            customer_id=None,
+                            document_type_id=None,
+                            carrier_id=None,
+                        )
+                        messages.success(request, "Ajuste copiado y registrado correctamente.")
+                        return redirect("inventory:movement_list")
+            except ValueError as exc:
+                messages.error(request, str(exc))
+
+    type_labels = {
+        MovementType.ENTRY: "entrada",
+        MovementType.EXIT: "salida",
+        MovementType.TRANSFER: "transferencia",
+        MovementType.ADJUSTMENT: "ajuste",
+    }
+    return render(request, "inventory/movement_form.html", {
+        "form": form,
+        "formset": formset,
+        "title": f"Copiar {type_labels.get(source.type, 'movimiento')}",
+        "movement_type": source.type,
         "cancel_url": "inventory:movement_list",
         "units": Unit.objects.all().order_by("code"),
     })

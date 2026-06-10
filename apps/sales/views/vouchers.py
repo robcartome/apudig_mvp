@@ -37,6 +37,9 @@ from apps.sales.services import (
     issue_voucher,
     void_voucher,
 )
+from apps.inventory.models import PriceList
+
+DEFAULT_IGV_RATE = 18
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -57,7 +60,9 @@ def _lines_from_formset(formset) -> list[dict]:
     return [
         form.cleaned_data
         for form in formset
-        if form.cleaned_data and not form.cleaned_data.get("DELETE")
+        if form.cleaned_data
+        and not form.cleaned_data.get("DELETE")
+        and form.cleaned_data.get("product")   # ignorar filas extra vacías
     ]
 
 
@@ -138,6 +143,10 @@ def voucher_create(request):
         "header_form": header_form,
         "line_formset": line_formset,
         "title": "Nuevo comprobante",
+        "igv_rate": DEFAULT_IGV_RATE,
+        "price_lists": PriceList.objects.filter(
+            company_id=company_id, active=True
+        ).order_by("name") if company_id else PriceList.objects.none(),
     })
 
 

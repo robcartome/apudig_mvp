@@ -559,3 +559,11 @@ def toggle_price_list(pricelist: PriceList) -> PriceList:
     pricelist.active = not pricelist.active
     pricelist.save(update_fields=["active"])
     return pricelist
+
+
+def set_default_price_list(pricelist: PriceList) -> PriceList:
+    """Marca esta lista como predeterminada y desmarca las demás de la misma empresa."""
+    PriceList.objects.filter(company_id=pricelist.company_id, is_default=True).update(is_default=False)
+    pricelist.is_default = True
+    pricelist.save(update_fields=["is_default"])
+    return pricelist

@@ -119,9 +119,13 @@
       <div class="col-12 col-md-6 col-xl-3">
         <p class="cfg-section-title"><i class="ti ti-coin me-1"></i>Finanzas</p>
         <div class="d-flex flex-wrap gap-2">
+          <a href="?item=condiciones_pago" class="cfg-item {% if item == 'condiciones_pago' %}active{% endif %}">
+            <i class="ti ti-credit-card"></i>Condiciones de Pago
+          </a>
+          <a href="?item=medios_pago" class="cfg-item {% if item == 'medios_pago' %}active{% endif %}">
+            <i class="ti ti-cash"></i>Medios de Pago
+          </a>
           <span class="cfg-item disabled"><i class="ti ti-building-bank"></i>Cuentas Bancarias</span>
-          <span class="cfg-item disabled"><i class="ti ti-credit-card"></i>Formas de Pago</span>
-          <span class="cfg-item disabled"><i class="ti ti-cash"></i>Medios de Pago</span>
           <span class="cfg-item disabled"><i class="ti ti-transfer"></i>Tipos de Op. Bancaria</span>
           <span class="cfg-item disabled"><i class="ti ti-chart-arrows"></i>Flujo de Caja</span>
           <span class="cfg-item disabled"><i class="ti ti-percentage"></i>Tasas de Interés</span>
@@ -181,6 +185,10 @@
           <th>Nombre</th><th>Activo</th><th class="w-1">Acciones</th>
           {% elif item == "unidades" %}
           <th>Código</th><th>Nombre</th><th class="w-1">Acciones</th>
+          {% elif item == "condiciones_pago" %}
+          <th>Nombre</th><th class="text-center">Efectivo (Contado)</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
+          {% elif item == "medios_pago" %}
+          <th>Nombre</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
           {% endif %}
         </tr>
       </thead>
@@ -242,6 +250,32 @@
           <td>
             <a href="{% url 'inventory:unit_update' obj.pk %}" class="btn btn-sm btn-outline-primary me-1"><i class="ti ti-pencil"></i></a>
             <a href="{% url 'inventory:unit_delete' obj.pk %}" class="btn btn-sm btn-outline-danger"><i class="ti ti-trash"></i></a>
+          </td>
+
+          {% elif item == "condiciones_pago" %}
+          <td>{{ obj.name }}</td>
+          <td class="text-center">
+            {% if obj.is_cash %}<span class="badge bg-green-lt text-green">Sí</span>
+            {% else %}<span class="badge bg-secondary-lt">No</span>{% endif %}
+          </td>
+          <td class="text-center">
+            {% if obj.active %}<span class="badge bg-success-lt text-success">Activo</span>
+            {% else %}<span class="badge bg-secondary-lt text-secondary">Inactivo</span>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'sales:payment_method_update' obj.pk %}" class="btn btn-sm btn-outline-primary me-1"><i class="ti ti-pencil"></i></a>
+            <a href="{% url 'sales:payment_method_delete' obj.pk %}" class="btn btn-sm btn-outline-danger"><i class="ti ti-trash"></i></a>
+          </td>
+
+          {% elif item == "medios_pago" %}
+          <td>{{ obj.name }}</td>
+          <td class="text-center">
+            {% if obj.active %}<span class="badge bg-success-lt text-success">Activo</span>
+            {% else %}<span class="badge bg-secondary-lt text-secondary">Inactivo</span>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'sales:means_of_payment_update' obj.pk %}" class="btn btn-sm btn-outline-primary me-1"><i class="ti ti-pencil"></i></a>
+            <a href="{% url 'sales:means_of_payment_delete' obj.pk %}" class="btn btn-sm btn-outline-danger"><i class="ti ti-trash"></i></a>
           </td>
           {% endif %}
         </tr>

@@ -153,9 +153,14 @@ window.ProductPicker = (function ($) {
       : 'text-muted';
 
     return $(`
-      <div class="d-flex justify-content-between align-items-start gap-3 py-1">
+      <div class="d-flex justify-content-between align-items-start gap-3 py-1" title='${esc(product.name || product.text)}'>
         <div style="min-width:0">
-          <div class="fw-semibold text-truncate" style="font-size:.85rem">${esc(product.sku || 'SIN-COD')} | ${esc(product.name || product.text)}</div>
+          <div 
+            class="fw-semibold text-truncate"
+            style="font-size:.85rem"
+          >
+            ${esc(product.sku || 'SIN-COD')} | ${esc(product.name || product.text)}
+          </div>
           <div class="text-muted" style="font-size:.72rem">
             Stock sucursal: <strong class="${stockClass}">${totalStock}</strong>
             ${esc(product.unit || '')}

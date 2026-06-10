@@ -87,9 +87,14 @@
           </td>
           <td class="text-end">{{ order.currency }} {{ order.total|floatformat:2 }}</td>
           <td class="text-end">
-            <a href="{% url 'sales:order_detail' order.pk %}" class="btn btn-sm btn-ghost-secondary">
+            <div class="d-inline-flex gap-1">
+            <a href="{% url 'sales:order_detail' order.pk %}" class="btn btn-sm btn-ghost-secondary" title="Ver">
               <i class="ti ti-eye"></i>
             </a>
+            <a href="{% url 'sales:order_copy' order.pk %}" class="btn btn-sm btn-ghost-secondary" title="Copiar orden">
+              <i class="ti ti-copy"></i>
+            </a>
+            </div>
           </td>
         </tr>
         {% empty %}

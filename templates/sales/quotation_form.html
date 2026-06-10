@@ -1,8 +1,35 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ title }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{% static 'css/inventory/movement_form.css' %}">
+<style>
+  #lines-table td.num-cell { text-align:right; padding-right:.6rem; }
+  #lines-table .readonly-cell { background:#f8f9fa; color:#495057; }
+  #lines-table .price-unit-input { min-width:90px; }
+</style>
+{% endblock %}
+
 {% block content %}
+{# Config div with data attrs for JS #}
+<div id="quot-form-config"
+     data-customer-url="{% url 'inventory:api_customer_search' %}"
+     data-search-url="{% url 'inventory:api_product_search' %}"
+     data-create-url="{% url 'inventory:api_product_create' %}"
+     data-price-list-url="{% url 'inventory:api_price_list_prices' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-series-number-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-default-price-list-id="{{ default_price_list_id|default:'' }}"
+     data-payment-method-search-url="{% url 'sales:api_payment_method_search' %}"
+     data-payment-method-create-url="{% url 'sales:api_payment_method_create' %}"
+     data-means-of-payment-search-url="{% url 'sales:api_means_of_payment_search' %}"
+     data-means-of-payment-create-url="{% url 'sales:api_means_of_payment_create' %}"
+     data-igv-rate="{{ igv_rate }}"
+     style="display:none"></div>
+
 <div class="page-header d-print-none mb-3">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0">
@@ -23,122 +50,356 @@
 <form method="post" novalidate id="quotation-form">
   {% csrf_token %}
 
-  {# ── Cabecera ── #}
+  {# ── Cabecera — 3 columnas ── #}
   <div class="card mb-3">
     <div class="card-header"><h3 class="card-title">Datos generales</h3></div>
     <div class="card-body">
-
       {% if header_form.non_field_errors %}
       <div class="alert alert-danger mb-3">{% for e in header_form.non_field_errors %}{{ e }}{% endfor %}</div>
       {% endif %}
 
-      <div class="row">
-        <div class="col-md-4 mb-3">
-          <label class="form-label required">Sucursal</label>
-          {{ header_form.store }}
-          {% if header_form.store.errors %}<div class="text-danger small mt-1">{{ header_form.store.errors.0 }}</div>{% endif %}
-        </div>
-        <div class="col-md-4 mb-3">
-          <label class="form-label required">Serie</label>
-          {{ header_form.series }}
-          {% if header_form.series.errors %}<div class="text-danger small mt-1">{{ header_form.series.errors.0 }}</div>{% endif %}
-        </div>
-        <div class="col-md-4 mb-3">
-          <label class="form-label required">Moneda</label>
-          {{ header_form.currency }}
-        </div>
-      </div>
+      <div class="row g-3">
 
-      <div class="mb-3">
-        <label class="form-label required">Cliente</label>
-        {{ header_form.customer }}
-        {% if header_form.customer.errors %}<div class="text-danger small mt-1">{{ header_form.customer.errors.0 }}</div>{% endif %}
-      </div>
+        {# ── Columna 1: Cliente / Dirección / Sucursal+Serie / Número ── #}
+        <div class="col-12 col-md-4 border-end">
 
-      <div class="row">
-        <div class="col-md-4 mb-3">
-          <label class="form-label required">Fecha de emisión</label>
-          {{ header_form.issue_date }}
-          {% if header_form.issue_date.errors %}<div class="text-danger small mt-1">{{ header_form.issue_date.errors.0 }}</div>{% endif %}
-        </div>
-        <div class="col-md-4 mb-3">
-          <label class="form-label">Válido hasta</label>
-          {{ header_form.valid_until }}
-        </div>
-        <div class="col-md-4 mb-3">
-          <label class="form-label">Referencia interna</label>
-          {{ header_form.internal_reference }}
-        </div>
-      </div>
+          <div class="mb-2">
+            <label class="form-label required">Cliente</label>
+            {{ header_form.customer }}{# hidden input #}
+            <select id="customer-select" class="partner-select w-100"
+                    data-partner-url="{% url 'inventory:api_customer_search' %}"
+                    data-hidden-id="{{ header_form.customer.id_for_label }}"
+                    data-placeholder="Buscar por RUC o nombre…">
+              {% if header_form.instance.customer_id %}
+              <option value="{{ header_form.instance.customer_id }}" selected>{{ header_form.instance.customer }}</option>
+              {% endif %}
+            </select>
+            {% if header_form.customer.errors %}<div class="text-danger small mt-1">{{ header_form.customer.errors.0 }}</div>{% endif %}
+          </div>
 
-      <div class="mb-3">
-        <label class="form-label">Notas</label>
-        {{ header_form.notes }}
-      </div>
+          <div class="mb-2">
+            <label class="form-label">Dirección</label>
+            <input type="text" id="customer-address-display" class="form-control form-control-sm"
+                   readonly placeholder="—"
+                   value="{{ quotation.customer_address|default:'' }}">
+          </div>
 
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label required">Sucursal</label>
+              {{ header_form.store }}
+              {% if header_form.store.errors %}<div class="text-danger small mt-1">{{ header_form.store.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-6">
+              <label class="form-label required">Serie</label>
+              {{ header_form.series }}
+              {% if header_form.series.errors %}<div class="text-danger small mt-1">{{ header_form.series.errors.0 }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Número</label>
+            <div class="input-group input-group-sm">
+              <input type="text" id="series-number-preview" class="form-control bg-light" readonly
+                     value="{{ quotation.number|default:'—' }}"
+                     placeholder="(se asigna al guardar)">
+              {% if not quotation.number %}
+              <button type="button" id="refresh-number-btn" class="btn btn-outline-secondary" title="Ver siguiente número disponible">
+                <i class="ti ti-refresh"></i>
+              </button>
+              {% endif %}
+            </div>
+            <div id="series-number-conflict" class="text-warning small mt-1 d-none">
+              <i class="ti ti-alert-triangle me-1"></i>El número puede haber cambiado. Actualiza para verificar.
+            </div>
+          </div>
+
+        </div>
+
+        {# ── Columna 2: Con. pago / Método / Moneda / Vendedor ── #}
+        <div class="col-12 col-md-4 border-end ps-md-4">
+
+          <div class="mb-2">
+            <label class="form-label">Forma de Pago</label>
+            {# hidden input submitted to Django form #}
+            {{ header_form.payment_method }}
+            <select id="payment-method-select" class="form-select form-select-sm w-100"
+                    style="width:100%">
+              {% if header_form.instance.payment_method_id %}
+              <option value="{{ header_form.instance.payment_method_id }}" selected
+                      data-is-cash="{% if header_form.instance.payment_method.is_cash %}true{% else %}false{% endif %}">
+                {{ header_form.instance.payment_method }}
+              </option>
+              {% endif %}
+            </select>
+          </div>
+
+          <div class="mb-2" id="payment-method-wrapper" {% if not header_form.instance.payment_method.is_cash %}style="display:none"{% endif %}>
+            <label class="form-label">Medio de Pago</label>
+            {{ header_form.means_of_payment }}
+            <select id="means-of-payment-select" class="form-select form-select-sm w-100"
+                    style="width:100%">
+              {% if header_form.instance.means_of_payment_id %}
+              <option value="{{ header_form.instance.means_of_payment_id }}" selected>
+                {{ header_form.instance.means_of_payment }}
+              </option>
+              {% endif %}
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label required">Moneda</label>
+            {{ header_form.currency }}
+            {% if header_form.currency.errors %}<div class="text-danger small mt-1">{{ header_form.currency.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">{{ header_form.seller_name.label }}</label>
+            {{ header_form.seller_name }}
+          </div>
+
+        </div>
+
+        {# ── Columna 3: Fechas / T/Cambio / IGV ── #}
+        <div class="col-12 col-md-4 ps-md-4">
+
+          <div class="mb-2">
+            <label class="form-label required">Fecha de emisión</label>
+            {{ header_form.issue_date }}
+            {% if header_form.issue_date.errors %}<div class="text-danger small mt-1">{{ header_form.issue_date.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Válido hasta</label>
+            {{ header_form.valid_until }}
+            {% if header_form.valid_until.errors %}<div class="text-danger small mt-1">{{ header_form.valid_until.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">T/Cambio</label>
+            {{ header_form.exchange_rate }}
+            {% if header_form.exchange_rate.errors %}<div class="text-danger small mt-1">{{ header_form.exchange_rate.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">IGV</label>
+            {{ header_form.igv_rate_default }}
+          </div>
+
+        </div>
+
+      </div>{# /row g-3 #}
     </div>
   </div>
 
-  {# ── Líneas ── #}
+  {# ── Detalle cotización ── #}
   <div class="card mb-3">
     <div class="card-header">
-      <h3 class="card-title">Líneas de cotización</h3>
-      <div class="card-options">
-        <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
-          <i class="ti ti-plus me-1"></i>Agregar línea
-        </button>
+      <h3 class="card-title">Detalle cotización</h3>
+    </div>
+
+    {# Toolbar: búsqueda por código de barra + lista de precios #}
+    <div class="card-body border-bottom py-2">
+      <div class="d-flex align-items-end justify-content-between gap-3">
+        <div style="flex:0 0 45%">
+          <label class="form-label mb-1 small text-muted">Buscar por código de barra</label>
+          <div class="input-group input-group-sm">
+            <input type="text" id="barcode-search" class="form-control"
+                   placeholder="Escanea o escribe el código…" autocomplete="off">
+            <button type="button" id="barcode-btn" class="btn btn-outline-secondary" title="Buscar">
+              <i class="ti ti-search"></i>
+            </button>
+          </div>
+        </div>
+        <div style="flex:0 0 45%">
+          <label class="form-label mb-1 small text-muted">
+            Lista de precios
+            <i class="ti ti-info-circle text-muted" title="Selecciona una lista para aplicar precios automáticamente"></i>
+          </label>
+          <select id="price-list-select" class="form-select form-select-sm">
+            <option value="">— Sin lista de precios —</option>
+            {% for pl in price_lists %}
+            <option value="{{ pl.pk }}" {% if pl.pk|stringformat:"s" == default_price_list_id %}selected{% endif %}>{{ pl.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div id="price-list-alert" class="alert alert-warning d-none mt-2 py-2 px-3" style="font-size:.85rem">
+        <i class="ti ti-alert-triangle me-1"></i>
+        Se actualizarán los precios de los productos seleccionados.
+        <div class="mt-1 d-flex gap-2">
+          <button type="button" id="price-list-confirm" class="btn btn-sm btn-warning">Aplicar</button>
+          <button type="button" id="price-list-cancel" class="btn btn-sm btn-outline-secondary">Cancelar</button>
+        </div>
       </div>
     </div>
-    <div class="card-body p-0">
-      {{ line_formset.management_form }}
 
-      <div class="table-responsive">
-        <table class="table table-sm mb-0" id="lines-table">
-          <thead class="table-light">
-            <tr>
-              <th style="min-width:200px">Producto</th>
-              <th style="min-width:180px">Descripción</th>
-              <th style="width:90px">Cantidad</th>
-              <th style="width:110px">Precio unit.</th>
-              <th style="width:100px">Descuento</th>
-              <th style="width:130px">Afectación IGV</th>
-              <th style="width:80px">Tasa IGV</th>
-              <th style="width:200px">Memo</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="lines-body">
-            {% for lf in line_formset %}
-            <tr class="line-row">
-              <td>
-                {{ lf.product }}
-                {% if lf.product.errors %}<div class="text-danger small">{{ lf.product.errors.0 }}</div>{% endif %}
-              </td>
-              <td>{{ lf.description }}</td>
-              <td>{{ lf.quantity }}</td>
-              <td>{{ lf.unit_price }}</td>
-              <td>{{ lf.discount_amount }}</td>
-              <td>{{ lf.tax_type }}</td>
-              <td>{{ lf.igv_rate }}</td>
-              <td>{{ lf.memo }}</td>
-              <td>
-                {% if lf.DELETE %}
-                <label class="d-none">{{ lf.DELETE }}</label>
-                <button type="button" class="btn btn-sm btn-ghost-danger remove-line" title="Eliminar">
-                  <i class="ti ti-trash"></i>
-                </button>
+    {# Tabla de líneas #}
+    <div class="table-responsive">
+      {{ line_formset.management_form }}
+      <table class="table table-sm table-vcenter mb-0" id="lines-table">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center" style="width:38px">#</th>
+            <th>Bien o Servicio</th>
+            <th style="width:90px">UND.</th>
+            <th style="width:80px">Cantidad</th>
+            <th style="width:150px">Tipo IGV</th>
+            <th style="width:100px">Valor Unit.</th>
+            <th style="width:110px">Precio Unit.</th>
+            <th style="width:90px">SubTotal</th>
+            <th style="width:90px">Impuesto</th>
+            <th style="width:90px">Total</th>
+            <th style="width:38px"></th>
+          </tr>
+        </thead>
+        <tbody id="lines-body">
+          {% for lf in line_formset %}
+          <tr class="line-row"
+              data-init-product="{{ lf.initial.product|default:'' }}"
+              data-init-name="{{ lf.initial.product_name|default:'' }}"
+              data-init-unit-id="{{ lf.initial.product_unit_id|default:'' }}"
+              data-init-unit="{{ lf.initial.product_unit|default:'' }}"
+              data-init-price-igv="{{ lf.initial.price_with_igv|default:'' }}">
+
+            <td class="text-center text-muted line-num">{{ forloop.counter }}</td>
+
+            {# Producto (hidden + Select2) #}
+            <td style="min-width:220px">
+              {{ lf.product }}{# hidden #}
+              {{ lf.description }}{# hidden #}
+              <select class="product-select w-100">
+                {% if lf.initial.product %}
+                <option value="{{ lf.initial.product }}" selected>{{ lf.initial.product_name|default:'' }}</option>
                 {% endif %}
-                {{ lf.id }}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+              </select>
+              {% if lf.product.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.product.errors.0 }}</div>{% endif %}
+            </td>
+
+            {# Unidad (display only) #}
+            <td>
+              <select class="form-select form-select-sm product-unit-select" disabled>
+                <option value="{{ lf.initial.product_unit_id|default:'' }}">{{ lf.initial.product_unit|default:'—' }}</option>
+              </select>
+            </td>
+
+            {# Cantidad #}
+            <td>
+              {{ lf.quantity }}
+              {% if lf.quantity.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.quantity.errors.0 }}</div>{% endif %}
+            </td>
+
+            {# Tipo IGV #}
+            <td>{{ lf.tax_type }}</td>
+
+            {# IGV rate (hidden) + Valor Unit. ex-IGV display #}
+            <td class="num-cell">
+              {{ lf.igv_rate }}{# hidden, para cálculo #}
+              <input type="text" class="form-control form-control-sm valor-unit-display text-end"
+                     value="0.00" disabled readonly tabindex="-1"
+                     title="Precio sin IGV">
+            </td>
+
+            {# Precio Unit. inc-IGV (user input, not a Django field) #}
+            <td>
+              {{ lf.unit_price }}{# hidden: stores ex-tax value for submission #}
+              <input type="number" class="form-control form-control-sm price-unit-input text-end"
+                     step="0.01" min="0" value="{{ lf.initial.price_with_igv|default:'' }}"
+                     placeholder="0.00">
+            </td>
+
+            {# SubTotal (readonly, computed) #}
+            <td class="num-cell readonly-cell line-subtotal text-end">0.00</td>
+
+            {# Impuesto (readonly, computed) #}
+            <td class="num-cell readonly-cell line-igv text-end">0.00</td>
+
+            {# Total (readonly, computed) #}
+            <td class="num-cell readonly-cell line-total fw-semibold text-end">0.00</td>
+
+            {# OP: memo + eliminar #}
+            <td class="text-center" style="white-space:nowrap">
+              {% if lf.DELETE %}<label class="d-none">{{ lf.DELETE }}</label>{% endif %}
+              {{ lf.id }}
+              {{ lf.memo }}{# hidden #}
+              <button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Agregar memo">
+                <i class="ti ti-notes"></i>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar">
+                <i class="ti ti-x"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Botón agregar #}
+    <div class="card-body py-2">
+      <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
+        <i class="ti ti-plus me-1"></i>Agregar nuevo ítem
+      </button>
     </div>
   </div>
 
-  <div class="d-flex gap-2">
+  {# ── Información adicional + Totales ── #}
+  <div class="row g-3 mb-4">
+
+    {# Información adicional #}
+    <div class="col-12 col-md-5">
+      <div class="card h-100">
+        <div class="card-header"><h3 class="card-title">Información adicional</h3></div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Notas</label>
+            {{ header_form.notes }}
+          </div>
+          <div class="mb-0">
+            <label class="form-label">Referencia interna</label>
+            {{ header_form.internal_reference }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Totales #}
+    <div class="col-12 col-md-7">
+      <div class="card h-100">
+        <div class="card-header"><h3 class="card-title">Resumen</h3></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr>
+                <td class="text-muted ps-3">SubTotal</td>
+                <td class="text-end fw-semibold pe-3" id="summary-subtotal">0.00</td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-3">Descuento</td>
+                <td class="text-end fw-semibold pe-3" id="summary-discount">0.00</td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-3">Base imponible</td>
+                <td class="text-end fw-semibold pe-3" id="summary-base">0.00</td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-3">IGV</td>
+                <td class="text-end fw-semibold pe-3" id="summary-igv">0.00</td>
+              </tr>
+              <tr class="table-active">
+                <td class="fw-bold ps-3">TOTAL</td>
+                <td class="text-end fw-bold pe-3" id="summary-total">0.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Botones ── #}
+  <div class="d-flex gap-2 mb-4">
     <button type="submit" class="btn btn-primary">
       <i class="ti ti-device-floppy me-1"></i>Guardar cotización
     </button>
@@ -147,41 +408,177 @@
     </a>
   </div>
 </form>
+
+{# Modal memo de fila #}
+<div class="modal fade" id="memoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="ti ti-notes me-2"></i>Nota de ítem</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Información adicional del producto</label>
+        <textarea id="memo-modal-text" class="form-control" rows="5"
+                  placeholder="Ej: Con unión de 3/4&quot;, color azul, marca X…"></textarea>
+        <div class="text-muted small mt-1">Máximo 1000 caracteres.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="memo-modal-save">
+          <i class="ti ti-check me-1"></i>Guardar nota
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Quick-create product modal #}
+<div class="modal modal-blur fade" id="quickCreateModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Crear producto rápido</h5></div>
+      <div class="modal-body">
+        <div id="qc-error" class="alert alert-danger d-none"></div>
+        <div class="mb-2">
+          <label class="form-label required">Nombre</label>
+          <input id="qc-name" class="form-control" placeholder="Nombre del producto">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">SKU</label>
+          <input id="qc-sku" class="form-control" placeholder="Opcional">
+        </div>
+        <div class="mb-2">
+          <label class="form-label required">Unidad</label>
+          <input id="qc-unit" class="form-control" placeholder="Ej: UND, KG, LT">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="qc-btn-save">Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script src="{% static 'js/components/product-picker.js' %}"></script>
+<script src="{% static 'js/sales/quotation-form.js' %}"></script>
 <script>
-// Clonar última fila para agregar líneas
-document.getElementById('add-line').addEventListener('click', function () {
-  const tbody = document.getElementById('lines-body');
-  const rows = tbody.querySelectorAll('.line-row');
-  const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
-  const idx = parseInt(totalForms.value);
+(function () {
+  const cfg = document.getElementById('quot-form-config');
+  const COND_SEARCH_URL  = cfg.dataset.paymentMethodSearchUrl;
+  const COND_CREATE_URL  = cfg.dataset.paymentMethodCreateUrl;
+  const METH_SEARCH_URL  = cfg.dataset.meansOfPaymentSearchUrl;
+  const METH_CREATE_URL  = cfg.dataset.meansOfPaymentCreateUrl;
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-  const template = rows[rows.length - 1].cloneNode(true);
-  template.querySelectorAll('input, select, textarea').forEach(el => {
-    el.name = el.name.replace(/-\d+-/, `-${idx}-`);
-    el.id = el.id.replace(/-\d+-/, `-${idx}-`);
-    if (el.type !== 'hidden') el.value = '';
-    if (el.tagName === 'SELECT') el.selectedIndex = 0;
-  });
-  tbody.appendChild(template);
-  totalForms.value = idx + 1;
-
-  template.querySelector('.remove-line')?.addEventListener('click', removeLine);
-});
-
-document.querySelectorAll('.remove-line').forEach(btn => btn.addEventListener('click', removeLine));
-
-function removeLine(e) {
-  const row = e.currentTarget.closest('tr');
-  const deleteInput = row.querySelector('input[type=checkbox][name$="-DELETE"]');
-  if (deleteInput) {
-    deleteInput.checked = true;
-    row.style.opacity = '0.3';
-  } else {
-    row.remove();
+  // ── Helper: quick-create via prompt ────────────────────────────────────────
+  async function quickCreate(createUrl, promptMsg) {
+    const name = window.prompt(promptMsg);
+    if (!name || !name.trim()) return null;
+    const resp = await fetch(createUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (!resp.ok) { alert('Error al crear.'); return null; }
+    return await resp.json();
   }
-}
+
+  // ── Forma de Pago Select2 ─────────────────────────────────────────────────────────
+  const $cond = $('#payment-method-select');
+  const condHidden = document.getElementById('{{ header_form.payment_method.auto_id }}');
+
+  $cond.select2({
+    theme: 'bootstrap-5',
+    placeholder: '— Seleccionar —',
+    allowClear: true,
+    minimumInputLength: 0,
+    ajax: {
+      url: COND_SEARCH_URL,
+      dataType: 'json',
+      delay: 200,
+      data: params => ({ q: params.term || '' }),
+      processResults: data => {
+        const results = data.results || [];
+        results.push({ id: '__new__', text: '+ Crear nuevo' });
+        return { results };
+      },
+    },
+  }).on('select2:select', function (e) {
+    const d = e.params.data;
+    if (d.id === '__new__') {
+      $(this).val(null).trigger('change');
+      quickCreate(COND_CREATE_URL, 'Nombre de la forma de pago:').then(obj => {
+        if (!obj) return;
+        const opt = new Option(obj.text, obj.id, true, true);
+        $(opt).data('is-cash', obj.is_cash);
+        $cond.append(opt).trigger('change');
+        if (condHidden) condHidden.value = obj.id;
+        toggleMethodVisibility(obj.is_cash);
+      });
+      return;
+    }
+    if (condHidden) condHidden.value = d.id;
+    const isCash = d.is_cash === true || d.is_cash === 'true';
+    toggleMethodVisibility(isCash);
+  }).on('select2:clear', function () {
+    if (condHidden) condHidden.value = '';
+    toggleMethodVisibility(false);
+  });
+
+  // ── Medio de Pago Select2 ───────────────────────────────────────────────────
+  const $meth = $('#means-of-payment-select');
+  const methHidden = document.getElementById('{{ header_form.means_of_payment.auto_id }}');
+
+  $meth.select2({
+    theme: 'bootstrap-5',
+    placeholder: '— Seleccionar —',
+    allowClear: true,
+    minimumInputLength: 0,
+    ajax: {
+      url: METH_SEARCH_URL,
+      dataType: 'json',
+      delay: 200,
+      data: params => ({ q: params.term || '' }),
+      processResults: data => {
+        const results = data.results || [];
+        results.push({ id: '__new__', text: '+ Crear nuevo' });
+        return { results };
+      },
+    },
+  }).on('select2:select', function (e) {
+    const d = e.params.data;
+    if (d.id === '__new__') {
+      $(this).val(null).trigger('change');
+      quickCreate(METH_CREATE_URL, 'Nombre del medio de pago:').then(obj => {
+        if (!obj) return;
+        const opt = new Option(obj.text, obj.id, true, true);
+        $meth.append(opt).trigger('change');
+        if (methHidden) methHidden.value = obj.id;
+      });
+      return;
+    }
+    if (methHidden) methHidden.value = d.id;
+  }).on('select2:clear', function () {
+    if (methHidden) methHidden.value = '';
+  });
+
+  // ── Show/hide Medio de Pago based on is_cash flag ──────────────────────────
+  function toggleMethodVisibility(isCash) {
+    const wrapper = document.getElementById('payment-method-wrapper');
+    if (wrapper) wrapper.style.display = isCash ? '' : 'none';
+    if (!isCash && methHidden) {
+      methHidden.value = '';
+      $meth.val(null).trigger('change');
+    }
+  }
+})();
 </script>
 {% endblock %}

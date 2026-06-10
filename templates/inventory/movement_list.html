@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{% load formatters %}
+
 {% block title %}Movimientos — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Movimientos</h2>{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
-  <div class="row align-items-center">
-    <div class="col">
+  <div class="row align-items-center gap-2">
+    <div class="col-sm">
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-0">
           <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
@@ -113,6 +115,9 @@
               >
                 <i class="ti ti-eye"></i>
               </button>
+              <a href="{% url 'inventory:movement_copy' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Copiar movimiento">
+                <i class="ti ti-copy"></i>
+              </a>
               {% if obj.status == "DRAFT" and not obj.is_locked_for_changes %}
               <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Confirmar este movimiento? Luego no será editable.');">
                 {% csrf_token %}
@@ -194,7 +199,12 @@
       <div class="modal-body">
         <div class="card bg-light mb-3">
           <div class="card-body">
-            <h6 class="text-muted mb-3">Información General</h6>
+            <div class="row align-items-center justify-content-between mb-2">
+              <h3 class="col-12 col-sm-4 text-muted">Información General</h3>
+              <a href="{% url 'inventory:movement_detail' obj.pk %}" class="btn btn-outline-success btn-sm col-12 col-sm-4 small">
+                Auditoria de este movimiento
+              </a>
+            </div>
             <div class="row g-3 small">
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Estado</div>
@@ -322,11 +332,11 @@
                 <td class="text-muted">{{ d.product.sku|default:"—" }}</td>
                 <td class="fw-semibold">{{ d.product.name }}</td>
                 {% if obj.type == "ADJUSTMENT" %}
-                <td class="text-end">{{ d.system_quantity|floatformat:3 }}</td>
-                <td class="text-end">{{ d.physical_quantity|floatformat:3 }}</td>
-                <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|floatformat:3 }}</td>
+                <td class="text-end">{{ d.system_quantity|smart_number }}</td>
+                <td class="text-end">{{ d.physical_quantity|smart_number }}</td>
+                <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|smart_number }}</td>
                 {% else %}
-                <td class="text-end">{{ d.quantity|floatformat:3 }}</td>
+                <td class="text-end">{{ d.quantity|smart_number }}</td>
                 <td class="text-end">S/ {{ d.unit_price|floatformat:2 }}</td>
                 <td class="text-end movement-line-total">S/ 0.00</td>
                 {% endif %}
