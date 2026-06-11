@@ -2,6 +2,8 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from apps.inventory.models import Brand, Category, Product, ProductPrice, StockByWarehouse
+from apps.inventory.models import Unit, Warehouse
+from apps.partners.models import DocumentType
 
 
 class BrandSerializer(serializers.ModelSerializer):
@@ -14,6 +16,32 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ("id", "code", "name", "active")
+
+
+class UnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Unit
+        fields = ("id", "code", "name")
+
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    store_name = serializers.CharField(source="store.name", read_only=True)
+
+    class Meta:
+        model = Warehouse
+        fields = ("id", "store", "store_name", "name", "description", "active", "is_default")
+
+
+class WarehouseUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Warehouse
+        fields = ("name", "description", "active", "is_default")
+
+
+class DocumentTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentType
+        fields = ("id", "code", "name", "abbreviation", "active")
 
 
 class ProductPriceSerializer(serializers.ModelSerializer):
