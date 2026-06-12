@@ -28,6 +28,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
+    "rest_framework",
+    "drf_spectacular",
     "apps.core.apps.CoreConfig",
     "apps.companies.apps.CompaniesConfig",
     "apps.users.apps.UsersConfig",
@@ -42,6 +45,7 @@ AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -104,3 +108,52 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# Only allow CORS on the catalog and API auth routes (not on admin/HTML views).
+CORS_URLS_REGEX = r"^/(catalog|api)/.*$"
+
+_raw_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+CORS_ALLOW_CREDENTIALS = False   # catalog is stateless (Bearer token)
+
+# ── JWT (internal catalog auth) ───────────────────────────────────────────────
+import datetime as _dt
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+JWT_ACCESS_TTL = _dt.timedelta(hours=int(os.getenv("JWT_ACCESS_TTL_HOURS", "8")))
+JWT_REFRESH_TTL = _dt.timedelta(days=int(os.getenv("JWT_REFRESH_TTL_DAYS", "30")))
+
+
+# ── Django REST Framework ────────────────────────────────────────────────────
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "apps.api.v1.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "apps.api.v1.pagination.DefaultLimitOffsetPagination",
+}
+
+
+# ── OpenAPI / Swagger ────────────────────────────────────────────────────────
+SPECTACULAR_SETTINGS = {
+    "TITLE": "ApuDig ERP API",
+    "DESCRIPTION": "API versionada para ApuDig ERP (SaaS multiempresa).",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": r"/api/v[0-9]",
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
+}

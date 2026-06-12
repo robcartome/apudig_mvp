@@ -1,0 +1,6 @@
+from django.urls import include, path
+
+urlpatterns = [
+    path("v1/", include("apps.api.v1.urls")),
+    path("v2/", include("apps.api.v2.urls")),
+]
