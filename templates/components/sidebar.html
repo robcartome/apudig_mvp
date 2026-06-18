@@ -237,7 +237,20 @@
           <div class="collapse {% if '/reportes/' in request.path %}show{% endif %}" id="sidebar-reports">
             <ul class="navbar-nav ps-lg-3">
               <li class="nav-item">
-                <span class="nav-link text-muted fst-italic" style="font-size:0.85em;">Próximamente…</span>
+                <a class="nav-link {% if 'stock_report_detail' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:stock_report_detail' %}">Stock por Almacén</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'stock_comparative_report' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:stock_comparative_report' %}">Stock Comparativo</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'movement_traceability_report' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:movement_traceability_report' %}">Movimientos de Almacén</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if 'kardex_report' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'inventory:kardex_report' %}">Kardex de Inventario</a>
               </li>
             </ul>
           </div>

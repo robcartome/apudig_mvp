@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Movimientos de Almacén — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Movimientos de Almacén</h2>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+{% endblock extra_css %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Movimientos de Almacén</li>
+        </ol>
+      </nav>
+      <p class="text-muted small mt-1 mb-0">
+        Trazabilidad por producto con documento clicable hacia el movimiento.
+      </p>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a id="btn-excel" href="#" class="btn btn-sm btn-outline-success">
+        <i class="ti ti-file-spreadsheet me-1"></i>Descargar Excel
+      </a>
+      <a id="btn-pdf" href="#" target="_blank" class="btn btn-sm btn-outline-secondary">
+        <i class="ti ti-printer me-1"></i>Descargar PDF
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3 d-print-none">
+  <div class="card-body">
+    <form method="get" id="trace-form">
+      <input type="hidden" name="run" value="1">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Almacén</label>
+          <select name="warehouse" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for wh in warehouses %}
+            <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:"s" %}selected{% endif %}>
+              {{ wh.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Tipo</label>
+          <select name="type" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for code, label in movement_types %}
+            <option value="{{ code }}" {% if movement_type == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Desde</label>
+          <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">Hasta</label>
+          <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Artículos</label>
+          <select id="product-select" name="product" class="form-select" multiple data-placeholder="Buscar y seleccionar uno o varios artículos...">
+            {% for product in selected_products %}
+            <option value="{{ product.pk }}" selected>{{ product.sku }} — {{ product.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold">Buscar</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="ti ti-search"></i></span>
+            <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="SKU, nombre, código de barra o referencia...">
+          </div>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="ti ti-eye me-1"></i>Ver reporte
+          </button>
+          <a href="{% url 'inventory:movement_traceability_report' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+        </div>
+        <div class="col-auto ms-auto text-muted small">
+          {% if should_run %}{{ total_rows }} registro{{ total_rows|pluralize }}{% else %}Sin consulta ejecutada{% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not should_run %}
+<div class="card">
+  <div class="card-body text-center text-muted py-5">
+    Define los filtros y pulsa <strong>Ver reporte</strong>. La consulta no se ejecuta automáticamente para evitar sobrecarga inicial.
+  </div>
+</div>
+{% else %}
+
+{% if report.truncated %}
+<div class="alert alert-warning d-print-none" role="alert">
+  Mostrando solo los primeros {{ report.limit }} registros de {{ report.total_matched }} encontrados para mantener rendimiento en web.
+  Usa <strong>Descargar Excel</strong> para exportar el resultado completo de filtros.
+</div>
+{% endif %}
+
+{% if report.summary_by_type %}
+<div class="card mb-3">
+  <div class="card-header py-2">
+    <h3 class="card-title mb-0">Resumen por tipo</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Tipo</th>
+          <th class="text-end">Movimientos</th>
+          <th class="text-end">Cantidad total</th>
+          <th class="text-end">Importe total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in report.summary_by_type %}
+        <tr>
+          <td>{{ item.type_label }}</td>
+          <td class="text-end">{{ item.movements }}</td>
+          <td class="text-end {% if item.quantity_total < 0 %}text-danger{% endif %}">{{ item.quantity_total|floatformat:2 }}</td>
+          <td class="text-end">S/ {{ item.amount_total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td>TOTAL</td>
+          <td class="text-end">{{ report.total_rows }}</td>
+          <td class="text-end {% if report.total_quantity < 0 %}text-danger{% endif %}">{{ report.total_quantity|floatformat:2 }}</td>
+          <td class="text-end">S/ {{ report.total_amount|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if not report.products %}
+<div class="card">
+  <div class="card-body text-center text-muted py-5">
+    No hay movimientos para los filtros seleccionados.
+  </div>
+</div>
+{% else %}
+{% for product in report.products %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center py-2">
+    <div>
+      <div class="fw-bold">
+        <a href="{% url 'inventory:product_readonly' product.product_id %}" target="_blank" class="text-decoration-none">
+          {{ product.sku }} — {{ product.product }}
+        </a>
+      </div>
+      <div class="text-muted small">{{ product.category }} | {{ product.unit }}</div>
+    </div>
+    <div class="text-end small text-muted">
+      <div>Movimientos: <strong>{{ product.movement_count }}</strong></div>
+      <div>Ingreso: <strong>{{ product.qty_in|floatformat:2 }}</strong> | Salida: <strong>{{ product.qty_out|floatformat:2 }}</strong></div>
+      <div>Saldo neto: <strong class="{% if product.closing_balance < 0 %}text-danger{% endif %}">{{ product.closing_balance|floatformat:2 }}</strong></div>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Fecha</th>
+          <th>Núm. operación</th>
+          <th>Tipo</th>
+          <th>Almacén</th>
+          <th>Producto</th>
+          <th>Socio</th>
+          <th>Documento</th>
+          <th>Referencia</th>
+          <th class="text-end">Cantidad</th>
+          <th class="text-end">P. Unit.</th>
+          <th class="text-end">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in product.entries %}
+        <tr>
+          <td class="text-muted small">{{ entry.date|date:"d/m/Y H:i" }}</td>
+          <td>
+            <a href="{% url 'inventory:movement_operation_readonly' entry.movement_id %}" target="_blank" class="font-monospace text-decoration-none">
+              {{ entry.operation_code }}
+            </a>
+          </td>
+          <td>
+            {% if entry.type == "ENTRY" %}<span class="badge bg-teal-lt">Entrada</span>
+            {% elif entry.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
+            {% elif entry.type == "TRANSFER" %}<span class="badge bg-info-lt">Transferencia</span>
+            {% else %}<span class="badge bg-yellow-lt">Ajuste</span>{% endif %}
+          </td>
+          <td class="text-muted small">{{ entry.warehouse }}</td>
+          <td>
+            <a href="{% url 'inventory:product_readonly' entry.product_id %}" target="_blank" class="text-decoration-none">
+              {{ entry.sku }} — {{ entry.product }}
+            </a>
+          </td>
+          <td>
+            {% if entry.partner_id and entry.partner_type %}
+            <a href="{% url 'inventory:partner_readonly' entry.partner_type entry.partner_id %}" target="_blank" class="text-decoration-none">
+              {{ entry.partner }}
+            </a>
+            {% else %}
+            {{ entry.partner }}
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'inventory:movement_operation_readonly' entry.movement_id %}" target="_blank" class="text-decoration-none">
+              {{ entry.document }}
+            </a>
+          </td>
+          <td class="text-muted small">{{ entry.reference_doc }}</td>
+          <td class="text-end fw-semibold {% if entry.signed_quantity < 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ entry.signed_quantity|floatformat:2 }}
+          </td>
+          <td class="text-end">S/ {{ entry.unit_price|floatformat:2 }}</td>
+          <td class="text-end">S/ {{ entry.amount|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script>
+(function () {
+  const productSelect = $('#product-select');
+  if (productSelect.length) {
+    productSelect.select2({
+      theme: 'bootstrap-5',
+      width: '100%',
+      ajax: {
+        url: '{{ product_search_url }}',
+        dataType: 'json',
+        delay: 250,
+        data: function (params) {
+          return { q: params.term || '' };
+        },
+        processResults: function (data) {
+          return {
+            results: (data.products || []).map(function (product) {
+              return { id: product.id, text: product.sku + ' — ' + product.name };
+            })
+          };
+        },
+        cache: true
+      },
+      minimumInputLength: 1,
+      placeholder: productSelect.data('placeholder') || 'Buscar artículos...'
+    });
+  }
+
+  function buildUrl(format) {
+    const form = document.getElementById('trace-form');
+    const params = new URLSearchParams(new FormData(form));
+    params.set('format', format);
+    return '{% url "inventory:movement_traceability_report" %}?' + params.toString();
+  }
+
+  const excelBtn = document.getElementById('btn-excel');
+  const pdfBtn = document.getElementById('btn-pdf');
+  if (excelBtn) {
+    excelBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      window.location = buildUrl('excel');
+    });
+  }
+  if (pdfBtn) {
+    pdfBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      window.open(buildUrl('print'), '_blank');
+    });
+  }
+})();
+</script>
+{% endblock extra_js %}

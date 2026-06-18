@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% load formatters %}
+{% block title %}Stock Comparativo por Almacén — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Stock Comparativo por Almacén</h2>{% endblock %}
+
+{% block content %}
+{# ─── Page header ─── #}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Stock Comparativo</li>
+        </ol>
+      </nav>
+      <p class="text-muted small mt-1 mb-0">
+        Selecciona uno o varios almacenes para comparar el stock de cada producto en la misma fila. Sin selección se muestran todos.
+      </p>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a id="btn-excel" href="#" class="btn btn-sm btn-outline-success">
+        <i class="ti ti-file-spreadsheet me-1"></i>Descargar Excel
+      </a>
+      <a id="btn-pdf" href="#" target="_blank" class="btn btn-sm btn-outline-secondary">
+        <i class="ti ti-printer me-1"></i>Descargar PDF
+      </a>
+    </div>
+  </div>
+</div>
+
+{# ─── Filters ─── #}
+<div class="card mb-3 d-print-none">
+  <div class="card-body">
+    <form method="get" id="filter-form">
+      <input type="hidden" name="run" value="1">
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">Almacenes</label>
+        <div class="d-flex flex-wrap gap-2" id="warehouse-chips">
+          {% for wh in all_warehouses %}
+          {% with wh_str=wh.pk|stringformat:"s" %}
+          <label class="badge-chip {% if wh_str in selected_ids %}active{% endif %}" data-id="{{ wh_str }}">
+            <input type="checkbox" name="warehouse" value="{{ wh_str }}" class="d-none"
+                   {% if wh_str in selected_ids %}checked{% endif %}>
+            {{ wh.name }}
+          </label>
+          {% endwith %}
+          {% empty %}
+          <span class="text-muted small">Cargando almacenes...</span>
+          {% endfor %}
+        </div>
+        {% if selected_ids %}
+        <button type="button" class="btn btn-link btn-sm text-success p-0 mt-1" id="btn-clear-wh">
+          Limpiar selección
+        </button>
+        {% endif %}
+      </div>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label small">Buscar producto (SKU, nombre o código de barra)</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="ti ti-search"></i></span>
+            <input type="text" name="q" value="{{ q }}" class="form-control"
+                   placeholder="Ej: plancha, 0204008...">
+          </div>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="ti ti-eye me-1"></i>Ver reporte
+          </button>
+          <a href="{% url 'inventory:stock_comparative_report' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+        </div>
+        {% if total is not None %}
+        <div class="col-auto ms-auto text-muted small">
+          {% if should_run %}{{ total }} producto{{ total|pluralize }}{% else %}Sin consulta ejecutada{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if should_run and warehouses and rows %}
+{# ─── Summary table ─── #}
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-success">
+            <tr>
+              <th>Almacén</th>
+              <th class="text-end">Stock total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for wh in warehouses %}
+            <tr>
+              <td class="fw-semibold">{{ wh.name }}</td>
+              <td class="text-end">{{ summary.by_warehouse|get_item:wh.pk|default:0|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="table-light fw-bold">
+              <td>TOTAL</td>
+              <td class="text-end">{{ summary.grand_total|floatformat:2 }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="text-muted small px-3 py-2 mb-0">
+          Valorización total (Stock × P.Compra): <strong>S/ {{ summary.grand_valuation|floatformat:2 }}</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ─── Main table ─── #}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table" id="comparative-table">
+      <thead class="table-light">
+        <tr>
+          <th>SKU</th>
+          <th>Producto</th>
+          <th>Categoría</th>
+          <th>UM</th>
+          {% for wh in warehouses %}
+          <th class="text-end">{{ wh.name }}</th>
+          {% endfor %}
+          <th class="text-end fw-bold">Stock Total</th>
+          <th class="text-end">P. Compra</th>
+          <th class="text-end">P. Venta</th>
+          <th class="text-end">Valorización</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="font-monospace small text-muted">{{ row.sku }}</td>
+          <td>
+            <a href="{% url 'inventory:product_readonly' row.product_id %}" target="_blank" class="text-decoration-none">{{ row.product }}</a>
+          </td>
+          <td class="text-muted small">{{ row.category }}</td>
+          <td class="text-muted small">{{ row.unit }}</td>
+          {% for wh in warehouses %}
+          <td class="text-end">{{ row.stocks|get_item:wh.pk|default:0|floatformat:2 }}</td>
+          {% endfor %}
+          <td class="text-end fw-bold">{{ row.total_stock|floatformat:2 }}</td>
+          <td class="text-end text-muted small">S/ {{ row.price_purchase|floatformat:2 }}</td>
+          <td class="text-end text-muted small">S/ {{ row.price_sale|floatformat:2 }}</td>
+          <td class="text-end">S/ {{ row.total_valuation|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{{ warehouses|length|add:8 }}" class="text-center text-muted py-5">
+            Usa los filtros y pulsa <strong>Ver reporte</strong> para consultar.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="4" class="text-end text-muted small">TOTALES:</td>
+          {% for wh in warehouses %}
+          <td class="text-end">{{ summary.by_warehouse|get_item:wh.pk|default:0|floatformat:2 }}</td>
+          {% endfor %}
+          <td class="text-end">{{ summary.grand_total|floatformat:2 }}</td>
+          <td colspan="2"></td>
+          <td class="text-end">S/ {{ summary.grand_valuation|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<style>
+.badge-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 14px; border-radius: 999px; border: 1px solid #ccc;
+  background: #fff; color: #555; font-size: 0.85rem; cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.badge-chip:hover { background: #f0f0f0; }
+.badge-chip.active { background: #1a7f64; color: #fff; border-color: #1a7f64; }
+</style>
+
+<script>
+(function () {
+  // Chip toggle behaviour
+  document.querySelectorAll('.badge-chip').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chip.classList.toggle('active');
+      chip.querySelector('input').checked = chip.classList.contains('active');
+    });
+  });
+
+  // Clear warehouses
+  const clearBtn = document.getElementById('btn-clear-wh');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function () {
+      document.querySelectorAll('.badge-chip').forEach(function (c) {
+        c.classList.remove('active');
+        c.querySelector('input').checked = false;
+      });
+    });
+  }
+
+  // Build download URLs from current form state
+  function buildDownloadUrl(format) {
+    const form = document.getElementById('filter-form');
+    const params = new URLSearchParams(new FormData(form));
+    params.set('format', format);
+    return '{% url "inventory:stock_comparative_report" %}?' + params.toString();
+  }
+
+  const excelBtn = document.getElementById('btn-excel');
+  const pdfBtn = document.getElementById('btn-pdf');
+  if (excelBtn) excelBtn.addEventListener('click', function (e) {
+    e.preventDefault(); window.location = buildDownloadUrl('excel');
+  });
+  if (pdfBtn) pdfBtn.addEventListener('click', function (e) {
+    e.preventDefault(); window.open(buildDownloadUrl('print'), '_blank');
+  });
+})();
+</script>
+{% endblock %}
