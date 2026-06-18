@@ -1,0 +1,77 @@
+{% load static formatters %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Stock Comparativo — APUDIG</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 10px; margin: 8mm; }
+    h2 { font-size: 14px; margin-bottom: 4px; }
+    .meta { color: #666; font-size: 9px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #1a7f64; color: #fff; padding: 4px 5px; text-align: left; font-size: 9px; }
+    td { padding: 3px 5px; border-bottom: 1px solid #e0e0e0; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    .text-right { text-align: right; }
+    tfoot td { font-weight: bold; background: #f0f0f0; }
+    @media print { body { margin: 6mm; } }
+  </style>
+</head>
+<body>
+  <h2>Stock Comparativo por Almacén</h2>
+  <div class="meta">
+    Almacenes: {% for wh in warehouses %}{{ wh.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    {% if q %} | Búsqueda: "{{ q }}"{% endif %}
+    | {{ rows|length }} producto{{ rows|length|pluralize }}
+    | Valorización total: S/ {{ summary.grand_valuation|floatformat:2 }}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th>Producto</th>
+        <th>Categoría</th>
+        <th>UM</th>
+        {% for wh in warehouses %}
+        <th class="text-right">{{ wh.name }}</th>
+        {% endfor %}
+        <th class="text-right">Stock Total</th>
+        <th class="text-right">P. Compra</th>
+        <th class="text-right">P. Venta</th>
+        <th class="text-right">Valorización</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.sku }}</td>
+        <td>{{ row.product }}</td>
+        <td>{{ row.category }}</td>
+        <td>{{ row.unit }}</td>
+        {% for wh in warehouses %}
+        <td class="text-right">{{ row.stocks|get_item:wh.pk|default:0|floatformat:2 }}</td>
+        {% endfor %}
+        <td class="text-right"><strong>{{ row.total_stock|floatformat:2 }}</strong></td>
+        <td class="text-right">S/ {{ row.price_purchase|floatformat:2 }}</td>
+        <td class="text-right">S/ {{ row.price_sale|floatformat:2 }}</td>
+        <td class="text-right">S/ {{ row.total_valuation|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4" class="text-right">TOTAL:</td>
+        {% for wh in warehouses %}
+        <td class="text-right">{{ summary.by_warehouse|get_item:wh.pk|default:0|floatformat:2 }}</td>
+        {% endfor %}
+        <td class="text-right">{{ summary.grand_total|floatformat:2 }}</td>
+        <td colspan="2"></td>
+        <td class="text-right">S/ {{ summary.grand_valuation|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <script>window.onload = function(){ window.print(); };</script>
+</body>
+</html>

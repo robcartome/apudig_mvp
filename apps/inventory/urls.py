@@ -9,6 +9,7 @@ from .views import (
     category_create, category_delete, category_list, category_update,
     customer_search,
     entry_create, exit_create,
+    kardex_report,
     location_search,
     movement_copy, movement_delete, movement_detail, movement_edit, movement_list, movement_confirm,
     price_list_prices,
@@ -19,7 +20,13 @@ from .views import (
     price_report,
     product_create, product_delete, product_list, product_update,
     product_quick_create, product_search, product_stock,
+    stock_comparative_report,
     stock_report,
+    stock_report_detail,
+    movement_traceability_report,
+    movement_operation_readonly,
+    product_readonly,
+    partner_readonly,
     supplier_search,
     transfer_create, adjustment_create,
     unit_create, unit_delete, unit_list, unit_update,
@@ -46,6 +53,15 @@ urlpatterns = [
 
     # Stock
     path("stock/", stock_report, name="stock_report"),
+
+    # Reportes
+    path("reportes/stock-almacen/", stock_report_detail, name="stock_report_detail"),
+    path("reportes/stock-comparativo/", stock_comparative_report, name="stock_comparative_report"),
+    path("reportes/kardex/", kardex_report, name="kardex_report"),
+    path("reportes/movimientos-almacen/", movement_traceability_report, name="movement_traceability_report"),
+    path("reportes/operacion/<uuid:pk>/", movement_operation_readonly, name="movement_operation_readonly"),
+    path("reportes/producto/<uuid:pk>/", product_readonly, name="product_readonly"),
+    path("reportes/socio/<str:kind>/<uuid:pk>/", partner_readonly, name="partner_readonly"),
 
     # Movements
     path("movements/", movement_list, name="movement_list"),

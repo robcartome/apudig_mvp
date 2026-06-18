@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Kardex de Inventario — APUDIG</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 9px; margin: 7mm; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    .meta { color: #666; font-size: 9px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th { background: #1a7f64; color: #fff; padding: 3px 4px; border: 1px solid #cfd6dc; }
+    td { padding: 3px 4px; border: 1px solid #e2e6ea; }
+    .text-right { text-align: right; }
+    .product { background: #d9ead3; font-weight: bold; }
+    .previous { background: #f3f3f3; font-weight: bold; }
+    .neg { color: #b03030; }
+    @media print { body { margin: 5mm; } }
+  </style>
+</head>
+<body>
+  <h2>Kardex de Inventario</h2>
+  <div class="meta">
+    Rango: {{ date_from }} a {{ date_to }}
+    {% if warehouse_id %}| Almacén: {{ warehouse_id }}{% endif %}
+    {% if category_id %}| Categoría: {{ category_id }}{% endif %}
+    {% if product_q %}| Artículo: "{{ product_q }}"{% endif %}
+  </div>
+
+  {% for group in kardex_groups %}
+  <table>
+    <thead>
+      <tr class="product">
+        <th colspan="13">{{ group.sku }} — {{ group.product_name }} | {{ group.category }} | {{ group.unit }}</th>
+      </tr>
+      <tr>
+        <th>Fecha</th>
+        <th>Tipo</th>
+        <th>Documento</th>
+        <th>Referencia</th>
+        <th>Socio</th>
+        <th class="text-right">Ingreso</th>
+        <th class="text-right">Salida</th>
+        <th class="text-right">Saldo</th>
+        <th class="text-right">V. Unit.</th>
+        <th class="text-right">Costo Prom.</th>
+        <th class="text-right">Val. Ingreso</th>
+        <th class="text-right">Val. Salida</th>
+        <th class="text-right">Val. Saldo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in group.entries %}
+      <tr {% if entry.is_previous %}class="previous"{% endif %}>
+        <td>{% if entry.date %}{{ entry.date|date:"d/m/Y H:i" }}{% endif %}</td>
+        <td>{{ entry.type }}</td>
+        <td>{{ entry.document }}</td>
+        <td>{{ entry.reference }}</td>
+        <td>{{ entry.partner }}</td>
+        <td class="text-right">{% if entry.ingreso is not None %}{{ entry.ingreso|floatformat:3 }}{% endif %}</td>
+        <td class="text-right">{% if entry.salida is not None %}{{ entry.salida|floatformat:3 }}{% endif %}</td>
+        <td class="text-right {% if entry.saldo < 0 %}neg{% endif %}">{{ entry.saldo|floatformat:3 }}</td>
+        <td class="text-right">{% if entry.unit_value is not None %}{{ entry.unit_value|floatformat:3 }}{% endif %}</td>
+        <td class="text-right">{% if entry.avg_cost is not None %}{{ entry.avg_cost|floatformat:3 }}{% endif %}</td>
+        <td class="text-right">{% if entry.value_ingreso is not None %}{{ entry.value_ingreso|floatformat:2 }}{% endif %}</td>
+        <td class="text-right">{% if entry.value_salida is not None %}{{ entry.value_salida|floatformat:2 }}{% endif %}</td>
+        <td class="text-right {% if entry.value_saldo < 0 %}neg{% endif %}">{{ entry.value_saldo|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <script>window.onload = function(){ window.print(); };</script>
+</body>
+</html>

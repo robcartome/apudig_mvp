@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}Kardex de Inventario — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Kardex de Inventario</h2>{% endblock %}
+
+{% block content %}
+{# ─── Info banner ─── #}
+<div class="alert alert-info alert-dismissible d-print-none mb-3" role="alert">
+  <div class="d-flex">
+    <div><i class="ti ti-info-circle me-2"></i></div>
+    <div>
+      <strong>KARDEX DE INVENTARIO</strong> — Tener en cuenta lo siguiente:
+      <ul class="mb-0 mt-1">
+        <li>El reporte muestra movimientos <strong>Confirmados</strong> y <strong>Cerrados</strong>.</li>
+        <li>Los movimientos en borrador no aparecen en el kardex.</li>
+        <li>El saldo anterior se calcula con todos los movimientos previos al rango de fechas.</li>
+      </ul>
+    </div>
+  </div>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+
+{# ─── Filters ─── #}
+<div class="card mb-3 d-print-none">
+  <div class="card-body">
+    <form method="get" id="kardex-form">
+      <div class="row g-3">
+        <div class="col-md-4 col-lg-3">
+          <label class="form-label small fw-semibold">Almacén <span class="text-danger">*</span></label>
+          <select name="warehouse" class="form-select form-select-sm" required id="wh-select">
+            <option value="">— Selecciona un almacén —</option>
+            {% for wh in warehouses %}
+            <option value="{{ wh.pk }}" {% if warehouse_id == wh.pk|stringformat:"s" %}selected{% endif %}>
+              {{ wh.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2 col-lg-2">
+          <label class="form-label small fw-semibold">Período</label>
+          <select name="year" class="form-select form-select-sm" id="year-select">
+            {% for y in years_range %}
+            <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3 col-lg-2">
+          <label class="form-label small fw-semibold">Fecha desde</label>
+          <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm" id="date-from">
+        </div>
+
+        <div class="col-md-3 col-lg-2">
+          <label class="form-label small fw-semibold">Fecha hasta</label>
+          <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm" id="date-to">
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+          <label class="form-label small fw-semibold">Categoría (opcional)</label>
+          <select name="category" class="form-select form-select-sm">
+            <option value="">Todas las categorías</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}" {% if category_id == cat.pk|stringformat:"s" %}selected{% endif %}>
+              {{ cat.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+          <label class="form-label small fw-semibold">Artículo (opcional)</label>
+          <input type="text" name="product_q" value="{{ product_q }}" class="form-control form-control-sm"
+                 placeholder="SKU, nombre o código de barra">
+        </div>
+
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="show_previous" value="1" id="chk-previous"
+                   {% if show_previous %}checked{% endif %}>
+            <label class="form-check-label small" for="chk-previous">
+              Mostrar saldo anterior
+            </label>
+          </div>
+        </div>
+
+        <div class="col-12 d-flex gap-2 align-items-center">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="ti ti-eye me-1"></i>Ver Kardex de Inventario
+          </button>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-success dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="ti ti-download me-1"></i>Descargar Kardex de Inventario
+            </button>
+            <ul class="dropdown-menu">
+              <li>
+                <a class="dropdown-item" id="btn-excel" href="#">
+                  <i class="ti ti-file-spreadsheet me-2 text-success"></i>Descargar Excel
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" id="btn-pdf" href="#" target="_blank">
+                  <i class="ti ti-file-type-pdf me-2 text-danger"></i>Descargar PDF
+                </a>
+              </li>
+            </ul>
+          </div>
+          <a href="{% url 'inventory:kardex_report' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+          {% if total_products %}
+          <span class="ms-auto text-muted small">{{ total_products }} artículo{{ total_products|pluralize }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ─── Kardex groups ─── #}
+{% if not warehouse_id %}
+<div class="card"><div class="card-body text-center text-muted py-5">
+  <i class="ti ti-package-off fs-1 mb-2 d-block"></i>
+  Selecciona un almacén y un rango de fechas, luego pulsa <strong>Ver Kardex de Inventario</strong>.
+</div></div>
+{% elif not kardex_groups %}
+<div class="card"><div class="card-body text-center text-muted py-5">
+  <i class="ti ti-search-off fs-1 mb-2 d-block"></i>
+  No se encontraron movimientos para los filtros seleccionados.
+</div></div>
+{% else %}
+{% for group in kardex_groups %}
+<div class="card mb-3">
+  <div class="card-header bg-success-lt d-flex justify-content-between align-items-center py-2">
+    <div>
+      <span class="fw-bold">{{ group.sku }}</span>
+      <span class="ms-2">{{ group.product_name }}</span>
+      <span class="ms-2 text-muted small">— {{ group.category }}</span>
+      <span class="ms-2 badge bg-blue-lt">{{ group.unit }}</span>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter mb-0">
+      <thead class="table-light">
+        <tr>
+          <th rowspan="2" class="align-middle">Fecha</th>
+          <th rowspan="2" class="align-middle">Tipo</th>
+          <th rowspan="2" class="align-middle">Documento</th>
+          <th rowspan="2" class="align-middle">Referencia</th>
+          <th rowspan="2" class="align-middle">Socio de Negocio</th>
+          <th colspan="3" class="text-center border-start border-end">Cantidades</th>
+          <th rowspan="2" class="align-middle text-end border-start">Valor Unit.</th>
+          <th rowspan="2" class="align-middle text-end">Costo Prom.</th>
+          <th colspan="3" class="text-center border-start">Valores</th>
+        </tr>
+        <tr>
+          <th class="text-end border-start">Ingreso</th>
+          <th class="text-end">Salida</th>
+          <th class="text-end border-end">Saldo</th>
+          <th class="text-end border-start">Ingreso</th>
+          <th class="text-end">Salida</th>
+          <th class="text-end">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in group.entries %}
+        <tr {% if entry.is_previous %}class="table-secondary fw-semibold"{% endif %}>
+          <td class="text-muted small">
+            {% if entry.date %}{{ entry.date|date:"d/m/Y H:i" }}{% endif %}
+          </td>
+          <td class="text-muted small">{{ entry.type }}</td>
+          <td class="text-muted small">{{ entry.document }}</td>
+          <td class="font-monospace text-muted small">{{ entry.reference }}</td>
+          <td class="{% if entry.is_previous %}fw-bold{% endif %}">{{ entry.partner }}</td>
+          <td class="text-end text-success fw-semibold border-start">
+            {% if entry.ingreso is not None %}{{ entry.ingreso|floatformat:3 }}{% endif %}
+          </td>
+          <td class="text-end text-danger fw-semibold">
+            {% if entry.salida is not None %}{{ entry.salida|floatformat:3 }}{% endif %}
+          </td>
+          <td class="text-end fw-bold border-end {% if entry.saldo < 0 %}text-danger{% endif %}">
+            {{ entry.saldo|floatformat:3 }}
+          </td>
+          <td class="text-end text-muted small border-start">
+            {% if entry.unit_value is not None %}{{ entry.unit_value|floatformat:3 }}{% endif %}
+          </td>
+          <td class="text-end text-muted small">
+            {% if entry.avg_cost is not None %}{{ entry.avg_cost|floatformat:3 }}{% endif %}
+          </td>
+          <td class="text-end text-success small border-start">
+            {% if entry.value_ingreso is not None %}S/ {{ entry.value_ingreso|floatformat:2 }}{% endif %}
+          </td>
+          <td class="text-end text-danger small">
+            {% if entry.value_salida is not None %}S/ {{ entry.value_salida|floatformat:2 }}{% endif %}
+          </td>
+          <td class="text-end fw-semibold small {% if entry.value_saldo < 0 %}text-danger{% endif %}">
+            S/ {{ entry.value_saldo|floatformat:2 }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="13" class="text-center text-muted py-3">Sin movimientos en el período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<script>
+(function () {
+  // Sync year → date_from / date_to
+  const yearSel = document.getElementById('year-select');
+  const dfInput = document.getElementById('date-from');
+  const dtInput = document.getElementById('date-to');
+  if (yearSel) {
+    yearSel.addEventListener('change', function () {
+      const y = this.value;
+      dfInput.value = y + '-01-01';
+      const today = new Date().toISOString().slice(0, 10);
+      dtInput.value = today.startsWith(y) ? today : y + '-12-31';
+    });
+  }
+
+  // Build download URLs
+  function buildUrl(format) {
+    const form = document.getElementById('kardex-form');
+    const params = new URLSearchParams(new FormData(form));
+    // Ensure show_previous is included when unchecked
+    if (!form.querySelector('#chk-previous').checked) {
+      params.set('show_previous', '0');
+    }
+    params.set('format', format);
+    return '{% url "inventory:kardex_report" %}?' + params.toString();
+  }
+
+  const btnExcel = document.getElementById('btn-excel');
+  const btnPdf = document.getElementById('btn-pdf');
+  if (btnExcel) btnExcel.addEventListener('click', function (e) {
+    e.preventDefault();
+    window.location = buildUrl('excel');
+  });
+  if (btnPdf) btnPdf.addEventListener('click', function (e) {
+    e.preventDefault();
+    window.open(buildUrl('print'), '_blank');
+  });
+})();
+</script>
+{% endblock %}

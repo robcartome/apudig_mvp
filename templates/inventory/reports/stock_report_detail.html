@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Stock por Almacén — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Stock por Almacén</h2>{% endblock %}
+
+{% block content %}
+{# ─── Page header ─── #}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Reporte Stock por Almacén</li>
+        </ol>
+      </nav>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a href="?warehouse={{ selected_warehouse }}&q={{ q }}&format=excel" class="btn btn-sm btn-outline-success">
+        <i class="ti ti-file-spreadsheet me-1"></i>Descargar Excel
+      </a>
+      <a href="?warehouse={{ selected_warehouse }}&q={{ q }}&format=print" target="_blank" class="btn btn-sm btn-outline-secondary">
+        <i class="ti ti-printer me-1"></i>Descargar PDF
+      </a>
+    </div>
+  </div>
+</div>
+
+{# ─── Filters ─── #}
+<div class="card mb-3 d-print-none">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <input type="hidden" name="run" value="1">
+      <div class="col-md-3">
+        <select name="warehouse" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Todos los almacenes</option>
+          {% for wh in warehouses %}
+          <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:'s' %}selected{% endif %}>
+            {{ wh.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="ti ti-search"></i></span>
+          <input type="text" name="q" value="{{ q }}" class="form-control"
+                 placeholder="Buscar por SKU, nombre o código de barras...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
+        <a href="{% url 'inventory:stock_report_detail' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+      </div>
+      <div class="col-auto ms-auto text-muted small">
+        {% if should_run %}{{ total }} producto{{ total|pluralize }} encontrado{{ total|pluralize }}{% else %}Sin consulta ejecutada{% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ─── Summary cards ─── #}
+{% if rows %}
+<div class="row g-3 mb-3">
+  <div class="col-sm-6 col-lg-4">
+    <div class="card">
+      <div class="card-body py-3 px-4">
+        <div class="text-muted small mb-1">Stock total</div>
+        <div class="h4 mb-0 fw-bold">{{ total_stock|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-4">
+    <div class="card">
+      <div class="card-body py-3 px-4">
+        <div class="text-muted small mb-1">Valorización total (Stock × P.Compra)</div>
+        <div class="h4 mb-0 fw-bold">S/ {{ total_valuation|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ─── Table ─── #}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Almacén</th>
+          <th>SKU</th>
+          <th>Producto</th>
+          <th>Categoría</th>
+          <th>UM</th>
+          <th class="text-end">Stock</th>
+          <th class="text-end">Mínimo</th>
+          <th class="text-center">Estado</th>
+          <th class="text-end">P. Compra</th>
+          <th class="text-end">Valorización</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="text-muted small">{{ row.warehouse }}</td>
+          <td class="fw-semibold text-muted small font-monospace">{{ row.sku }}</td>
+          <td>{{ row.product }}</td>
+          <td class="text-muted small">{{ row.category }}</td>
+          <td class="text-muted small">{{ row.unit }}</td>
+          <td class="text-end fw-semibold {% if row.status == 'BAJO' %}text-danger{% endif %}">
+            {{ row.quantity|floatformat:3 }}
+          </td>
+          <td class="text-end text-muted small">{{ row.min_stock|floatformat:0 }}</td>
+          <td class="text-center">
+            {% if row.status == "BAJO" %}
+            <span class="badge bg-red-lt">BAJO</span>
+            {% else %}
+            <span class="badge bg-green-lt">NORMAL</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-muted small">S/ {{ row.price_purchase|floatformat:2 }}</td>
+          <td class="text-end fw-semibold">S/ {{ row.valuation|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="text-center text-muted py-4">
+            {% if should_run %}
+            No hay registros de stock{% if selected_warehouse %} para el almacén seleccionado{% endif %}.
+            {% if not selected_warehouse %}<br>Selecciona un almacén o busca un producto.{% endif %}
+            {% else %}
+            Define filtros y pulsa <strong>Buscar</strong>. La consulta no se ejecuta automáticamente.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="5" class="text-end text-muted small">TOTALES:</td>
+          <td class="text-end">{{ total_stock|floatformat:2 }}</td>
+          <td colspan="3"></td>
+          <td class="text-end">S/ {{ total_valuation|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

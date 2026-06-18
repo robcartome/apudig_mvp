@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Movimientos de Almacén — APUDIG</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 9px; margin: 7mm; }
+    h2 { font-size: 13px; margin: 0 0 4px; }
+    .meta { color: #666; font-size: 9px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th { background: #1a7f64; color: #fff; padding: 3px 4px; border: 1px solid #cfd6dc; }
+    td { padding: 3px 4px; border: 1px solid #e2e6ea; }
+    .text-right { text-align: right; }
+    .product { background: #d9ead3; font-weight: bold; }
+    .summary { margin-bottom: 10px; }
+    .neg { color: #b03030; }
+    @media print { body { margin: 5mm; } }
+  </style>
+</head>
+<body>
+  <h2>Movimientos de Almacén</h2>
+  <div class="meta">
+    Rango: {{ date_from }} a {{ date_to }}
+    {% if selected_warehouse_name %}| Almacén: {{ selected_warehouse_name }}{% endif %}
+    {% if movement_type_label %}| Tipo: {{ movement_type_label }}{% endif %}
+    {% if q %}| Búsqueda: "{{ q }}"{% endif %}
+  </div>
+
+  {% if report.summary_by_type %}
+  <table class="summary">
+    <thead>
+      <tr>
+        <th>Tipo</th>
+        <th class="text-right">Movimientos</th>
+        <th class="text-right">Cantidad total</th>
+        <th class="text-right">Importe total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in report.summary_by_type %}
+      <tr>
+        <td>{{ item.type_label }}</td>
+        <td class="text-right">{{ item.movements }}</td>
+        <td class="text-right {% if item.quantity_total < 0 %}neg{% endif %}">{{ item.quantity_total|floatformat:2 }}</td>
+        <td class="text-right">S/ {{ item.amount_total|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% for product in report.products %}
+  <table>
+    <thead>
+      <tr class="product">
+        <th colspan="9">{{ product.sku }} — {{ product.product }} | {{ product.category }} | {{ product.unit }}</th>
+      </tr>
+      <tr>
+        <th>Fecha</th>
+        <th>Núm. operación</th>
+        <th>Tipo</th>
+        <th>Almacén</th>
+        <th>Producto</th>
+        <th>Socio</th>
+        <th>Documento</th>
+        <th>Referencia</th>
+        <th class="text-right">Cantidad</th>
+        <th class="text-right">P. Unit.</th>
+        <th class="text-right">Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in product.entries %}
+      <tr>
+        <td>{{ entry.date|date:"d/m/Y H:i" }}</td>
+        <td>{{ entry.operation_code }}</td>
+        <td>{{ entry.type_label }}</td>
+        <td>{{ entry.warehouse }}</td>
+        <td>{{ entry.sku }} — {{ entry.product }}</td>
+        <td>{{ entry.partner }}</td>
+        <td>{{ entry.document }}</td>
+        <td>{{ entry.reference_doc }}</td>
+        <td class="text-right {% if entry.signed_quantity < 0 %}neg{% endif %}">{{ entry.signed_quantity|floatformat:2 }}</td>
+        <td class="text-right">S/ {{ entry.unit_price|floatformat:2 }}</td>
+        <td class="text-right">S/ {{ entry.amount|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <script>window.onload = function(){ window.print(); };</script>
+</body>
+</html>
