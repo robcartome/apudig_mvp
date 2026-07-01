@@ -477,7 +477,7 @@ def product_update(request, pk):
     if err:
         return err
     obj = get_object_or_404(Product, pk=pk, company=company)
-    price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "name")
+    price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
     existing_prices = {str(pp.price_list_id): pp for pp in obj.prices.all()}
 
     form = ProductForm(request.POST or None, instance=obj, company=company)
@@ -502,10 +502,15 @@ def product_update(request, pk):
         messages.success(request, "Producto actualizado.")
         return redirect("inventory:product_list")
 
-    price_list_data = [
-        {"pl": price_list, "amount": existing_prices.get(str(price_list.pk)) and existing_prices[str(price_list.pk)].amount}
-        for price_list in price_lists
-    ]
+    price_list_data = []
+
+    for price_list in price_lists:
+        product_price = existing_prices.get(str(price_list.pk))
+
+        price_list_data.append({
+            "price_list": price_list,
+            "amount": product_price.amount if product_price else None,
+        })
 
     print(price_list_data)
 
