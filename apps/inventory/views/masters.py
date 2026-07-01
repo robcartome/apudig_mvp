@@ -21,12 +21,12 @@ from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
 from apps.companies.models import Company, Store
 
 from ..forms import BulkImportForm, BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
+from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation, PriceList, ProductPrice
 from ..importers import (
     ENTITY_LABELS,
     build_import_template_workbook,
     import_inventory_excel,
 )
-from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation
 from ..selectors import (
     get_brands,
     get_categories,
@@ -477,13 +477,46 @@ def product_update(request, pk):
     if err:
         return err
     obj = get_object_or_404(Product, pk=pk, company=company)
+    price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
+    existing_prices = {str(pp.price_list_id): pp for pp in obj.prices.all()}
+
     form = ProductForm(request.POST or None, instance=obj, company=company)
     if request.method == "POST" and form.is_valid():
         form.save()
+        for price_list in price_lists:
+            field_name = f"price_list_{price_list.pk}"
+            raw = request.POST.get(field_name, "").strip()
+            if raw == "":
+                continue
+            try:
+                from decimal import Decimal, InvalidOperation
+                amount = Decimal(raw)
+            except InvalidOperation:
+                continue
+            pp = existing_prices.get(str(price_list.pk))
+            if pp:
+                pp.amount = amount
+                pp.save(update_fields=["amount"])
+            else:
+                ProductPrice.objects.create(product=obj, price_list=price_list, amount=amount, currency="PEN")
         messages.success(request, "Producto actualizado.")
         return redirect("inventory:product_list")
+
+    price_list_data = []
+
+    for price_list in price_lists:
+        product_price = existing_prices.get(str(price_list.pk))
+
+        price_list_data.append({
+            "price_list": price_list,
+            "amount": product_price.amount if product_price else None,
+        })
+
+    print(price_list_data)
+
     return render(request, "inventory/product_form.html", {
-        "form": form, "title": "Editar producto", "object": obj, "cancel_url": "inventory:product_list",
+        "form": form, "title": "Editar producto", "object": obj,
+        "cancel_url": "inventory:product_list", "price_list_data": price_list_data,
     })
 
 
