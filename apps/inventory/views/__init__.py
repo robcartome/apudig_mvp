@@ -1,5 +1,7 @@
 # inventory/views package
 from .api import (
+    brand_search,
+    category_search,
     customer_search,
     location_search,
     price_list_prices,
@@ -78,6 +80,7 @@ from .reports import (
 __all__ = [
     "admin_panel",
     "adjustment_create",
+    "brand_search",
     "brand_create",
     "brand_delete",
     "brand_list",
@@ -85,6 +88,7 @@ __all__ = [
     "bulk_import",
     "bulk_import_errors",
     "bulk_import_template",
+    "category_search",
     "category_create",
     "category_delete",
     "category_list",

@@ -128,8 +128,8 @@ class ProductForm(forms.ModelForm):
             "model": forms.TextInput(attrs=_text),
             "price_purchase": forms.NumberInput(attrs={**_text, "step": "0.01"}),
             "price_sale": forms.NumberInput(attrs={**_text, "step": "0.01"}),
-            "category": forms.Select(attrs=_select),
-            "brand": forms.Select(attrs=_select),
+            "category": forms.HiddenInput(),
+            "brand": forms.HiddenInput(),
             "unit": forms.Select(attrs=_select),
             "active": forms.CheckboxInput(attrs=_check),
         }

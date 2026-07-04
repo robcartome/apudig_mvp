@@ -7,6 +7,8 @@ from .views import (
     bulk_import_template,
     brand_create, brand_delete, brand_list, brand_update,
     category_create, category_delete, category_list, category_update,
+    brand_search,
+    category_search,
     customer_search,
     entry_create, exit_create,
     kardex_report,
@@ -50,6 +52,8 @@ urlpatterns = [
     path("api/suppliers/",       supplier_search,      name="api_supplier_search"),
     path("api/customers/",       customer_search,      name="api_customer_search"),
     path("api/locations/",       location_search,      name="api_location_search"),
+    path("api/categories/",      category_search,      name="api_category_search"),
+    path("api/brands/",          brand_search,         name="api_brand_search"),
 
     # Stock
     path("stock/", stock_report, name="stock_report"),
