@@ -1,6 +1,12 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ title }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+{% endblock extra_css %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -70,7 +76,7 @@
           </div>
         </div>
 
-        {% if object and price_list_data %}
+        {% if price_list_data %}
         <hr class="my-2">
         <p class="text-muted small mb-2">Listas de precio</p>
         <div class="row">
@@ -101,10 +107,26 @@
         <div class="mb-3">
           <label class="form-label">Categoría</label>
           {{ form.category }}
+          <select id="category-select" class="catalog-select w-100"
+                  data-url="{% url 'inventory:api_category_search' %}"
+                  data-hidden-id="{{ form.category.id_for_label }}"
+                  data-placeholder="Buscar categoría…">
+            {% if form.instance.category_id %}
+            <option value="{{ form.instance.category_id }}" selected>{{ form.instance.category }}</option>
+            {% endif %}
+          </select>
         </div>
         <div class="mb-3">
           <label class="form-label">Marca</label>
           {{ form.brand }}
+          <select id="brand-select" class="catalog-select w-100"
+                  data-url="{% url 'inventory:api_brand_search' %}"
+                  data-hidden-id="{{ form.brand.id_for_label }}"
+                  data-placeholder="Buscar marca…">
+            {% if form.instance.brand_id %}
+            <option value="{{ form.instance.brand_id }}" selected>{{ form.instance.brand }}</option>
+            {% endif %}
+          </select>
         </div>
         <div class="mb-0">
           <label class="form-check">
@@ -127,3 +149,11 @@
 </div>
 </form>
 {% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script src="{% static 'js/api.js' %}"></script>
+<!-- <script src="{% static 'js/inventory/product-form.js' %}"></script> -->
+{% endblock extra_js %}

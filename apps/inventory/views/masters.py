@@ -460,13 +460,28 @@ def product_create(request):
     company, err = _require_company(request)
     if err:
         return err
+    price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
     form = ProductForm(request.POST or None, company=company)
+    print(form)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        product = form.save()
+        for price_list in price_lists:
+            raw = request.POST.get(f"price_list_{price_list.pk}", "").strip()
+            if raw == "":
+                continue
+            try:
+                from decimal import Decimal, InvalidOperation
+                amount = Decimal(raw)
+            except InvalidOperation:
+                continue
+            ProductPrice.objects.create(product=product, price_list=price_list, amount=amount, currency="PEN")
         messages.success(request, "Producto creado correctamente.")
         return redirect("inventory:product_list")
+
+    price_list_data = [{"price_list": price_list, "amount": None} for price_list in price_lists]
     return render(request, "inventory/product_form.html", {
         "form": form, "title": "Nuevo producto", "cancel_url": "inventory:product_list",
+        "price_list_data": price_list_data,
     })
 
 
@@ -511,8 +526,6 @@ def product_update(request, pk):
             "price_list": price_list,
             "amount": product_price.amount if product_price else None,
         })
-
-    print(price_list_data)
 
     return render(request, "inventory/product_form.html", {
         "form": form, "title": "Editar producto", "object": obj,

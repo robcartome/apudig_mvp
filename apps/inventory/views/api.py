@@ -10,7 +10,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.partners.models import Customer, Supplier
 
-from ..models import Product, ProductPrice, StockByWarehouse, Unit, WarehouseLocation
+from ..models import Brand, Category, Product, ProductPrice, StockByWarehouse, Unit, WarehouseLocation
 
 
 def _get_company_id(request):
@@ -107,7 +107,6 @@ def product_stock(request):
 
 
 # ── Supplier search ───────────────────────────────────────────────────────────
-
 @require_GET
 def supplier_search(request):
     """Return up to 30 active suppliers matching `q` (name or document_number)."""
@@ -137,7 +136,6 @@ def supplier_search(request):
 
 
 # ── Customer search ───────────────────────────────────────────────────────────
-
 @require_GET
 def customer_search(request):
     """Return up to 30 active customers matching `q` (legal_name, trade_name or document_number)."""
@@ -173,7 +171,6 @@ def customer_search(request):
 
 
 # ── Quick create product ───────────────────────────────────────────────────────
-
 @require_http_methods(["POST"])
 def product_quick_create(request):
     """Create a product with minimal data and return its JSON representation."""
@@ -228,9 +225,7 @@ def product_quick_create(request):
         status=201,
     )
 
-
 # ── Price list prices ────────────────────────────────────────────────────────
-
 @require_GET
 def price_list_prices(request, pk):
     """Return prices for given product IDs in a price list."""
@@ -256,9 +251,35 @@ def price_list_prices(request, pk):
         }
     })
 
+# ── Category search ──────────────────────────────────────────────────────────
+@require_GET
+def category_search(request):
+    if _require_auth(request):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    query = request.GET.get("q", "").strip()
+    company_id = _get_company_id(request)
+    qs = Category.objects.filter(active=True)
+    if company_id:
+        qs = qs.filter(company_id=company_id)
+    if query:
+        qs = qs.filter(Q(name__icontains=query) | Q(code__icontains=query))
+    return JsonResponse({"results": [{"id": str(c.pk), "text": c.name} for c in qs.order_by("name")[:50]]})
+
+# ── Brand search ──────────────────────────────────────────────────────────────
+@require_GET
+def brand_search(request):
+    if _require_auth(request):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    query = request.GET.get("q", "").strip()
+    company_id = _get_company_id(request)
+    qs = Brand.objects.filter(active=True)
+    if company_id:
+        qs = qs.filter(company_id=company_id)
+    if query:
+        qs = qs.filter(name__icontains=query)
+    return JsonResponse({"results": [{"id": str(b.pk), "text": b.name} for b in qs.order_by("name")[:50]]})
 
 # ── Location search ───────────────────────────────────────────────────────────
-
 @require_GET
 def location_search(request):
     """Return active warehouse locations for a given warehouse."""
