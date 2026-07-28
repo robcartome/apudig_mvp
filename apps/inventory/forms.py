@@ -295,8 +295,18 @@ class MovementDetailForm(forms.Form):
         label="Ubicación",
     )
 
-    def __init__(self, *args, company_id=None, **kwargs):
+    def __init__(self, *args, company_id=None, allow_zero=False, **kwargs):
         super().__init__(*args, **kwargs)
+        if allow_zero:
+            self.fields["quantity"] = forms.DecimalField(
+                max_digits=10,
+                decimal_places=3,
+                min_value=Decimal("0"),
+                widget=forms.NumberInput(
+                    attrs={"class": _sm, "step": "0.001", "min": "0"}
+                ),
+                label="Cantidad",
+            )
         if company_id:
             self.fields["product"].queryset = (
                 Product.objects
