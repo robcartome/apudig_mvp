@@ -18,6 +18,7 @@
   const locationUrl = configEl.dataset.locationUrl;
   const movementType = configEl.dataset.movementType;
   const showUnitPrice = configEl.dataset.showUnitPrice === '1';
+  const minimumQuantity = movementType === 'ADJUSTMENT' ? '0' : '0.001';
   const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
   const warehouseInput = document.getElementById(
@@ -133,7 +134,7 @@
       </td>
       <td>
         <input type="number" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
-               class="form-control form-control-sm" step="0.001" min="0.001" value="">
+               class="form-control form-control-sm" step="0.001" min="${minimumQuantity}" value="">
       </td>
       <td>
         <input type="text" class="form-control form-control-sm product-stock text-end text-muted"
