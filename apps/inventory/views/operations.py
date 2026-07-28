@@ -152,7 +152,10 @@ def _movement_forms(request, store_id, movement, company_id=None):
             instance=movement,
         )
 
-    form_kwargs = {"company_id": company_id} if company_id else {}
+    form_kwargs = {
+        "company_id": company_id,
+        "allow_zero": movement.type == MovementType.ADJUSTMENT,
+    }
     formset = MovementDetailEditFormSet(
         request.POST or None, initial=initial_lines, prefix="lines", form_kwargs=form_kwargs
     )
@@ -490,7 +493,10 @@ def adjustment_create(request):
     )
     formset = MovementDetailFormSet(
         request.POST or None, prefix="lines",
-        form_kwargs={"company_id": company_id} if company_id else {},
+        form_kwargs={
+            "company_id": company_id,
+            "allow_zero": True,
+        },
     )
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
@@ -607,7 +613,10 @@ def movement_copy(request, pk):
             initial=initial_header,
         )
 
-    form_kwargs = {"company_id": company_id} if company_id else {}
+    form_kwargs = {
+        "company_id": company_id,
+        "allow_zero": source.type == MovementType.ADJUSTMENT,
+    }
     formset = MovementDetailFormSet(
         request.POST or None,
         initial=initial_lines,

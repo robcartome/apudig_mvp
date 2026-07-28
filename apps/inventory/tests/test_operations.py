@@ -123,6 +123,25 @@ class MovementViewsTest(TestCase):
         self.assertEqual(stock_a.quantity, Decimal("3"))  # 5 - 2
         self.assertEqual(stock_b.quantity, Decimal("2"))
 
+    # ── Adjustment ─────────────────────────────────────────────────────────
+
+    def test_adjustment_accepts_zero_physical_quantity(self):
+        self._post_movement(reverse("inventory:entry_create"))
+
+        resp = self._post_movement(
+            reverse("inventory:adjustment_create"),
+            {"lines-0-quantity": "0"},
+        )
+
+        self.assertRedirects(resp, reverse("inventory:movement_list"))
+        stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity, Decimal("0"))
+
+        adjustment = Movement.objects.get(type="ADJUSTMENT")
+        detail = adjustment.details.get()
+        self.assertEqual(detail.physical_quantity, Decimal("0"))
+        self.assertEqual(detail.quantity, Decimal("-5"))
+
     # ── Stock report ──────────────────────────────────────────────────────────
 
     def test_stock_report_ok(self):
