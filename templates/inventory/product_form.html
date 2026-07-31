@@ -107,7 +107,7 @@
         <div class="mb-3">
           <label class="form-label">Categoría</label>
           {{ form.category }}
-          <select id="category-select" class="catalog-select w-100"
+          <select id="category-select" class="remote-select-js w-100"
                   data-url="{% url 'inventory:api_category_search' %}"
                   data-hidden-id="{{ form.category.id_for_label }}"
                   data-placeholder="Buscar categoría…">
@@ -119,7 +119,7 @@
         <div class="mb-3">
           <label class="form-label">Marca</label>
           {{ form.brand }}
-          <select id="brand-select" class="catalog-select w-100"
+          <select id="brand-select" class="remote-select-js w-100"
                   data-url="{% url 'inventory:api_brand_search' %}"
                   data-hidden-id="{{ form.brand.id_for_label }}"
                   data-placeholder="Buscar marca…">
@@ -155,5 +155,5 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/api.js' %}"></script>
-<!-- <script src="{% static 'js/inventory/product-form.js' %}"></script> -->
+<script src="{% static 'js/inventory/product-form.js' %}"></script>
 {% endblock extra_js %}
