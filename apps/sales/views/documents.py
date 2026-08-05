@@ -1,16 +1,16 @@
 """
-sales/views/vouchers.py — Vistas del ciclo de comprobantes.
+sales/views/documents.py — Vistas del ciclo de documentos de venta.
 
 Rutas:
-  voucher_list      GET      /ventas/comprobantes/
-  voucher_create    GET+POST /ventas/comprobantes/nuevo/
-  voucher_from_ord  POST     /ventas/ordenes/<uuid:pk>/emitir/
-  voucher_detail    GET      /ventas/comprobantes/<uuid:pk>/
-  voucher_issue     POST     /ventas/comprobantes/<uuid:pk>/emitir/
-  voucher_void      POST     /ventas/comprobantes/<uuid:pk>/anular/
-  voucher_cancel    POST     /ventas/comprobantes/<uuid:pk>/cancelar/
-  voucher_credit    GET+POST /ventas/comprobantes/<uuid:pk>/nota-credito/
-  voucher_pdf       GET      /ventas/comprobantes/<uuid:pk>/pdf/
+  document_list      GET      /ventas/comprobantes/
+  document_create    GET+POST /ventas/comprobantes/nuevo/
+  document_from_order  POST     /ventas/ordenes/<uuid:pk>/emitir/
+  document_detail    GET      /ventas/comprobantes/<uuid:pk>/
+  document_issue     POST     /ventas/comprobantes/<uuid:pk>/emitir/
+  document_void      POST     /ventas/comprobantes/<uuid:pk>/anular/
+  document_cancel    POST     /ventas/comprobantes/<uuid:pk>/cancelar/
+  document_credit    GET+POST /ventas/comprobantes/<uuid:pk>/nota-credito/
+  document_pdf       GET      /ventas/comprobantes/<uuid:pk>/pdf/
 """
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -20,22 +20,22 @@ from django.utils import timezone
 
 from apps.sales.forms import (
     CreditNoteReasonForm,
-    VoucherHeaderForm,
-    VoucherLineFormSet,
+    SalesDocumentHeaderForm,
+    SalesDocumentLineFormSet,
 )
 from apps.sales.models import (
     DocumentSeries,
     SaleOrder,
-    Voucher,
-    VOUCHER_STATUS_CHOICES,
+    SalesDocument,
+    SALES_DOCUMENT_STATUS_CHOICES,
 )
-from apps.sales.selectors import get_voucher_detail, search_vouchers, get_series_for_store
+from apps.sales.selectors import get_document_detail, search_sales_documents, get_series_for_store
 from apps.sales.services import (
-    cancel_voucher,
+    cancel_sales_document,
     create_credit_note,
-    create_voucher_draft,
-    issue_voucher,
-    void_voucher,
+    create_sales_document_draft,
+    issue_sales_document,
+    void_sales_document,
 )
 from apps.inventory.models import PriceList
 
@@ -68,7 +68,7 @@ def _lines_from_formset(formset) -> list[dict]:
 
 # ── Vistas ────────────────────────────────────────────────────────────────────
 
-def voucher_list(request):
+def document_list(request):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
@@ -76,39 +76,39 @@ def voucher_list(request):
     _, store_id = _get_ids(request)
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
-    voucher_type = request.GET.get("voucher_type", "")
+    document_type = request.GET.get("document_type", "")
 
-    qs = search_vouchers(store_id, query=q or None, status=status or None)
-    if voucher_type:
-        qs = qs.filter(voucher_type=voucher_type)
+    qs = search_sales_documents(store_id, query=q or None, status=status or None)
+    if document_type:
+        qs = qs.filter(document_type=document_type)
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
 
-    return render(request, "sales/voucher_list.html", {
+    return render(request, "sales/document_list.html", {
         "page_obj": page,
         "q": q,
         "status": status,
-        "voucher_type": voucher_type,
-        "status_choices": VOUCHER_STATUS_CHOICES,
+        "document_type": document_type,
+        "status_choices": SALES_DOCUMENT_STATUS_CHOICES,
     })
 
 
-def voucher_create(request):
+def document_create(request):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
 
     company_id, store_id = _get_ids(request)
-    # Determine voucher_type from query param (default factura)
-    vtype = request.GET.get("voucher_type", "01")
+    # Determine document_type from query param (default factura)
+    vtype = request.GET.get("document_type", "01")
 
     if request.method == "POST":
-        vtype = request.POST.get("voucher_type", "01")
-        header_form = VoucherHeaderForm(
-            request.POST, company_id=company_id, store_id=store_id, voucher_type=vtype
+        vtype = request.POST.get("document_type", "01")
+        header_form = SalesDocumentHeaderForm(
+            request.POST, company_id=company_id, store_id=store_id, document_type=vtype
         )
-        line_formset = VoucherLineFormSet(request.POST, prefix="lines")
+        line_formset = SalesDocumentLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
             lines = _lines_from_formset(line_formset)
@@ -117,10 +117,10 @@ def voucher_create(request):
             else:
                 cd = header_form.cleaned_data
                 try:
-                    voucher = create_voucher_draft(
+                    sales_document = create_sales_document_draft(
                         store_id=str(cd["store"].pk),
                         customer=cd["customer"],
-                        voucher_type=cd["voucher_type"],
+                        document_type=cd["document_type"],
                         series=cd["series"],
                         lines=lines,
                         created_by=request.user,
@@ -129,17 +129,17 @@ def voucher_create(request):
                         notes=cd.get("notes", ""),
                     )
                     messages.success(request, "Comprobante en borrador creado.")
-                    return redirect("sales:voucher_detail", pk=voucher.pk)
+                    return redirect("sales:document_detail", pk=sales_document.pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
     else:
-        header_form = VoucherHeaderForm(
-            company_id=company_id, store_id=store_id, voucher_type=vtype,
-            initial={"voucher_type": vtype},
+        header_form = SalesDocumentHeaderForm(
+            company_id=company_id, store_id=store_id, document_type=vtype,
+            initial={"document_type": vtype},
         )
-        line_formset = VoucherLineFormSet(prefix="lines")
+        line_formset = SalesDocumentLineFormSet(prefix="lines")
 
-    return render(request, "sales/voucher_form.html", {
+    return render(request, "sales/document_form.html", {
         "header_form": header_form,
         "line_formset": line_formset,
         "title": "Nuevo comprobante",
@@ -150,7 +150,7 @@ def voucher_create(request):
     })
 
 
-def voucher_from_ord(request, pk):
+def document_from_order(request, pk):
     """Crea borrador de comprobante a partir de una orden CONFIRMED."""
     redirect_resp = _require_auth(request)
     if redirect_resp:
@@ -163,7 +163,7 @@ def voucher_from_ord(request, pk):
     order = get_object_or_404(SaleOrder, pk=pk)
 
     series_id = request.POST.get("series_id")
-    voucher_type = request.POST.get("voucher_type", "01")
+    document_type = request.POST.get("document_type", "01")
 
     if not series_id:
         messages.error(request, "Debe seleccionar una serie.")
@@ -186,10 +186,10 @@ def voucher_from_ord(request, pk):
             }
             for line in order.lines.all()
         ]
-        voucher = create_voucher_draft(
+        sales_document = create_sales_document_draft(
             store_id=str(order.store_id) if order.store_id else None,
             customer=order.customer,
-            voucher_type=voucher_type,
+            document_type=document_type,
             series=series,
             lines=lines,
             sale_order=order,
@@ -199,83 +199,83 @@ def voucher_from_ord(request, pk):
             notes=order.notes,
         )
         messages.success(request, "Borrador de comprobante creado.")
-        return redirect("sales:voucher_detail", pk=voucher.pk)
+        return redirect("sales:document_detail", pk=sales_document.pk)
     except ValueError as exc:
         messages.error(request, str(exc))
         return redirect("sales:order_detail", pk=pk)
 
 
-def voucher_detail(request, pk):
+def document_detail(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
 
     try:
-        voucher = get_voucher_detail(pk)
-    except Voucher.DoesNotExist:
+        sales_document = get_document_detail(pk)
+    except SalesDocument.DoesNotExist:
         raise Http404
 
     company_id, store_id = _get_ids(request)
     # Pass available series for credit note quick-form
-    cn_series = get_series_for_store(company_id, store_id, voucher_type="07") if company_id and store_id else []
+    cn_series = get_series_for_store(company_id, store_id, document_type="07") if company_id and store_id else []
 
-    return render(request, "sales/voucher_detail.html", {
-        "voucher": voucher,
+    return render(request, "sales/document_detail.html", {
+        "sales_document": sales_document,
         "cn_series": cn_series,
     })
 
 
-def voucher_issue(request, pk):
+def document_issue(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
     if request.method != "POST":
-        return redirect("sales:voucher_detail", pk=pk)
+        return redirect("sales:document_detail", pk=pk)
     try:
-        v = issue_voucher(pk)
+        v = issue_sales_document(pk)
         messages.success(request, f"Comprobante {v.series_code}-{v.number} emitido.")
-    except (Voucher.DoesNotExist, ValueError) as exc:
+    except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
-    return redirect("sales:voucher_detail", pk=pk)
+    return redirect("sales:document_detail", pk=pk)
 
 
-def voucher_void(request, pk):
+def document_void(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
     if request.method != "POST":
-        return redirect("sales:voucher_detail", pk=pk)
+        return redirect("sales:document_detail", pk=pk)
     reason = request.POST.get("reason", "")
     try:
-        void_voucher(pk, reason=reason)
+        void_sales_document(pk, reason=reason)
         messages.success(request, "Comprobante anulado.")
-    except (Voucher.DoesNotExist, ValueError) as exc:
+    except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
-    return redirect("sales:voucher_detail", pk=pk)
+    return redirect("sales:document_detail", pk=pk)
 
 
-def voucher_cancel(request, pk):
+def document_cancel(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
     if request.method != "POST":
-        return redirect("sales:voucher_detail", pk=pk)
+        return redirect("sales:document_detail", pk=pk)
     try:
-        cancel_voucher(pk)
+        cancel_sales_document(pk)
         messages.success(request, "Comprobante cancelado.")
-    except (Voucher.DoesNotExist, ValueError) as exc:
+    except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
-    return redirect("sales:voucher_detail", pk=pk)
+    return redirect("sales:document_detail", pk=pk)
 
 
-def voucher_credit(request, pk):
+def document_credit(request, pk):
     """Genera una nota de crédito a partir de un comprobante ISSUED."""
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
 
     company_id, store_id = _get_ids(request)
-    voucher = get_object_or_404(Voucher, pk=pk)
+    sales_document = get_object_or_404(SalesDocument, pk=pk)
 
     if request.method == "POST":
         form = CreditNoteReasonForm(request.POST, company_id=company_id, store_id=store_id)
@@ -283,32 +283,32 @@ def voucher_credit(request, pk):
             cd = form.cleaned_data
             try:
                 note = create_credit_note(
-                    voucher_id=pk,
+                    sales_document_id=pk,
                     reason_code=cd["reason_code"],
                     reason_description=cd["reason_description"],
                     series=cd["series"],
                     created_by=request.user,
                 )
                 messages.success(request, "Nota de crédito creada.")
-                return redirect("sales:voucher_detail", pk=note.pk)
+                return redirect("sales:document_detail", pk=note.pk)
             except ValueError as exc:
                 messages.error(request, str(exc))
     else:
         form = CreditNoteReasonForm(company_id=company_id, store_id=store_id)
 
-    return render(request, "sales/voucher_credit_form.html", {
+    return render(request, "sales/document_credit_form.html", {
         "form": form,
-        "voucher": voucher,
+        "sales_document": sales_document,
     })
 
 
-def voucher_pdf(request, pk):
+def document_pdf(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
     try:
-        voucher = get_voucher_detail(pk)
-    except Voucher.DoesNotExist:
+        sales_document = get_document_detail(pk)
+    except SalesDocument.DoesNotExist:
         raise Http404
-    company = voucher.store.company if voucher.store else None
-    return render(request, "sales/pdf/voucher_pdf.html", {"voucher": voucher, "company": company})
+    company = sales_document.store.company if sales_document.store else None
+    return render(request, "sales/pdf/document_pdf.html", {"sales_document": sales_document, "company": company})

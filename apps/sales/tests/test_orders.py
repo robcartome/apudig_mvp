@@ -69,10 +69,10 @@ class SaleOrderServiceTest(TestCase):
             code="OV01", name="Orden de Venta", category="SALES"
         )
         self.ov_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="OV", series="OV01",
+            company=self.company, store=self.store, document_type="OV", series="OV01",
         )
         self.cot_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="COT", series="C001",
+            company=self.company, store=self.store, document_type="COT", series="C001",
         )
         self.product = _make_product()
 
@@ -197,7 +197,7 @@ class SaleOrderViewsTest(TestCase):
             code="OV02", name="Orden de Venta B", category="SALES"
         )
         self.ov_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="OV", series="OV02",
+            company=self.company, store=self.store, document_type="OV", series="OV02",
         )
         self.product = _make_product("Prod Views OV")
         self.user = User.objects.create_user(email="ov@demo.com", password="pass1234")

@@ -213,7 +213,7 @@ class Command(BaseCommand):
         created = 0
         for vtype, series in series_data:
             _, ok = DocumentSeries.objects.get_or_create(
-                company=company, voucher_type=vtype, series=series,
+                company=company, document_type=vtype, series=series,
                 defaults={"store": store, "current_number": 0}
             )
             if ok:

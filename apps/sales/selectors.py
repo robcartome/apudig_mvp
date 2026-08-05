@@ -3,7 +3,7 @@ sales/selectors.py — Consultas de lectura del módulo de ventas.
 """
 from django.db.models import Q
 
-from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SaleOrder, Voucher
+from .models import BusinessDocumentType, DocumentSeries, SalesQuotation, SaleOrder, SalesDocument
 
 def get_quotations_for_store(store_id: str, status: str | None = None):
     qs = (
@@ -85,10 +85,10 @@ def get_order_detail(pk):
     )
 
 
-def get_series_for_store(company_id: str, store_id: str, voucher_type: str | None = None):
+def get_series_for_store(company_id: str, store_id: str, document_type: str | None = None):
     qs = DocumentSeries.objects.for_company(company_id).for_store(store_id).filter(active=True)
-    if voucher_type:
-        qs = qs.filter(voucher_type=voucher_type)
+    if document_type:
+        qs = qs.filter(document_type=document_type)
     return qs
 
 
@@ -96,9 +96,9 @@ def get_active_document_types():
     return BusinessDocumentType.objects.filter(active=True).order_by("code")
 
 
-def get_vouchers_for_store(store_id: str, status: str | None = None):
+def get_sales_documents_for_store(store_id: str, status: str | None = None):
     qs = (
-        Voucher.objects.for_store(store_id)
+        SalesDocument.objects.for_store(store_id)
         .select_related("customer", "series")
         .order_by("-issue_date", "-created_at")
     )
@@ -107,9 +107,9 @@ def get_vouchers_for_store(store_id: str, status: str | None = None):
     return qs
 
 
-def search_vouchers(store_id: str, query: str | None = None, status: str | None = None):
+def search_sales_documents(store_id: str, query: str | None = None, status: str | None = None):
     qs = (
-        Voucher.objects.for_store(store_id)
+        SalesDocument.objects.for_store(store_id)
         .select_related("customer", "series")
         .order_by("-issue_date", "-created_at")
     )
@@ -125,13 +125,13 @@ def search_vouchers(store_id: str, query: str | None = None, status: str | None 
     return qs
 
 
-def get_voucher_detail(pk):
-    """Retorna Voucher con líneas y producto prefetcheados."""
+def get_document_detail(pk):
+    """Retorna SalesDocument con líneas y producto prefetcheados."""
     return (
-        Voucher.objects
+        SalesDocument.objects
         .select_related(
             "customer", "series", "store", "created_by",
-            "sale_order", "reference_voucher",
+            "sale_order", "reference_document",
         )
         .prefetch_related("lines__product__unit")
         .get(pk=pk)

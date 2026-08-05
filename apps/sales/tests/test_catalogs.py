@@ -41,7 +41,7 @@ class CatalogViewsTest(TestCase):
             reverse("sales:series_create"),
             {
                 "store": str(self.store.id),
-                "voucher_type": "COT",
+                "document_type": "COT",
                 "series": "C001",
                 "active": "on",
             },
@@ -54,7 +54,7 @@ class CatalogViewsTest(TestCase):
         DocumentSeries.objects.create(
             company=self.company,
             store=self.store,
-            voucher_type="COT",
+            document_type="COT",
             series="C001",
         )
         # Intentar duplicado
@@ -62,7 +62,7 @@ class CatalogViewsTest(TestCase):
             reverse("sales:series_create"),
             {
                 "store": str(self.store.id),
-                "voucher_type": "COT",
+                "document_type": "COT",
                 "series": "C001",
                 "active": "on",
             },
@@ -74,7 +74,7 @@ class CatalogViewsTest(TestCase):
         obj = DocumentSeries.objects.create(
             company=self.company,
             store=self.store,
-            voucher_type="COT",
+            document_type="COT",
             series="T001",
             active=True,
         )

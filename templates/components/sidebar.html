@@ -96,8 +96,8 @@
                    href="{% url 'sales:order_list' %}">Pedidos de Venta</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link {% if 'voucher' in request.resolver_match.url_name|default:'' %}active{% endif %}"
-                   href="{% url 'sales:voucher_list' %}">Comprobantes</a>
+                <a class="nav-link {% if 'sales_document' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                   href="{% url 'sales:document_list' %}">Comprobantes</a>
               </li>
             </ul>
           </div>

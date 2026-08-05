@@ -18,9 +18,9 @@ from .models import (
     SalesQuotation,
     SalesQuotationLine,
     SaleOrder,
-    Voucher,
+    SalesDocument,
     TAX_TYPE_CHOICES,
-    VOUCHER_TYPE_CHOICES,
+    SALES_DOCUMENT_TYPE_CHOICES,
     DOC_CATEGORY_CHOICES,
 )
 
@@ -42,14 +42,14 @@ class DocumentSeriesForm(forms.ModelForm):
             self.fields["store"].queryset = Store.objects.filter(
                 company_id=company_id, active=True
             ).order_by("name")
-        self.fields["voucher_type"].widget.attrs.update(_select)
+        self.fields["document_type"].widget.attrs.update(_select)
         self.fields["series"].widget.attrs.update(_text)
         self.fields["store"].widget.attrs.update(_select)
         self.fields["active"].widget.attrs.update(_check)
 
     class Meta:
         model = DocumentSeries
-        fields = ("store", "voucher_type", "series", "active")
+        fields = ("store", "document_type", "series", "active")
 
     def clean_series(self):
         return self.cleaned_data["series"].upper().strip()
@@ -149,7 +149,7 @@ class QuotationHeaderForm(forms.ModelForm):
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                voucher_type="COT",
+                document_type="COT",
                 active=True,
             )
         if company_id:
@@ -164,6 +164,7 @@ class QuotationHeaderForm(forms.ModelForm):
         self.fields["currency"].widget.attrs.update(_select)
         self.fields["notes"].widget.attrs.update(_textarea)
         self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
+        self.fields["exchange_rate"].required = False
         # Fechas con datetime-local — se crea un nuevo widget para que input_type se aplique
         # correctamente (DateInput.__init__ hace pop de "type" y lo asigna a input_type)
         for fname in ("issue_date", "valid_until"):
@@ -278,7 +279,7 @@ class SaleOrderHeaderForm(forms.ModelForm):
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                voucher_type="OV",
+                document_type="OV",
                 active=True,
             )
         self.fields["series"].widget.attrs.update(_select)
@@ -379,7 +380,7 @@ SaleOrderLineFormSet = forms.formset_factory(
 # ── Comprobantes ──────────────────────────────────────────────────────────────
 
 # Solo tipos fiscales: Factura (01), Boleta (03), Nota de Crédito (07), Nota de Débito (08)
-_VOUCHER_FISCAL_TYPES = [
+_SALES_DOCUMENT_FISCAL_TYPES = [
     ("01", "Factura"),
     ("03", "Boleta de Venta"),
     ("07", "Nota de Crédito"),
@@ -399,22 +400,22 @@ _NOTE_REASON_CODES = [
 ]
 
 
-class VoucherHeaderForm(forms.ModelForm):
+class SalesDocumentHeaderForm(forms.ModelForm):
     """Cabecera de comprobante."""
 
-    def __init__(self, *args, company_id=None, store_id=None, voucher_type=None, **kwargs):
+    def __init__(self, *args, company_id=None, store_id=None, document_type=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = filter_by_company(
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget = forms.HiddenInput()
         self.fields["customer"].required = False
-        self.fields["voucher_type"].widget.attrs.update(_select)
-        if company_id and store_id and voucher_type:
+        self.fields["document_type"].widget.attrs.update(_select)
+        if company_id and store_id and document_type:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                voucher_type=voucher_type,
+                document_type=document_type,
                 active=True,
             )
         self.fields["series"].widget.attrs.update(_select)
@@ -424,18 +425,18 @@ class VoucherHeaderForm(forms.ModelForm):
         self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
 
     class Meta:
-        model = Voucher
+        model = SalesDocument
         fields = (
             "store",
             "customer",
-            "voucher_type",
+            "document_type",
             "series",
             "issue_date",
             "currency",
             "notes",
         )
         widgets = {
-            "voucher_type": forms.Select(choices=_VOUCHER_FISCAL_TYPES, attrs=_select),
+            "document_type": forms.Select(choices=_SALES_DOCUMENT_FISCAL_TYPES, attrs=_select),
             "currency": forms.Select(
                 choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
                 attrs=_select,
@@ -443,7 +444,7 @@ class VoucherHeaderForm(forms.ModelForm):
         }
 
 
-class VoucherLineForm(forms.Form):
+class SalesDocumentLineForm(forms.Form):
     """Línea individual de comprobante (usado en formset).
 
     Usa HiddenInput para campos que maneja el ProductPicker JS,
@@ -508,8 +509,8 @@ class VoucherLineForm(forms.Form):
         return self.cleaned_data.get("igv_rate") or Decimal("18")
 
 
-VoucherLineFormSet = forms.formset_factory(
-    VoucherLineForm,
+SalesDocumentLineFormSet = forms.formset_factory(
+    SalesDocumentLineForm,
     extra=0,
     min_num=1,
     validate_min=True,
@@ -542,6 +543,6 @@ class CreditNoteReasonForm(forms.Form):
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                voucher_type="07",
+                document_type="07",
                 active=True,
             )

@@ -1,5 +1,5 @@
 """
-sales/tests/test_vouchers.py — Tests del módulo de comprobantes.
+sales/tests/test_sales_documents.py — Tests del módulo de comprobantes.
 """
 from decimal import Decimal
 
@@ -13,16 +13,16 @@ from apps.partners.models import Customer
 from apps.sales.models import (
     DocumentSeries,
     SaleOrder,
-    Voucher,
+    SalesDocument,
 )
 from apps.sales.services import (
-    cancel_voucher,
+    cancel_sales_document,
     confirm_order,
     create_credit_note,
     create_sale_order,
-    create_voucher_draft,
-    issue_voucher,
-    void_voucher,
+    create_sales_document_draft,
+    issue_sales_document,
+    void_sales_document,
 )
 
 from django.contrib.auth import get_user_model
@@ -45,7 +45,7 @@ def _make_product(name="Producto Vch", unit=None):
 def _make_line(product, qty="2", price="100.00"):
     return {
         "product": product,
-        "description": "Línea test voucher",
+        "description": "Línea test sales_document",
         "quantity": Decimal(qty),
         "unit_price": Decimal(price),
         "unit_code": "NIU",
@@ -55,7 +55,7 @@ def _make_line(product, qty="2", price="100.00"):
     }
 
 
-class VoucherServiceTest(TestCase):
+class SalesDocumentServiceTest(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Empresa Vch", ruc="20333333333")
         self.store = Store.objects.create(company=self.company, name="Tienda Vch")
@@ -66,18 +66,18 @@ class VoucherServiceTest(TestCase):
             legal_name="Cliente Vch SAC",
         )
         self.fac_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="01", series="F001",
+            company=self.company, store=self.store, document_type="01", series="F001",
         )
         self.cn_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="07", series="FC01",
+            company=self.company, store=self.store, document_type="07", series="FC01",
         )
         self.product = _make_product()
 
     def _create_draft(self, series=None, lines=None):
-        return create_voucher_draft(
+        return create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            voucher_type="01",
+            document_type="01",
             series=series or self.fac_series,
             lines=lines or [_make_line(self.product)],
             created_by=None,
@@ -99,7 +99,7 @@ class VoucherServiceTest(TestCase):
 
     def test_issue_assigns_number(self):
         v = self._create_draft()
-        issued = issue_voucher(v.pk)
+        issued = issue_sales_document(v.pk)
         self.assertEqual(issued.status, "ISSUED")
         self.assertEqual(issued.number, "00000001")
         self.assertEqual(issued.series_code, "F001")
@@ -107,8 +107,8 @@ class VoucherServiceTest(TestCase):
     def test_issue_increments_number(self):
         v1 = self._create_draft()
         v2 = self._create_draft()
-        issue_voucher(v1.pk)
-        issue_voucher(v2.pk)
+        issue_sales_document(v1.pk)
+        issue_sales_document(v2.pk)
         v1.refresh_from_db()
         v2.refresh_from_db()
         self.assertEqual(v1.number, "00000001")
@@ -116,9 +116,9 @@ class VoucherServiceTest(TestCase):
 
     def test_issue_requires_draft(self):
         v = self._create_draft()
-        issue_voucher(v.pk)
+        issue_sales_document(v.pk)
         with self.assertRaises(ValueError):
-            issue_voucher(v.pk)
+            issue_sales_document(v.pk)
 
     def test_issue_marks_order_invoiced(self):
         from apps.sales.models import BusinessDocumentType
@@ -126,7 +126,7 @@ class VoucherServiceTest(TestCase):
             code="OV_V", defaults={"name": "Orden Venta Vch", "category": "SALES"}
         )
         ov_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="OV", series="OV0V",
+            company=self.company, store=self.store, document_type="OV", series="OV0V",
         )
         order = create_sale_order(
             store_id=str(self.store.id),
@@ -137,10 +137,10 @@ class VoucherServiceTest(TestCase):
             issue_date=timezone.now().date(),
         )
         confirm_order(order.pk)
-        v = create_voucher_draft(
+        v = create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            voucher_type="01",
+            document_type="01",
             series=self.fac_series,
             lines=[_make_line(self.product)],
             sale_order=order,
@@ -148,43 +148,43 @@ class VoucherServiceTest(TestCase):
             issue_date=timezone.now().date(),
             currency="PEN",
         )
-        issue_voucher(v.pk)
+        issue_sales_document(v.pk)
         order.refresh_from_db()
         self.assertEqual(order.status, "INVOICED")
 
     def test_void_issued(self):
         v = self._create_draft()
-        issue_voucher(v.pk)
-        voided = void_voucher(v.pk, reason="Error en datos")
+        issue_sales_document(v.pk)
+        voided = void_sales_document(v.pk, reason="Error en datos")
         self.assertEqual(voided.status, "VOIDED")
 
     def test_void_requires_issued(self):
         v = self._create_draft()
         with self.assertRaises(ValueError):
-            void_voucher(v.pk)
+            void_sales_document(v.pk)
 
     def test_cancel_draft(self):
         v = self._create_draft()
-        cancelled = cancel_voucher(v.pk)
+        cancelled = cancel_sales_document(v.pk)
         self.assertEqual(cancelled.status, "CANCELLED")
 
     def test_cancel_issued_raises(self):
         v = self._create_draft()
-        issue_voucher(v.pk)
+        issue_sales_document(v.pk)
         with self.assertRaises(ValueError):
-            cancel_voucher(v.pk)
+            cancel_sales_document(v.pk)
 
     def test_credit_note_links_original(self):
         v = self._create_draft()
-        issue_voucher(v.pk)
+        issue_sales_document(v.pk)
         note = create_credit_note(
-            voucher_id=v.pk,
+            sales_document_id=v.pk,
             reason_code="01",
             reason_description="Anulación",
             series=self.cn_series,
         )
-        self.assertEqual(note.voucher_type, "07")
-        self.assertEqual(note.reference_voucher_id, v.pk)
+        self.assertEqual(note.document_type, "07")
+        self.assertEqual(note.reference_document_id, v.pk)
         self.assertEqual(note.note_reason_code, "01")
         self.assertEqual(note.lines.count(), v.lines.count())
 
@@ -192,14 +192,14 @@ class VoucherServiceTest(TestCase):
         v = self._create_draft()  # still DRAFT
         with self.assertRaises(ValueError):
             create_credit_note(
-                voucher_id=v.pk,
+                sales_document_id=v.pk,
                 reason_code="01",
                 reason_description="Test",
                 series=self.cn_series,
             )
 
 
-class VoucherViewsTest(TestCase):
+class SalesDocumentViewsTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.company = Company.objects.create(name="Empresa Views Vch", ruc="20555555555")
@@ -211,7 +211,7 @@ class VoucherViewsTest(TestCase):
             legal_name="Cliente Views Vch SAC",
         )
         self.fac_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="01", series="F002",
+            company=self.company, store=self.store, document_type="01", series="F002",
         )
         self.product = _make_product("Prod Views Vch")
         self.user = User.objects.create_user(email="vch@demo.com", password="pass1234")
@@ -224,10 +224,10 @@ class VoucherViewsTest(TestCase):
         self.client.login(username="vch@demo.com", password="pass1234")
 
     def _create_draft(self):
-        return create_voucher_draft(
+        return create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            voucher_type="01",
+            document_type="01",
             series=self.fac_series,
             lines=[_make_line(self.product)],
             created_by=self.user,
@@ -236,17 +236,17 @@ class VoucherViewsTest(TestCase):
         )
 
     def test_list_anonymous_redirect(self):
-        resp = self.client.get(reverse("sales:voucher_list"))
+        resp = self.client.get(reverse("sales:document_list"))
         self.assertRedirects(resp, reverse("login"), fetch_redirect_response=False)
 
     def test_list_ok(self):
         self._login()
-        resp = self.client.get(reverse("sales:voucher_list"))
+        resp = self.client.get(reverse("sales:document_list"))
         self.assertEqual(resp.status_code, 200)
 
     def test_create_get(self):
         self._login()
-        resp = self.client.get(reverse("sales:voucher_create"))
+        resp = self.client.get(reverse("sales:document_create"))
         self.assertEqual(resp.status_code, 200)
 
     def test_create_post_ok(self):
@@ -254,7 +254,7 @@ class VoucherViewsTest(TestCase):
         data = {
             "store": str(self.store.pk),
             "customer": str(self.customer.pk),
-            "voucher_type": "01",
+            "document_type": "01",
             "series": str(self.fac_series.pk),
             "issue_date": timezone.now().date().isoformat(),
             "currency": "PEN",
@@ -272,22 +272,22 @@ class VoucherViewsTest(TestCase):
             "lines-0-tax_type": "10",
             "lines-0-igv_rate": "18",
         }
-        resp = self.client.post(reverse("sales:voucher_create"), data)
-        self.assertEqual(Voucher.objects.filter(store=self.store).count(), 1)
+        resp = self.client.post(reverse("sales:document_create"), data)
+        self.assertEqual(SalesDocument.objects.filter(store=self.store).count(), 1)
 
     def test_detail_ok(self):
         self._login()
         v = self._create_draft()
-        resp = self.client.get(reverse("sales:voucher_detail", kwargs={"pk": v.pk}))
+        resp = self.client.get(reverse("sales:document_detail", kwargs={"pk": v.pk}))
         self.assertEqual(resp.status_code, 200)
 
     def test_issue_view(self):
         self._login()
         v = self._create_draft()
-        resp = self.client.post(reverse("sales:voucher_issue", kwargs={"pk": v.pk}))
+        resp = self.client.post(reverse("sales:document_issue", kwargs={"pk": v.pk}))
         self.assertRedirects(
             resp,
-            reverse("sales:voucher_detail", kwargs={"pk": v.pk}),
+            reverse("sales:document_detail", kwargs={"pk": v.pk}),
             fetch_redirect_response=False,
         )
         v.refresh_from_db()
@@ -296,16 +296,16 @@ class VoucherViewsTest(TestCase):
     def test_pdf_ok(self):
         self._login()
         v = self._create_draft()
-        resp = self.client.get(reverse("sales:voucher_pdf", kwargs={"pk": v.pk}))
+        resp = self.client.get(reverse("sales:document_pdf", kwargs={"pk": v.pk}))
         self.assertEqual(resp.status_code, 200)
 
     def test_cancel_view(self):
         self._login()
         v = self._create_draft()
-        resp = self.client.post(reverse("sales:voucher_cancel", kwargs={"pk": v.pk}))
+        resp = self.client.post(reverse("sales:document_cancel", kwargs={"pk": v.pk}))
         self.assertRedirects(
             resp,
-            reverse("sales:voucher_detail", kwargs={"pk": v.pk}),
+            reverse("sales:document_detail", kwargs={"pk": v.pk}),
             fetch_redirect_response=False,
         )
         v.refresh_from_db()

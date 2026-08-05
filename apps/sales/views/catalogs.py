@@ -49,21 +49,21 @@ def series_list(request):
         DocumentSeries.objects
         .select_related("store", "company")
         .filter(company_id=company_id)
-        .order_by("voucher_type", "series")
+        .order_by("document_type", "series")
     )
 
-    voucher_type = request.GET.get("type", "")
-    if voucher_type:
-        qs = qs.filter(voucher_type=voucher_type)
+    document_type = request.GET.get("type", "")
+    if document_type:
+        qs = qs.filter(document_type=document_type)
 
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    from apps.sales.models import VOUCHER_TYPE_CHOICES
+    from apps.sales.models import SALES_DOCUMENT_TYPE_CHOICES
     return render(request, "sales/series_list.html", {
         "page_obj": page_obj,
-        "voucher_type": voucher_type,
-        "type_choices": VOUCHER_TYPE_CHOICES,
+        "document_type": document_type,
+        "type_choices": SALES_DOCUMENT_TYPE_CHOICES,
     })
 
 
@@ -81,7 +81,7 @@ def series_create(request):
                 create_document_series(
                     company_id=company_id,
                     store_id=str(form.cleaned_data["store"].pk) if form.cleaned_data.get("store") else None,
-                    voucher_type=form.cleaned_data["voucher_type"],
+                    document_type=form.cleaned_data["document_type"],
                     series_code=form.cleaned_data["series"],
                 )
                 messages.success(request, "Serie creada correctamente.")

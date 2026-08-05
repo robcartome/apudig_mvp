@@ -14,7 +14,7 @@
       </nav>
     </div>
     <div class="col-auto">
-      <a href="{% url 'sales:voucher_create' %}" class="btn btn-primary btn-sm">
+      <a href="{% url 'sales:document_create' %}" class="btn btn-primary btn-sm">
         <i class="ti ti-plus me-1"></i>Nuevo comprobante
       </a>
     </div>
@@ -37,12 +37,12 @@
                placeholder="Buscar por cliente, RUC o número…">
       </div>
       <div class="col-md-2">
-        <select name="voucher_type" class="form-select form-select-sm">
+        <select name="document_type" class="form-select form-select-sm">
           <option value="">Todos los tipos</option>
-          <option value="01" {% if voucher_type == "01" %}selected{% endif %}>Factura</option>
-          <option value="03" {% if voucher_type == "03" %}selected{% endif %}>Boleta</option>
-          <option value="07" {% if voucher_type == "07" %}selected{% endif %}>Nota Crédito</option>
-          <option value="08" {% if voucher_type == "08" %}selected{% endif %}>Nota Débito</option>
+          <option value="01" {% if document_type == "01" %}selected{% endif %}>Factura</option>
+          <option value="03" {% if document_type == "03" %}selected{% endif %}>Boleta</option>
+          <option value="07" {% if document_type == "07" %}selected{% endif %}>Nota Crédito</option>
+          <option value="08" {% if document_type == "08" %}selected{% endif %}>Nota Débito</option>
         </select>
       </div>
       <div class="col-md-2">
@@ -55,7 +55,7 @@
       </div>
       <div class="col-auto">
         <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
-        <a href="{% url 'sales:voucher_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+        <a href="{% url 'sales:document_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
       </div>
     </form>
   </div>
@@ -79,14 +79,14 @@
         {% for v in page_obj %}
         <tr>
           <td class="fw-semibold">
-            <a href="{% url 'sales:voucher_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
+            <a href="{% url 'sales:document_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
           </td>
           <td class="text-muted small">
-            {% if v.voucher_type == "01" %}Factura
-            {% elif v.voucher_type == "03" %}Boleta
-            {% elif v.voucher_type == "07" %}Nota de Crédito
-            {% elif v.voucher_type == "08" %}Nota de Débito
-            {% else %}{{ v.voucher_type }}{% endif %}
+            {% if v.document_type == "01" %}Factura
+            {% elif v.document_type == "03" %}Boleta
+            {% elif v.document_type == "07" %}Nota de Crédito
+            {% elif v.document_type == "08" %}Nota de Débito
+            {% else %}{{ v.document_type }}{% endif %}
           </td>
           <td>
             <div>{{ v.customer_legal_name }}</div>
@@ -102,7 +102,7 @@
           </td>
           <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
           <td class="text-end">
-            <a href="{% url 'sales:voucher_detail' v.pk %}" class="btn btn-sm btn-ghost-secondary">
+            <a href="{% url 'sales:document_detail' v.pk %}" class="btn btn-sm btn-ghost-secondary">
               <i class="ti ti-eye"></i>
             </a>
           </td>
@@ -122,10 +122,10 @@
     </p>
     <ul class="pagination m-0 ms-auto">
       {% if page_obj.has_previous %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&voucher_type={{ voucher_type }}">ant</a></li>
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&document_type={{ document_type }}">ant</a></li>
       {% endif %}
       {% if page_obj.has_next %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&voucher_type={{ voucher_type }}">sig</a></li>
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&document_type={{ document_type }}">sig</a></li>
       {% endif %}
     </ul>
   </div>

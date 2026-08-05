@@ -60,7 +60,7 @@ class QuotationServiceTest(TestCase):
             legal_name="Cliente SAC",
         )
         self.series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="COT", series="C001",
+            company=self.company, store=self.store, document_type="COT", series="C001",
         )
         self.product = _make_product()
 
@@ -158,7 +158,7 @@ class QuotationViewsTest(TestCase):
             document_type="6", document_number="20111111111", legal_name="Cliente Demo SAC"
         )
         self.series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="COT", series="C001",
+            company=self.company, store=self.store, document_type="COT", series="C001",
         )
         self.product = _make_product("Prod A")
         self.client.login(username="test@demo.com", password="pass1234")

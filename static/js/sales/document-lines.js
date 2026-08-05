@@ -1,5 +1,5 @@
 /**
- * quotation-form.js — Sales quotation form behavior.
+ * document-lines.js — Shared behavior for sales document line forms.
  *
  * Column layout: # | Producto | UND | Cantidad | Tipo IGV | Valor Unit.(%) | Precio Unit. | SubTotal | Impuesto | Total | [x]
  *
@@ -16,7 +16,7 @@
   const linesBody = document.getElementById('lines-body');
   if (!linesBody) return;
 
-  const configEl  = document.getElementById('quot-form-config');
+  const configEl  = document.getElementById('sales-form-config');
   let IGV_RATE = parseFloat(document.getElementById('id_igv_rate_default')?.value)
                || parseFloat(configEl.dataset.igvRate) || 18;
   let IGV_MULT = 1 + IGV_RATE / 100;             // e.g. 1.18

@@ -24,7 +24,7 @@ class QuotationServiceTest(TestCase):
         self.series = get_or_create_series(
             company_id=str(self.company.id),
             store_id=str(self.store.id),
-            voucher_type="COT",
+            document_type="COT",
             series_code="C001",
         )
 

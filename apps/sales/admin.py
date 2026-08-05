@@ -7,8 +7,8 @@ from .models import (
     SaleOrderLine,
     SalesQuotation,
     SalesQuotationLine,
-    Voucher,
-    VoucherLine,
+    SalesDocument,
+    SalesDocumentLine,
 )
 
 
@@ -21,8 +21,8 @@ class BusinessDocumentTypeAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentSeries)
 class DocumentSeriesAdmin(admin.ModelAdmin):
-    list_display = ("series", "voucher_type", "company", "store", "current_number", "active")
-    list_filter = ("voucher_type", "company", "active")
+    list_display = ("series", "document_type", "company", "store", "current_number", "active")
+    list_filter = ("document_type", "company", "active")
     search_fields = ("series",)
 
 
@@ -56,16 +56,16 @@ class SaleOrderAdmin(admin.ModelAdmin):
     inlines = [SaleOrderLineInline]
 
 
-class VoucherLineInline(admin.TabularInline):
-    model = VoucherLine
+class SalesDocumentLineInline(admin.TabularInline):
+    model = SalesDocumentLine
     extra = 0
     fields = ("product", "description", "quantity", "unit_price", "subtotal", "igv_amount", "total")
     readonly_fields = ("subtotal", "igv_amount", "total")
 
 
-@admin.register(Voucher)
-class VoucherAdmin(admin.ModelAdmin):
-    list_display = ("voucher_type", "series_code", "number", "customer", "issue_date", "status", "total")
-    list_filter = ("voucher_type", "status", "store")
+@admin.register(SalesDocument)
+class SalesDocumentAdmin(admin.ModelAdmin):
+    list_display = ("document_type", "series_code", "number", "customer", "issue_date", "status", "total")
+    list_filter = ("document_type", "status", "store")
     search_fields = ("customer__legal_name", "series_code", "number")
-    inlines = [VoucherLineInline]
+    inlines = [SalesDocumentLineInline]

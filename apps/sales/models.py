@@ -9,7 +9,7 @@ from apps.core.models import TimeStampedModel
 
 # ── Enums / choices ───────────────────────────────────────────────────────────
 
-VOUCHER_TYPE_CHOICES = [
+SALES_DOCUMENT_TYPE_CHOICES = [
     ("01", "Factura"),
     ("03", "Boleta de Venta"),
     ("07", "Nota de Crédito"),
@@ -19,7 +19,7 @@ VOUCHER_TYPE_CHOICES = [
     ("COT", "Cotización"),
 ]
 
-VOUCHER_STATUS_CHOICES = [
+SALES_DOCUMENT_STATUS_CHOICES = [
     ("DRAFT", "Borrador"),
     ("ISSUED", "Emitido"),
     ("SUNAT_PENDING", "Pendiente SUNAT"),
@@ -136,17 +136,17 @@ class DocumentSeries(TimeStampedModel):
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="document_series"
     )
-    voucher_type = models.CharField(max_length=10, choices=VOUCHER_TYPE_CHOICES)
+    document_type = models.CharField(max_length=10, choices=SALES_DOCUMENT_TYPE_CHOICES)
     series = models.CharField(max_length=4)
     current_number = models.IntegerField(default=0)
     active = models.BooleanField(default=True)
 
     class Meta:
         db_table = "document_series"
-        unique_together = ("company", "store", "voucher_type", "series")
+        unique_together = ("company", "store", "document_type", "series")
 
     def __str__(self) -> str:
-        return f"{self.series} ({self.voucher_type})"
+        return f"{self.series} ({self.document_type})"
 
     def next_number(self) -> int:
         self.current_number += 1
@@ -301,16 +301,16 @@ class SaleOrderLine(SaleLineBase):
 
 # ── Comprobantes ──────────────────────────────────────────────────────────────
 
-class Voucher(TimeStampedModel):
+class SalesDocument(TimeStampedModel):
     objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(
-        "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+        "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
-    voucher_type = models.CharField(max_length=10, choices=VOUCHER_TYPE_CHOICES)
-    status = models.CharField(max_length=20, choices=VOUCHER_STATUS_CHOICES, default="DRAFT")
+    document_type = models.CharField(max_length=10, choices=SALES_DOCUMENT_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=SALES_DOCUMENT_STATUS_CHOICES, default="DRAFT")
     customer = models.ForeignKey(
-        "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+        "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
     customer_document_type = models.CharField(max_length=2)
     customer_document_number = models.CharField(max_length=15)
@@ -321,7 +321,7 @@ class Voucher(TimeStampedModel):
     currency = models.CharField(max_length=3, default="PEN")
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, default=1)
     series = models.ForeignKey(
-        DocumentSeries, on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+        DocumentSeries, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
     series_code = models.CharField(max_length=4, blank=True)
     number = models.CharField(max_length=8, blank=True)
@@ -332,7 +332,7 @@ class Voucher(TimeStampedModel):
     igv_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    reference_voucher = models.ForeignKey(
+    reference_document = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="credit_notes"
     )
     reference_series = models.CharField(max_length=4, blank=True)
@@ -340,7 +340,7 @@ class Voucher(TimeStampedModel):
     note_reason_code = models.CharField(max_length=5, blank=True)
     note_reason_description = models.CharField(max_length=200, blank=True)
     sale_order = models.ForeignKey(
-        SaleOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+        SaleOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
     sunat_ticket = models.CharField(max_length=100, blank=True)
     sunat_cdr_status = models.CharField(max_length=20, blank=True)
@@ -352,22 +352,29 @@ class Voucher(TimeStampedModel):
     sunat_hash = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="vouchers"
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
 
     class Meta:
-        db_table = "vouchers"
+        db_table = "sales_documents"
         ordering = ["-issue_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("series", "number"),
+                condition=~models.Q(number=""),
+                name="uniq_issued_sales_document_number",
+            )
+        ]
 
     def __str__(self) -> str:
-        return f"{self.voucher_type} {self.series_code}-{self.number}"
+        return f"{self.document_type} {self.series_code}-{self.number}"
 
 
-class VoucherLine(SaleLineBase):
-    voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name="lines")
+class SalesDocumentLine(SaleLineBase):
+    sales_document = models.ForeignKey(SalesDocument, on_delete=models.CASCADE, related_name="lines")
     sale_order_line = models.ForeignKey(
-        SaleOrderLine, on_delete=models.SET_NULL, null=True, blank=True, related_name="voucher_lines"
+        SaleOrderLine, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_document_lines"
     )
 
     class Meta:
-        db_table = "voucher_lines"
+        db_table = "sales_document_lines"

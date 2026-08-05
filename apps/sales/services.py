@@ -1,7 +1,7 @@
 """
 sales/services.py — Lógica de negocio del ciclo comercial.
 
-Flujo principal: SalesQuotation → SaleOrder → Voucher
+Flujo principal: SalesQuotation → SaleOrder → SalesDocument
 
 Reglas:
 - Toda creación de documento usa transaction.atomic().
@@ -23,8 +23,8 @@ from .models import (
     SaleOrder,
     SaleOrderLine,
     TAX_TYPE_CHOICES,
-    Voucher,
-    VoucherLine,
+    SalesDocument,
+    SalesDocumentLine,
 )
 
 
@@ -34,7 +34,7 @@ def _next_series_number(series: DocumentSeries) -> int:
     Siempre llamar dentro de transaction.atomic().
     """
     if series is None:
-        raise ValueError("Debe seleccionar una serie de cotización activa.")
+        raise ValueError("Debe seleccionar una serie documental activa.")
     locked = DocumentSeries.objects.select_for_update().get(pk=series.pk)
     locked.current_number += 1
     locked.save(update_fields=["current_number"])
@@ -44,7 +44,7 @@ def _next_series_number(series: DocumentSeries) -> int:
 def create_document_series(
     company_id: str,
     store_id: str | None,
-    voucher_type: str,
+    document_type: str,
     series_code: str,
 ) -> DocumentSeries:
     """
@@ -54,14 +54,14 @@ def create_document_series(
     if DocumentSeries.objects.filter(
         company_id=company_id,
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         series=series_code,
     ).exists():
         raise ValueError(f"Ya existe la serie '{series_code}' para este tipo y sucursal.")
     return DocumentSeries.objects.create(
         company_id=company_id,
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         series=series_code,
     )
 
@@ -73,11 +73,11 @@ def toggle_series(series: DocumentSeries) -> DocumentSeries:
     return series
 
 
-def get_or_create_series(company_id: str, store_id: str | None, voucher_type: str, series_code: str) -> DocumentSeries:
+def get_or_create_series(company_id: str, store_id: str | None, document_type: str, series_code: str) -> DocumentSeries:
     obj, _ = DocumentSeries.objects.get_or_create(
         company_id=company_id,
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         series=series_code,
     )
     return obj
@@ -425,193 +425,7 @@ def cancel_order(order_id) -> SaleOrder:
 
 # ── Comprobantes ──────────────────────────────────────────────────────────────
 
-@transaction.atomic
-def create_voucher_draft(
-    store_id,
-    customer,
-    voucher_type: str,
-    series: DocumentSeries,
-    lines: list[dict],
-    sale_order=None,
-    created_by=None,
-    **kwargs,
-) -> Voucher:
-    """
-    Crea un comprobante en estado DRAFT sin asignar número.
-    El número se asigna al emitir (issue_voucher).
-    """
-    calculated_lines = [_calculate_line(l) for l in lines]
-    taxable = sum(
-        calc["subtotal"] for calc, raw in zip(calculated_lines, lines)
-        if raw.get("tax_type", "10") == "10"
-    )
-    exempt = sum(
-        calc["subtotal"] for calc, raw in zip(calculated_lines, lines)
-        if raw.get("tax_type", "10") == "20"
-    )
-    unaffected = sum(
-        calc["subtotal"] for calc, raw in zip(calculated_lines, lines)
-        if raw.get("tax_type", "10") == "30"
-    )
-    igv_total = sum(calc["igv_amount"] for calc in calculated_lines)
-    subtotal = sum(calc["subtotal"] for calc in calculated_lines)
-    total_discount = sum(
-        Decimal(str(l.get("discount_amount", 0))) for l in lines
-    )
-    total = subtotal + igv_total
-
-    voucher = Voucher.objects.create(
-        store_id=store_id,
-        customer=customer,
-        customer_document_type=customer.document_type,
-        customer_document_number=customer.document_number,
-        customer_legal_name=customer.legal_name,
-        customer_address=getattr(customer, "address", ""),
-        customer_ubigeo=getattr(customer, "ubigeo", ""),
-        voucher_type=voucher_type,
-        series=series,
-        series_code=series.series,
-        sale_order=sale_order,
-        subtotal=subtotal,
-        taxable_amount=taxable,
-        exempt_amount=exempt,
-        unaffected_amount=unaffected,
-        igv_total=igv_total,
-        total_discount=total_discount,
-        total=total,
-        created_by=created_by,
-        **kwargs,
-    )
-    for raw, calc in zip(lines, calculated_lines):
-        VoucherLine.objects.create(
-            voucher=voucher,
-            product=raw["product"],
-            description=raw.get("description", ""),
-            quantity=raw["quantity"],
-            unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
-            discount_amount=raw.get("discount_amount", Decimal("0")),
-            tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
-            sunat_product_code=raw.get("sunat_product_code", ""),
-            product_code=raw.get("product_code", ""),
-            subtotal=calc["subtotal"],
-            igv_amount=calc["igv_amount"],
-            total=calc["total"],
-        )
-    return voucher
-
-
-@transaction.atomic
-def issue_voucher(voucher_id) -> Voucher:
-    """
-    Asigna número de serie y cambia estado a ISSUED.
-    Usa select_for_update para garantizar numeración sin gaps.
-    """
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
-        raise ValueError("Solo se pueden emitir comprobantes en estado Borrador.")
-    if not voucher.series_id:
-        raise ValueError("El comprobante no tiene serie asignada.")
-
-    number = _next_series_number(voucher.series)
-    formatted = f"{number:08d}"
-
-    # Verificar unicidad (defensa extra)
-    if Voucher.objects.filter(
-        series=voucher.series,
-        number=formatted,
-    ).exclude(pk=voucher_id).exists():
-        raise ValueError(f"El número {voucher.series_code}-{formatted} ya existe.")
-
-    voucher.number = formatted
-    voucher.status = "ISSUED"
-    voucher.save(update_fields=["number", "status"])
-
-    # Marcar orden vinculada como INVOICED
-    if voucher.sale_order_id:
-        SaleOrder.objects.filter(pk=voucher.sale_order_id).update(status="INVOICED")
-
-    return voucher
-
-
-@transaction.atomic
-def void_voucher(voucher_id, reason: str = "") -> Voucher:
-    """Anula un comprobante ISSUED."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "ISSUED":
-        raise ValueError("Solo se pueden anular comprobantes en estado Emitido.")
-    voucher.status = "VOIDED"
-    voucher.notes = (voucher.notes + f"\nAnulado: {reason}").strip() if reason else voucher.notes
-    voucher.save(update_fields=["status", "notes"])
-    return voucher
-
-
-@transaction.atomic
-def cancel_voucher(voucher_id) -> Voucher:
-    """Cancela un comprobante DRAFT (antes de emitir)."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
-        raise ValueError("Solo se pueden cancelar comprobantes en estado Borrador.")
-    voucher.status = "CANCELLED"
-    voucher.save(update_fields=["status"])
-    return voucher
-
-
-@transaction.atomic
-def create_credit_note(
-    voucher_id,
-    reason_code: str,
-    reason_description: str,
-    series: DocumentSeries,
-    created_by=None,
-) -> Voucher:
-    """
-    Crea una nota de crédito (tipo 07) que referencia al comprobante original.
-    Copia todas las líneas del comprobante original.
-    La nota queda en DRAFT; se emite con issue_voucher().
-    """
-    original = Voucher.objects.get(pk=voucher_id)
-    if original.status != "ISSUED":
-        raise ValueError("Solo se puede crear una nota de crédito desde un comprobante Emitido.")
-
-    lines = [
-        {
-            "product": line.product,
-            "description": line.description,
-            "quantity": line.quantity,
-            "unit_price": line.unit_price,
-            "unit_code": line.unit_code,
-            "discount_amount": line.discount_amount,
-            "tax_type": line.tax_type,
-            "igv_rate": line.igv_rate,
-            "sunat_product_code": line.sunat_product_code,
-            "product_code": line.product_code,
-        }
-        for line in original.lines.all()
-    ]
-
-    note = create_voucher_draft(
-        store_id=str(original.store_id) if original.store_id else None,
-        customer=original.customer,
-        voucher_type="07",
-        series=series,
-        lines=lines,
-        created_by=created_by,
-        issue_date=timezone.now().date(),
-        currency=original.currency,
-        reference_voucher=original,
-        reference_series=original.series_code,
-        reference_number=original.number,
-        note_reason_code=reason_code,
-        note_reason_description=reason_description,
-    )
-    return note
-
-
-# ── Comprobantes ──────────────────────────────────────────────────────────────
-
-def _calc_voucher_totals(lines: list[dict], calculated: list[dict]) -> dict:
+def _calc_sales_document_totals(lines: list[dict], calculated: list[dict]) -> dict:
     """Calcula totales desagregados para comprobante (gravado / exonerado / inafecto)."""
     taxable = Decimal("0")
     exempt = Decimal("0")
@@ -643,26 +457,26 @@ def _calc_voucher_totals(lines: list[dict], calculated: list[dict]) -> dict:
 
 
 @transaction.atomic
-def create_voucher_draft(
+def create_sales_document_draft(
     store_id: str,
     customer,
-    voucher_type: str,
+    document_type: str,
     series: DocumentSeries,
     lines: list[dict],
     sale_order=None,
     created_by=None,
     **kwargs,
-) -> Voucher:
+) -> SalesDocument:
     """
-    Crea un comprobante en estado DRAFT sin asignar número (se reserva en issue_voucher).
+    Crea un comprobante en estado DRAFT sin asignar número (se reserva en issue_sales_document).
     lines: misma estructura que create_quotation.
     """
     calculated_lines = [_calculate_line(l) for l in lines]
-    totals = _calc_voucher_totals(lines, calculated_lines)
+    totals = _calc_sales_document_totals(lines, calculated_lines)
 
-    voucher = Voucher.objects.create(
+    sales_document = SalesDocument.objects.create(
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         status="DRAFT",
         customer=customer,
         customer_document_type=customer.document_type,
@@ -672,14 +486,14 @@ def create_voucher_draft(
         customer_ubigeo=getattr(customer, "ubigeo", ""),
         series=series,
         series_code=series.series,
-        number="",        # se asignará en issue_voucher
+        number="",        # se asignará en issue_sales_document
         sale_order=sale_order,
         created_by=created_by,
         **{k: v for k, v in {**totals, **kwargs}.items()},
     )
     for raw, calc in zip(lines, calculated_lines):
-        VoucherLine.objects.create(
-            voucher=voucher,
+        SalesDocumentLine.objects.create(
+            sales_document=sales_document,
             product=raw["product"],
             description=raw.get("description", ""),
             quantity=raw["quantity"],
@@ -694,81 +508,81 @@ def create_voucher_draft(
             igv_amount=calc["igv_amount"],
             total=calc["total"],
         )
-    return voucher
+    return sales_document
 
 
 @transaction.atomic
-def issue_voucher(voucher_id) -> Voucher:
+def issue_sales_document(sales_document_id) -> SalesDocument:
     """
     Emite el comprobante: asigna número correlativo con bloqueo pesimista.
     Valida unicidad (series + number). Cambia status a ISSUED.
     Si tiene sale_order → la marca INVOICED.
     """
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
+    sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if sales_document.status != "DRAFT":
         raise ValueError(
-            f"Solo se pueden emitir comprobantes en Borrador. Estado actual: '{voucher.status}'."
+            f"Solo se pueden emitir comprobantes en Borrador. Estado actual: '{sales_document.status}'."
         )
 
-    number = _next_series_number(voucher.series)
+    number = _next_series_number(sales_document.series)
     number_str = f"{number:08d}"
 
     # Verificar unicidad
-    if Voucher.objects.filter(
-        series=voucher.series, number=number_str
-    ).exclude(pk=voucher.pk).exists():
+    if SalesDocument.objects.filter(
+        series=sales_document.series, number=number_str
+    ).exclude(pk=sales_document.pk).exists():
         raise ValueError(
-            f"Ya existe un comprobante con el número {voucher.series_code}-{number_str}."
+            f"Ya existe un comprobante con el número {sales_document.series_code}-{number_str}."
         )
 
-    voucher.number = number_str
-    voucher.status = "ISSUED"
-    voucher.save(update_fields=["number", "status"])
+    sales_document.number = number_str
+    sales_document.status = "ISSUED"
+    sales_document.save(update_fields=["number", "status"])
 
-    if voucher.sale_order_id:
-        SaleOrder.objects.filter(pk=voucher.sale_order_id).update(status="INVOICED")
+    if sales_document.sale_order_id:
+        SaleOrder.objects.filter(pk=sales_document.sale_order_id).update(status="INVOICED")
 
-    return voucher
+    return sales_document
 
 
 @transaction.atomic
-def void_voucher(voucher_id, reason: str = "") -> Voucher:
+def void_sales_document(sales_document_id, reason: str = "") -> SalesDocument:
     """Anula un comprobante ISSUED."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "ISSUED":
+    sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if sales_document.status != "ISSUED":
         raise ValueError("Solo se pueden anular comprobantes emitidos.")
-    voucher.status = "VOIDED"
+    sales_document.status = "VOIDED"
     if reason:
-        voucher.notes = (voucher.notes + "\n" + reason).strip()
-    voucher.save(update_fields=["status", "notes"])
-    return voucher
+        sales_document.notes = (sales_document.notes + "\n" + reason).strip()
+    sales_document.save(update_fields=["status", "notes"])
+    return sales_document
 
 
 @transaction.atomic
-def cancel_voucher(voucher_id) -> Voucher:
+def cancel_sales_document(sales_document_id) -> SalesDocument:
     """Cancela un comprobante DRAFT."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
+    sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if sales_document.status != "DRAFT":
         raise ValueError("Solo se pueden cancelar comprobantes en Borrador.")
-    voucher.status = "CANCELLED"
-    voucher.save(update_fields=["status"])
-    return voucher
+    sales_document.status = "CANCELLED"
+    sales_document.save(update_fields=["status"])
+    return sales_document
 
 
 @transaction.atomic
 def create_credit_note(
-    voucher_id,
+    sales_document_id,
     reason_code: str,
     reason_description: str,
     series: DocumentSeries,
     lines: list[dict] | None = None,
     created_by=None,
-) -> Voucher:
+) -> SalesDocument:
     """
     Crea una nota de crédito (tipo 07) referenciando el comprobante original.
     Si no se pasan líneas, copia todas las del comprobante original.
     """
-    original = Voucher.objects.select_related("customer", "store").get(pk=voucher_id)
+    original = SalesDocument.objects.select_related("customer", "store").get(pk=sales_document_id)
     if original.status != "ISSUED":
         raise ValueError("Solo se puede generar nota de crédito de comprobantes emitidos.")
 
@@ -789,16 +603,16 @@ def create_credit_note(
             for line in original.lines.all()
         ]
 
-    note = create_voucher_draft(
+    note = create_sales_document_draft(
         store_id=str(original.store_id) if original.store_id else None,
         customer=original.customer,
-        voucher_type="07",
+        document_type="07",
         series=series,
         lines=lines,
         created_by=created_by,
         issue_date=timezone.now().date(),
         currency=original.currency,
-        reference_voucher=original,
+        reference_document=original,
         reference_series=original.series_code,
         reference_number=original.number,
         note_reason_code=reason_code,

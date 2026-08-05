@@ -24,7 +24,7 @@ class AuditLog(models.Model):
         related_name="audit_logs",
     )
     action = models.CharField(max_length=100)           # CREATE, UPDATE, DELETE, LOGIN, etc.
-    entity = models.CharField(max_length=100, blank=True)   # 'Product', 'Voucher', etc.
+    entity = models.CharField(max_length=100, blank=True)   # 'Product', 'SalesDocument', etc.
     entity_id = models.CharField(max_length=255, blank=True) # UUID o int del objeto afectado
     meta_data = models.JSONField(null=True, blank=True)      # detalles extra si se necesitan
     created_at = models.DateTimeField(auto_now_add=True)

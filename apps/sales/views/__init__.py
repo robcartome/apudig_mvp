@@ -43,16 +43,16 @@ from .orders import (
     order_pdf,
     order_update,
 )
-from .vouchers import (
-    voucher_cancel,
-    voucher_create,
-    voucher_credit,
-    voucher_detail,
-    voucher_from_ord,
-    voucher_issue,
-    voucher_list,
-    voucher_pdf,
-    voucher_void,
+from .documents import (
+    document_cancel,
+    document_create,
+    document_credit,
+    document_detail,
+    document_from_order,
+    document_issue,
+    document_list,
+    document_pdf,
+    document_void,
 )
 from .pdf import quotation_pdf
 from .pdf import quotation_xlsx
@@ -73,8 +73,8 @@ __all__ = [
     # Orders
     "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
     "order_confirm", "order_cancel", "order_copy", "order_pdf",
-    # Vouchers
-    "voucher_list", "voucher_create", "voucher_from_ord", "voucher_detail",
-    "voucher_issue", "voucher_void", "voucher_cancel", "voucher_credit", "voucher_pdf",
+    # Sales documents
+    "document_list", "document_create", "document_from_order", "document_detail",
+    "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf",
 ]
 

@@ -79,7 +79,7 @@ def _default_quotation_series(company_id, store_id):
         DocumentSeries.objects.filter(
             company_id=company_id,
             store_id=store_id,
-            voucher_type="COT",
+            document_type="COT",
             active=True,
         )
         .order_by("series")

@@ -16,7 +16,7 @@
 
 {% block content %}
 {# Config div with data attrs for JS #}
-<div id="quot-form-config"
+<div id="sales-form-config"
      data-customer-url="{% url 'inventory:api_customer_search' %}"
      data-search-url="{% url 'inventory:api_product_search' %}"
      data-create-url="{% url 'inventory:api_product_create' %}"
@@ -47,7 +47,7 @@
 {% endfor %}
 {% endif %}
 
-<form method="post" novalidate id="quotation-form">
+<form method="post" novalidate id="sales-form">
   {% csrf_token %}
 
   {# ── Cabecera — 3 columnas ── #}
@@ -468,10 +468,10 @@
 <script src="{% static 'js/api.js' %}"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/product-picker.js' %}"></script>
-<script src="{% static 'js/sales/quotation-form.js' %}"></script>
+<script src="{% static 'js/sales/document-lines.js' %}"></script>
 <script>
 (function () {
-  const cfg = document.getElementById('quot-form-config');
+  const cfg = document.getElementById('sales-form-config');
   const COND_SEARCH_URL  = cfg.dataset.paymentMethodSearchUrl;
   const COND_CREATE_URL  = cfg.dataset.paymentMethodCreateUrl;
   const METH_SEARCH_URL  = cfg.dataset.meansOfPaymentSearchUrl;
