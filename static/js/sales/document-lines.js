@@ -35,7 +35,7 @@
     ['11', 'IGV retiro'],
   ];
 
-  const TAXED = new Set(['10', '11']);
+  const TAXED = new Set(['10']);
 
   // ── IGV rate header select ────────────────────────────────────────────────
   document.getElementById('id_igv_rate_default')?.addEventListener('change', function () {
@@ -71,6 +71,9 @@
   }
 
   function fmt(n) { return isFinite(n) ? n.toFixed(2) : '0.00'; }
+  function priceListSelect() {
+    return document.getElementById('id_price_list') || document.getElementById('price-list-select');
+  }
 
   // ── Per-row calculation ────────────────────────────────────────────────────
   function calcRow(row) {
@@ -109,27 +112,38 @@
     const valorCell = row.querySelector('.valor-unit-display');
     if (valorCell) valorCell.value = fmt(unitPriceEx);
 
-    return { subtotal, igvAmt, lineTotal, discount };
+    return { subtotal, igvAmt, lineTotal, discount, taxType };
   }
 
   // ── Grand totals ───────────────────────────────────────────────────────────
   function updateSummary() {
-    let sumSub = 0, sumDisc = 0, sumBase = 0, sumIgv = 0, sumTotal = 0;
+    let sumSub = 0, sumDisc = 0, sumBase = 0, sumExempt = 0;
+    let sumUnaffected = 0, sumExport = 0, sumFree = 0, sumIgv = 0, sumTotal = 0;
 
     linesBody.querySelectorAll('.line-row').forEach(row => {
       if (row.style.opacity === '0.3') return;          // deleted rows
-      const { subtotal, igvAmt, lineTotal, discount } = calcRow(row);
+      const { subtotal, igvAmt, lineTotal, discount, taxType } = calcRow(row);
       sumSub   += subtotal;
       sumDisc  += discount;
-      sumBase  += (igvAmt > 0 ? subtotal : 0);         // taxable base
-      sumIgv   += igvAmt;
-      sumTotal += lineTotal;
+      if (taxType === '10') sumBase += subtotal;
+      if (taxType === '20') sumExempt += subtotal;
+      if (taxType === '30') sumUnaffected += subtotal;
+      if (taxType === '40') sumExport += subtotal;
+      if (taxType === '11') sumFree += subtotal;
+      if (taxType !== '11') {
+        sumIgv += igvAmt;
+        sumTotal += lineTotal;
+      }
     });
 
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
     set('summary-subtotal', sumSub);
     set('summary-discount', sumDisc);
     set('summary-base',     sumBase);
+    set('summary-exempt',   sumExempt);
+    set('summary-unaffected', sumUnaffected);
+    set('summary-export',   sumExport);
+    set('summary-free',     sumFree);
     set('summary-igv',      sumIgv);
     set('summary-total',    sumTotal);
   }
@@ -212,7 +226,6 @@
 
       <td class="text-center" style="white-space:nowrap">
         <input type="hidden" name="lines-${index}-id" value="">
-        <input type="hidden" name="lines-${index}-memo" id="id_lines-${index}-memo" value="">
         <button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Agregar memo">
           <i class="ti ti-notes"></i>
         </button>
@@ -244,7 +257,7 @@
     updateSummary();
 
     // Auto-apply selected price list price (overrides price_sale if found)
-    const plId = document.getElementById('price-list-select')?.value;
+    const plId = priceListSelect()?.value;
     if (plId && PRICE_LIST_URL_TPL && product.id) {
       const url = PRICE_LIST_URL_TPL.replace('00000000-0000-0000-0000-000000000000', plId)
                   + '?products=' + product.id;
@@ -356,13 +369,13 @@
   let pendingPriceListId = null;
 
   // Pre-select default price list if none already chosen
-  const plSelect = document.getElementById('price-list-select');
+  const plSelect = priceListSelect();
   if (plSelect && !plSelect.value && DEFAULT_PRICE_LIST_ID) {
     plSelect.value = DEFAULT_PRICE_LIST_ID;
     pendingPriceListId = DEFAULT_PRICE_LIST_ID;
   }
 
-  document.getElementById('price-list-select')?.addEventListener('change', function () {
+  plSelect?.addEventListener('change', function () {
     const plId = this.value;
     if (!plId) { pendingPriceListId = null; hidePriceAlert(); return; }
 
@@ -384,7 +397,7 @@
 
   document.getElementById('price-list-cancel')?.addEventListener('click', function () {
     pendingPriceListId = null;
-    document.getElementById('price-list-select').value = '';
+    if (plSelect) plSelect.value = '';
     hidePriceAlert();
   });
 

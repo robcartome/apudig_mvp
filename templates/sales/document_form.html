@@ -28,7 +28,7 @@
 <div class="page-header d-print-none mb-3">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0">
-      <li class="breadcrumb-item"><a href="{% url 'sales:document_list' %}">Comprobantes</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'sales:document_list' %}">Documentos de venta</a></li>
       <li class="breadcrumb-item active">{{ title }}</li>
     </ol>
   </nav>
@@ -71,12 +71,8 @@
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label">Lista de precios</label>
-          <select id="price-list-select" class="form-select">
-            <option value="">— Sin lista de precios —</option>
-            {% for pl in price_lists %}
-            <option value="{{ pl.pk }}">{{ pl.name }}</option>
-            {% endfor %}
-          </select>
+          {{ header_form.price_list }}
+          {% if header_form.price_list.errors %}<div class="text-danger small mt-1">{{ header_form.price_list.errors.0 }}</div>{% endif %}
           <div id="price-list-alert" class="alert alert-warning d-none mt-1 py-2 px-3" style="font-size:.85rem">
             <i class="ti ti-alert-triangle me-1"></i>
             Se actualizarán los precios de los productos seleccionados.
@@ -96,7 +92,7 @@
           {% if header_form.store.errors %}<div class="text-danger small mt-1">{{ header_form.store.errors.0 }}</div>{% endif %}
         </div>
         <div class="col-12 col-md-3">
-          <label class="form-label required">Tipo comprobante</label>
+          <label class="form-label required">Tipo de documento</label>
           {{ header_form.document_type }}
           {% if header_form.document_type.errors %}<div class="text-danger small mt-1">{{ header_form.document_type.errors.0 }}</div>{% endif %}
         </div>
@@ -111,12 +107,52 @@
         </div>
       </div>
 
-      {# ── Fila 3: Fecha ── #}
+      {# ── Fila 3: Fecha, moneda y referencia ── #}
       <div class="row g-3 mb-3">
         <div class="col-12 col-md-3">
           <label class="form-label required">Fecha de emisión</label>
           {{ header_form.issue_date }}
           {% if header_form.issue_date.errors %}<div class="text-danger small mt-1">{{ header_form.issue_date.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Tipo de cambio</label>
+          {{ header_form.exchange_rate }}
+          {% if header_form.exchange_rate.errors %}<div class="text-danger small mt-1">{{ header_form.exchange_rate.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Referencia interna</label>
+          {{ header_form.internal_reference }}
+          {% if header_form.internal_reference.errors %}<div class="text-danger small mt-1">{{ header_form.internal_reference.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label">Forma de pago</label>
+          {{ header_form.payment_method }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Medio de pago</label>
+          {{ header_form.means_of_payment }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Vendedor</label>
+          {{ header_form.seller }}
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-check">
+            {{ header_form.register_inventory_movement }}
+            <span class="form-check-label">Registrar movimiento de inventario al emitir</span>
+          </label>
+          {% if header_form.register_inventory_movement.errors %}<div class="text-danger small mt-1">{{ header_form.register_inventory_movement.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Almacén</label>
+          {{ header_form.warehouse }}
+          {% if header_form.warehouse.errors %}<div class="text-danger small mt-1">{{ header_form.warehouse.errors.0 }}</div>{% endif %}
         </div>
       </div>
 
@@ -128,10 +164,10 @@
     </div>
   </div>
 
-  {# ── Detalle del Comprobante ── #}
+  {# ── Detalle del documento ── #}
   <div class="card mb-3">
     <div class="card-header">
-      <h3 class="card-title">Detalle del Comprobante</h3>
+      <h3 class="card-title">Detalle del documento</h3>
     </div>
     <div class="table-responsive">
       {{ line_formset.management_form }}
@@ -244,19 +280,19 @@
                   </tr>
                   <tr>
                     <td class="text-muted">Total Descuento (-)</td>
-                    <td class="text-end fw-semibold">0.00</td>
+                    <td class="text-end fw-semibold" id="summary-export">0.00</td>
                   </tr>
                   <tr>
                     <td class="text-muted">Total Exportación</td>
-                    <td class="text-end fw-semibold">0.00</td>
+                    <td class="text-end fw-semibold" id="summary-exempt">0.00</td>
                   </tr>
                   <tr>
                     <td class="text-muted">Total Exonerada</td>
-                    <td class="text-end fw-semibold">0.00</td>
+                    <td class="text-end fw-semibold" id="summary-unaffected">0.00</td>
                   </tr>
                   <tr>
                     <td class="text-muted">Total Inafecta</td>
-                    <td class="text-end fw-semibold">0.00</td>
+                    <td class="text-end fw-semibold" id="summary-free">0.00</td>
                   </tr>
                   <tr>
                     <td class="text-muted">Total Gravada</td>
@@ -268,14 +304,6 @@
                   </tr>
                   <tr>
                     <td class="text-muted">Total Gratuita</td>
-                    <td class="text-end fw-semibold">0.00</td>
-                  </tr>
-                  <tr>
-                    <td class="text-muted">Shipping</td>
-                    <td class="text-end fw-semibold">0.00</td>
-                  </tr>
-                  <tr>
-                    <td class="text-muted">Impuesto a la Bolsa Plástica (+)</td>
                     <td class="text-end fw-semibold">0.00</td>
                   </tr>
                   <tr class="table-active">

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Comprobante {{ sales_document.series_code }}-{{ sales_document.number|default:"Borrador" }} — APUDIG{% endblock %}
-{% block page_title %}<h2 class="page-title">Comprobante</h2>{% endblock %}
+{% block title %}Documento {{ sales_document.series_code }}-{{ sales_document.number|default:"Borrador" }} — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Documento de venta</h2>{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -8,20 +8,28 @@
     <div class="col">
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'sales:document_list' %}">Comprobantes</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'sales:document_list' %}">Documentos de venta</a></li>
           <li class="breadcrumb-item active">{{ sales_document.series_code }}-{{ sales_document.number|default:"Borrador" }}</li>
         </ol>
       </nav>
     </div>
     <div class="col-auto d-flex gap-2">
       {% if sales_document.status == "DRAFT" %}
+      {% if can_manage_sales_documents %}
+      <a href="{% url 'sales:document_edit' sales_document.pk %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-edit me-1"></i>Editar
+      </a>
+      {% endif %}
+      {% if can_authorize_sales_documents %}
       <form method="post" action="{% url 'sales:document_issue' sales_document.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-success btn-sm"
-                onclick="return confirm('¿Emitir este comprobante? Se asignará número de serie.')">
+                onclick="return confirm('¿Emitir este documento? Se asignará el número correlativo.')">
           <i class="ti ti-send me-1"></i>Emitir
         </button>
       </form>
+      {% endif %}
+      {% if can_manage_sales_documents %}
       <form method="post" action="{% url 'sales:document_cancel' sales_document.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-outline-danger btn-sm"
@@ -30,8 +38,9 @@
         </button>
       </form>
       {% endif %}
+      {% endif %}
 
-      {% if sales_document.status == "ISSUED" %}
+      {% if sales_document.status == "ISSUED" and can_authorize_sales_documents %}
       <a href="{% url 'sales:document_credit' sales_document.pk %}" class="btn btn-outline-warning btn-sm">
         <i class="ti ti-file-minus me-1"></i>Nota de crédito
       </a>
@@ -58,15 +67,16 @@
 {% endif %}
 
 <div class="row">
-  {# ── Datos del comprobante ── #}
+  {# ── Datos del documento ── #}
   <div class="col-md-6 mb-3">
     <div class="card h-100">
-      <div class="card-header"><h3 class="card-title">Datos del comprobante</h3></div>
+      <div class="card-header"><h3 class="card-title">Datos del documento</h3></div>
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-5 text-muted">Tipo</dt>
           <dd class="col-7">
-            {% if sales_document.document_type == "01" %}Factura
+            {% if sales_document.document_type == "NV" %}Nota de venta
+            {% elif sales_document.document_type == "01" %}Factura
             {% elif sales_document.document_type == "03" %}Boleta de Venta
             {% elif sales_document.document_type == "07" %}Nota de Crédito
             {% elif sales_document.document_type == "08" %}Nota de Débito
@@ -86,6 +96,28 @@
           <dd class="col-7">{{ sales_document.issue_date|date:"d/m/Y" }}</dd>
           <dt class="col-5 text-muted">Moneda</dt>
           <dd class="col-7">{{ sales_document.currency }}</dd>
+          {% if sales_document.currency != "PEN" %}
+          <dt class="col-5 text-muted">Tipo de cambio</dt>
+          <dd class="col-7">{{ sales_document.exchange_rate }}</dd>
+          {% endif %}
+          {% if sales_document.payment_method %}<dt class="col-5 text-muted">Forma de pago</dt><dd class="col-7">{{ sales_document.payment_method }}</dd>{% endif %}
+          {% if sales_document.means_of_payment %}<dt class="col-5 text-muted">Medio de pago</dt><dd class="col-7">{{ sales_document.means_of_payment }}</dd>{% endif %}
+          {% if sales_document.seller %}<dt class="col-5 text-muted">Vendedor</dt><dd class="col-7">{{ sales_document.seller }}</dd>{% endif %}
+          {% if sales_document.price_list %}<dt class="col-5 text-muted">Lista de precios</dt><dd class="col-7">{{ sales_document.price_list }}</dd>{% endif %}
+          {% if sales_document.warehouse %}<dt class="col-5 text-muted">Almacén</dt><dd class="col-7">{{ sales_document.warehouse }}</dd>{% endif %}
+          {% if sales_document.inventory_movement %}
+          <dt class="col-5 text-muted">Movimiento de stock</dt>
+          <dd class="col-7">
+            <a href="{% url 'inventory:movement_detail' sales_document.inventory_movement.pk %}">
+              {{ sales_document.inventory_movement.get_type_display }} · {{ sales_document.inventory_movement.get_status_display }}
+            </a>
+          </dd>
+          {% if sales_document.inventory_movement.reversal %}
+          <dt class="col-5 text-muted">Reversión de stock</dt>
+          <dd class="col-7"><a href="{% url 'inventory:movement_detail' sales_document.inventory_movement.reversal.pk %}">Ver movimiento de reversión</a></dd>
+          {% endif %}
+          {% endif %}
+          {% if sales_document.internal_reference %}<dt class="col-5 text-muted">Referencia interna</dt><dd class="col-7">{{ sales_document.internal_reference }}</dd>{% endif %}
           {% if sales_document.sale_order %}
           <dt class="col-5 text-muted">Orden vinculada</dt>
           <dd class="col-7">
@@ -95,7 +127,7 @@
           </dd>
           {% endif %}
           {% if sales_document.reference_document %}
-          <dt class="col-5 text-muted">Comprobante orig.</dt>
+          <dt class="col-5 text-muted">Documento original</dt>
           <dd class="col-7">
             <a href="{% url 'sales:document_detail' sales_document.reference_document.pk %}">
               {{ sales_document.reference_series }}-{{ sales_document.reference_number }}
@@ -185,6 +217,12 @@
           <td colspan="3" class="text-end">{{ sales_document.unaffected_amount|floatformat:2 }}</td>
         </tr>
         {% endif %}
+        {% if sales_document.export_amount %}
+        <tr><td colspan="6" class="text-end text-muted">Subtotal exportación</td><td colspan="3" class="text-end">{{ sales_document.export_amount|floatformat:2 }}</td></tr>
+        {% endif %}
+        {% if sales_document.free_amount %}
+        <tr><td colspan="6" class="text-end text-muted">Operaciones gratuitas</td><td colspan="3" class="text-end">{{ sales_document.free_amount|floatformat:2 }}</td></tr>
+        {% endif %}
         <tr>
           <td colspan="6" class="text-end text-muted">IGV (18%)</td>
           <td colspan="3" class="text-end">{{ sales_document.igv_total|floatformat:2 }}</td>
@@ -227,6 +265,30 @@
 </div>
 {% endif %}
 
+{% if audit_logs %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Bitácora de auditoría</h3></div>
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter card-table">
+      <thead><tr><th>Fecha</th><th>Acción</th><th>Usuario</th><th>Detalle</th></tr></thead>
+      <tbody>
+        {% for log in audit_logs %}
+        <tr>
+          <td class="text-muted">{{ log.created_at|date:"d/m/Y H:i" }}</td>
+          <td><span class="badge bg-secondary-lt">{{ log.action }}</span></td>
+          <td>{{ log.user|default:"Sistema" }}</td>
+          <td class="small text-muted">
+            {{ log.meta_data.series }}{% if log.meta_data.number %}-{{ log.meta_data.number }}{% endif %}
+            · {{ log.meta_data.status }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {# ── Modal anulación ── #}
 {% if sales_document.status == "ISSUED" %}
 <div class="modal fade" id="voidModal" tabindex="-1">
@@ -235,7 +297,7 @@
       <form method="post" action="{% url 'sales:document_void' sales_document.pk %}">
         {% csrf_token %}
         <div class="modal-header">
-          <h5 class="modal-title">Anular comprobante</h5>
+          <h5 class="modal-title">Anular documento de venta</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">

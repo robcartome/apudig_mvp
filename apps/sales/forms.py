@@ -7,8 +7,9 @@ from django import forms
 
 from apps.core.managers import filter_by_company
 from apps.companies.models import Store
-from apps.inventory.models import Product
+from apps.inventory.models import PriceList, Product, Warehouse
 from apps.partners.models import Customer
+from apps.users.models import Employee
 
 from .models import (
     BusinessDocumentType,
@@ -377,10 +378,11 @@ SaleOrderLineFormSet = forms.formset_factory(
 )
 
 
-# ── Comprobantes ──────────────────────────────────────────────────────────────
+# ── Documentos de venta ──────────────────────────────────────────────────────
 
-# Solo tipos fiscales: Factura (01), Boleta (03), Nota de Crédito (07), Nota de Débito (08)
+# Tipos admitidos por el flujo de documentos de venta.
 _SALES_DOCUMENT_FISCAL_TYPES = [
+    ("NV", "Nota de Venta"),
     ("01", "Factura"),
     ("03", "Boleta de Venta"),
     ("07", "Nota de Crédito"),
@@ -401,7 +403,7 @@ _NOTE_REASON_CODES = [
 
 
 class SalesDocumentHeaderForm(forms.ModelForm):
-    """Cabecera de comprobante."""
+    """Cabecera de un documento de venta."""
 
     def __init__(self, *args, company_id=None, store_id=None, document_type=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -409,7 +411,12 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget = forms.HiddenInput()
-        self.fields["customer"].required = False
+        self.fields["customer"].required = True
+        self.fields["store"].queryset = Store.objects.filter(
+            company_id=company_id, active=True
+        ) if company_id else Store.objects.none()
+        if store_id:
+            self.fields["store"].queryset = self.fields["store"].queryset.filter(pk=store_id)
         self.fields["document_type"].widget.attrs.update(_select)
         if company_id and store_id and document_type:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
@@ -418,11 +425,53 @@ class SalesDocumentHeaderForm(forms.ModelForm):
                 document_type=document_type,
                 active=True,
             )
+        else:
+            self.fields["series"].queryset = DocumentSeries.objects.none()
+        self.fields["payment_method"].queryset = PaymentMethod.objects.filter(
+            company_id=company_id, active=True
+        ) if company_id else PaymentMethod.objects.none()
+        self.fields["means_of_payment"].queryset = MeansOfPayment.objects.filter(
+            company_id=company_id, active=True
+        ) if company_id else MeansOfPayment.objects.none()
+        self.fields["seller"].queryset = Employee.objects.filter(
+            company_id=company_id, is_active=True
+        ) if company_id else Employee.objects.none()
+        self.fields["price_list"].queryset = PriceList.objects.filter(
+            company_id=company_id, active=True
+        ) if company_id else PriceList.objects.none()
+        self.fields["warehouse"].queryset = Warehouse.objects.filter(
+            store_id=store_id, active=True
+        ) if store_id else Warehouse.objects.none()
         self.fields["series"].widget.attrs.update(_select)
         self.fields["store"].widget.attrs.update(_select)
         self.fields["currency"].widget.attrs.update(_select)
+        for field_name in (
+            "payment_method", "means_of_payment", "seller", "price_list", "warehouse"
+        ):
+            self.fields[field_name].widget.attrs.update(_select)
         self.fields["notes"].widget.attrs.update(_textarea)
         self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
+        self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
+        self.fields["exchange_rate"].required = False
+        self.fields["internal_reference"].widget.attrs.update(_text)
+        self.fields["register_inventory_movement"].widget.attrs.update(_check)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        store = cleaned_data.get("store")
+        series = cleaned_data.get("series")
+        document_type = cleaned_data.get("document_type")
+        warehouse = cleaned_data.get("warehouse")
+
+        if series and store and (
+            series.store_id != store.id or series.document_type != document_type
+        ):
+            self.add_error("series", "La serie no corresponde a la sucursal y tipo de documento.")
+        if cleaned_data.get("register_inventory_movement") and not warehouse:
+            self.add_error("warehouse", "Seleccione un almacén para registrar la salida.")
+        if warehouse and store and warehouse.store_id != store.id:
+            self.add_error("warehouse", "El almacén no pertenece a la sucursal seleccionada.")
+        return cleaned_data
 
     class Meta:
         model = SalesDocument
@@ -433,7 +482,15 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             "series",
             "issue_date",
             "currency",
+            "exchange_rate",
+            "payment_method",
+            "means_of_payment",
+            "seller",
+            "price_list",
+            "register_inventory_movement",
+            "warehouse",
             "notes",
+            "internal_reference",
         )
         widgets = {
             "document_type": forms.Select(choices=_SALES_DOCUMENT_FISCAL_TYPES, attrs=_select),
@@ -441,11 +498,12 @@ class SalesDocumentHeaderForm(forms.ModelForm):
                 choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
                 attrs=_select,
             ),
+            "register_inventory_movement": forms.CheckboxInput(attrs=_check),
         }
 
 
 class SalesDocumentLineForm(forms.Form):
-    """Línea individual de comprobante (usado en formset).
+    """Línea individual de documento de venta (usada en formset).
 
     Usa HiddenInput para campos que maneja el ProductPicker JS,
     igual que QuotationLineForm.
@@ -519,7 +577,7 @@ SalesDocumentLineFormSet = forms.formset_factory(
 
 
 class CreditNoteReasonForm(forms.Form):
-    """Formulario rápido para crear nota de crédito desde un comprobante emitido."""
+    """Formulario para crear una nota de crédito desde un documento emitido."""
 
     reason_code = forms.ChoiceField(
         choices=_NOTE_REASON_CODES,

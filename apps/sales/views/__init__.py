@@ -48,6 +48,8 @@ from .documents import (
     document_create,
     document_credit,
     document_detail,
+    document_edit,
+    document_from_quotation,
     document_from_order,
     document_issue,
     document_list,
@@ -74,7 +76,7 @@ __all__ = [
     "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
     "order_confirm", "order_cancel", "order_copy", "order_pdf",
     # Sales documents
-    "document_list", "document_create", "document_from_order", "document_detail",
+    "document_list", "document_create", "document_edit", "document_from_order", "document_from_quotation", "document_detail",
     "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf",
 ]
 

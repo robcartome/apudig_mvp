@@ -94,7 +94,7 @@
 {% if sales_document.reference_series %}
 <div class="section">
   <div class="section-title">Referencia</div>
-  <div class="info-row"><span class="info-label">Comprobante:</span><span>{{ sales_document.reference_series }}-{{ sales_document.reference_number }}</span></div>
+  <div class="info-row"><span class="info-label">Documento original:</span><span>{{ sales_document.reference_series }}-{{ sales_document.reference_number }}</span></div>
   {% if sales_document.note_reason_description %}
   <div class="info-row"><span class="info-label">Motivo:</span><span>{{ sales_document.note_reason_code }} — {{ sales_document.note_reason_description }}</span></div>
   {% endif %}

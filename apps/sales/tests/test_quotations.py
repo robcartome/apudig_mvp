@@ -10,11 +10,12 @@ from django.utils import timezone
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
 from apps.partners.models import Customer
-from apps.sales.models import DocumentSeries, SalesQuotation
+from apps.sales.models import DocumentSeries, SalesDocument, SalesQuotation
 from apps.sales.services import (
     approve_quotation,
     cancel_quotation,
     create_quotation,
+    create_document_from_quotation,
     reject_quotation,
     update_quotation,
 )
@@ -63,6 +64,9 @@ class QuotationServiceTest(TestCase):
             company=self.company, store=self.store, document_type="COT", series="C001",
         )
         self.product = _make_product()
+        self.sales_series = DocumentSeries.objects.create(
+            company=self.company, store=self.store, document_type="NV", series="NV01"
+        )
 
     def _create(self, lines=None):
         if lines is None:
@@ -146,6 +150,36 @@ class QuotationServiceTest(TestCase):
         self.assertEqual(q.igv_total, Decimal("0.00"))
         self.assertEqual(q.total, q.subtotal)
 
+    def test_approved_quotation_converts_once_and_copies_commercial_data(self):
+        quotation = self._create()
+        quotation.exchange_rate = Decimal("3.750000")
+        quotation.notes = "Condiciones copiadas"
+        quotation.internal_reference = "REF-COT"
+        quotation.save(update_fields=["exchange_rate", "notes", "internal_reference"])
+        approve_quotation(quotation.pk)
+
+        document = create_document_from_quotation(
+            quotation.pk,
+            document_type="NV",
+            series=self.sales_series,
+            register_inventory_movement=False,
+        )
+        self.assertEqual(document.source_quotation_id, quotation.pk)
+        self.assertEqual(document.customer_id, quotation.customer_id)
+        self.assertEqual(document.exchange_rate, Decimal("3.750000"))
+        self.assertEqual(document.internal_reference, "REF-COT")
+        self.assertEqual(document.lines.count(), quotation.lines.count())
+        quotation.refresh_from_db()
+        self.assertEqual(quotation.status, "APPROVED")
+
+        with self.assertRaisesRegex(ValueError, "ya fue convertida"):
+            create_document_from_quotation(
+                quotation.pk,
+                document_type="NV",
+                series=self.sales_series,
+                register_inventory_movement=False,
+            )
+
 
 class QuotationViewsTest(TestCase):
     def setUp(self):
@@ -161,6 +195,9 @@ class QuotationViewsTest(TestCase):
             company=self.company, store=self.store, document_type="COT", series="C001",
         )
         self.product = _make_product("Prod A")
+        self.sales_series = DocumentSeries.objects.create(
+            company=self.company, store=self.store, document_type="NV", series="NV01"
+        )
         self.client.login(username="test@demo.com", password="pass1234")
         s = self.client.session
         s["active_company_id"] = str(self.company.id)
@@ -207,6 +244,22 @@ class QuotationViewsTest(TestCase):
         self.assertEqual(SalesQuotation.objects.count(), 1)
         q = SalesQuotation.objects.first()
         self.assertRedirects(resp, reverse("sales:quotation_detail", args=[q.pk]))
+
+    def test_convert_approved_quotation_to_document(self):
+        self._post_create()
+        quotation = SalesQuotation.objects.get()
+        approve_quotation(quotation.pk)
+        response = self.client.post(
+            reverse("sales:document_from_quotation", args=[quotation.pk]),
+            {"series_id": str(self.sales_series.pk)},
+        )
+        document = SalesDocument.objects.get(source_quotation=quotation)
+        self.assertRedirects(
+            response,
+            reverse("sales:document_detail", args=[document.pk]),
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(document.register_inventory_movement)
 
     def test_detail_ok(self):
         self._post_create()

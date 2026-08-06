@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from apps.sales.forms import QuotationHeaderForm, QuotationLineFormSet
-from apps.sales.models import SalesQuotation, QUOTATION_STATUS_CHOICES, DocumentSeries
+from apps.sales.models import SalesDocument, SalesQuotation, QUOTATION_STATUS_CHOICES, DocumentSeries
 from apps.sales.selectors import search_quotations, get_quotation_detail
 from apps.sales.services import (
     approve_quotation,
@@ -28,7 +28,8 @@ from apps.sales.services import (
     reject_quotation,
     update_quotation,
 )
-from apps.inventory.models import PriceList
+from apps.inventory.models import PriceList, Warehouse
+from apps.users.permissions import user_has_company_permission
 
 DEFAULT_IGV_RATE = 18
 
@@ -187,16 +188,33 @@ def quotation_detail(request, pk):
     if redirect_resp:
         return redirect_resp
 
-    _, store_id = _get_ids(request)
+    company_id, store_id = _get_ids(request)
     try:
         quotation = get_quotation_detail(pk)
     except SalesQuotation.DoesNotExist:
+        raise Http404
+    if str(quotation.store_id) != str(store_id):
         raise Http404
 
     lines_view = _build_lines_view(quotation)
     return render(request, "sales/quotation_detail.html", {
         "quotation": quotation,
         "lines_view": lines_view,
+        "converted_document": SalesDocument.objects.filter(
+            source_quotation=quotation
+        ).first(),
+        "sales_document_series": DocumentSeries.objects.filter(
+            company_id=company_id,
+            store_id=store_id,
+            document_type__in=("NV", "01", "03"),
+            active=True,
+        ).order_by("document_type", "series"),
+        "warehouses": Warehouse.objects.filter(
+            store_id=store_id, active=True
+        ).order_by("name"),
+        "can_manage_sales_documents": user_has_company_permission(
+            request.user, company_id, "manage.sales.documents"
+        ),
     })
 
 

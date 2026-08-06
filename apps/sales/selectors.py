@@ -125,14 +125,18 @@ def search_sales_documents(store_id: str, query: str | None = None, status: str 
     return qs
 
 
-def get_document_detail(pk):
+def get_document_detail(pk, store_id=None):
     """Retorna SalesDocument con líneas y producto prefetcheados."""
-    return (
+    queryset = (
         SalesDocument.objects
         .select_related(
             "customer", "series", "store", "created_by",
-            "sale_order", "reference_document",
+            "sale_order", "reference_document", "source_quotation",
+            "payment_method", "means_of_payment", "seller", "price_list",
+            "warehouse", "inventory_movement",
         )
         .prefetch_related("lines__product__unit")
-        .get(pk=pk)
     )
+    if store_id is not None:
+        queryset = queryset.filter(store_id=store_id)
+    return queryset.get(pk=pk)

@@ -184,6 +184,7 @@
           <th>Socio</th>
           <th>Documento</th>
           <th>Referencia</th>
+          <th>Usuario</th>
           <th class="text-end">Cantidad</th>
           <th class="text-end">P. Unit.</th>
           <th class="text-end">Importe</th>
@@ -203,6 +204,7 @@
             {% elif entry.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
             {% elif entry.type == "TRANSFER" %}<span class="badge bg-info-lt">Transferencia</span>
             {% else %}<span class="badge bg-yellow-lt">Ajuste</span>{% endif %}
+            <div class="text-muted small">{{ entry.origin_label }}</div>
           </td>
           <td class="text-muted small">{{ entry.warehouse }}</td>
           <td>
@@ -220,11 +222,18 @@
             {% endif %}
           </td>
           <td>
+            {% if entry.sales_document_id %}
+            <a href="{% url 'sales:document_detail' entry.sales_document_id %}" target="_blank" class="text-decoration-none">
+              {{ entry.document }}
+            </a>
+            {% else %}
             <a href="{% url 'inventory:movement_operation_readonly' entry.movement_id %}" target="_blank" class="text-decoration-none">
               {{ entry.document }}
             </a>
+            {% endif %}
           </td>
           <td class="text-muted small">{{ entry.reference_doc }}</td>
+          <td class="text-muted small">{{ entry.created_by }}</td>
           <td class="text-end fw-semibold {% if entry.signed_quantity < 0 %}text-danger{% else %}text-success{% endif %}">
             {{ entry.signed_quantity|floatformat:2 }}
           </td>

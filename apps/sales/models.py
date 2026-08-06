@@ -10,6 +10,7 @@ from apps.core.models import TimeStampedModel
 # ── Enums / choices ───────────────────────────────────────────────────────────
 
 SALES_DOCUMENT_TYPE_CHOICES = [
+    ("NV", "Nota de Venta"),
     ("01", "Factura"),
     ("03", "Boleta de Venta"),
     ("07", "Nota de Crédito"),
@@ -299,7 +300,7 @@ class SaleOrderLine(SaleLineBase):
         db_table = "sale_order_lines"
 
 
-# ── Comprobantes ──────────────────────────────────────────────────────────────
+# ── Documentos de venta ──────────────────────────────────────────────────────
 
 class SalesDocument(TimeStampedModel):
     objects = CompanyScopedManager()
@@ -320,6 +321,34 @@ class SalesDocument(TimeStampedModel):
     issue_date = models.DateField()
     currency = models.CharField(max_length=3, default="PEN")
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, default=1)
+    payment_method = models.ForeignKey(
+        PaymentMethod,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_documents",
+    )
+    means_of_payment = models.ForeignKey(
+        MeansOfPayment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_documents",
+    )
+    seller = models.ForeignKey(
+        "users.Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_documents",
+    )
+    price_list = models.ForeignKey(
+        "inventory.PriceList",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_documents",
+    )
     series = models.ForeignKey(
         DocumentSeries, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
@@ -329,6 +358,9 @@ class SalesDocument(TimeStampedModel):
     taxable_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     exempt_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     unaffected_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    export_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    free_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    other_charges = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     igv_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -342,6 +374,28 @@ class SalesDocument(TimeStampedModel):
     sale_order = models.ForeignKey(
         SaleOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
+    source_quotation = models.OneToOneField(
+        SalesQuotation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_document",
+    )
+    register_inventory_movement = models.BooleanField(default=True)
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_documents",
+    )
+    inventory_movement = models.OneToOneField(
+        "inventory.Movement",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales_document",
+    )
     sunat_ticket = models.CharField(max_length=100, blank=True)
     sunat_cdr_status = models.CharField(max_length=20, blank=True)
     sunat_response_code = models.CharField(max_length=10, blank=True)
@@ -351,6 +405,7 @@ class SalesDocument(TimeStampedModel):
     sunat_pdf_path = models.CharField(max_length=500, blank=True)
     sunat_hash = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
+    internal_reference = models.CharField(max_length=100, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Comprobantes — APUDIG{% endblock %}
-{% block page_title %}<h2 class="page-title">Comprobantes</h2>{% endblock %}
+{% block title %}Documentos de venta — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Documentos de venta</h2>{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -9,15 +9,15 @@
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-0">
           <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
-          <li class="breadcrumb-item active">Comprobantes</li>
+          <li class="breadcrumb-item active">Documentos de venta</li>
         </ol>
       </nav>
     </div>
-    <div class="col-auto">
+    {% if can_manage_sales_documents %}<div class="col-auto">
       <a href="{% url 'sales:document_create' %}" class="btn btn-primary btn-sm">
-        <i class="ti ti-plus me-1"></i>Nuevo comprobante
+        <i class="ti ti-plus me-1"></i>Nuevo documento
       </a>
-    </div>
+    </div>{% endif %}
   </div>
 </div>
 
@@ -39,6 +39,7 @@
       <div class="col-md-2">
         <select name="document_type" class="form-select form-select-sm">
           <option value="">Todos los tipos</option>
+          <option value="NV" {% if document_type == "NV" %}selected{% endif %}>Nota de venta</option>
           <option value="01" {% if document_type == "01" %}selected{% endif %}>Factura</option>
           <option value="03" {% if document_type == "03" %}selected{% endif %}>Boleta</option>
           <option value="07" {% if document_type == "07" %}selected{% endif %}>Nota Crédito</option>
@@ -66,7 +67,7 @@
     <table class="table table-vcenter table-hover card-table">
       <thead>
         <tr>
-          <th>Comprobante</th>
+          <th>Documento</th>
           <th>Tipo</th>
           <th>Cliente</th>
           <th>Emisión</th>
@@ -82,7 +83,8 @@
             <a href="{% url 'sales:document_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
           </td>
           <td class="text-muted small">
-            {% if v.document_type == "01" %}Factura
+            {% if v.document_type == "NV" %}Nota de venta
+            {% elif v.document_type == "01" %}Factura
             {% elif v.document_type == "03" %}Boleta
             {% elif v.document_type == "07" %}Nota de Crédito
             {% elif v.document_type == "08" %}Nota de Débito
@@ -102,14 +104,19 @@
           </td>
           <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
           <td class="text-end">
-            <a href="{% url 'sales:document_detail' v.pk %}" class="btn btn-sm btn-ghost-secondary">
+            {% if v.status == "DRAFT" and can_manage_sales_documents %}
+            <a href="{% url 'sales:document_edit' v.pk %}" class="btn btn-sm btn-ghost-secondary" title="Editar">
+              <i class="ti ti-edit"></i>
+            </a>
+            {% endif %}
+            <a href="{% url 'sales:document_detail' v.pk %}" class="btn btn-sm btn-ghost-secondary" title="Ver">
               <i class="ti ti-eye"></i>
             </a>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">No se encontraron comprobantes.</td>
+          <td colspan="7" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -118,7 +125,7 @@
   {% if page_obj.has_other_pages %}
   <div class="card-footer d-flex align-items-center">
     <p class="m-0 text-muted">
-      Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} comprobantes
+      Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} documentos
     </p>
     <ul class="pagination m-0 ms-auto">
       {% if page_obj.has_previous %}
