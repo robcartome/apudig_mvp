@@ -39,11 +39,7 @@
       <div class="col-md-2">
         <select name="document_type" class="form-select form-select-sm">
           <option value="">Todos los tipos</option>
-          <option value="NV" {% if document_type == "NV" %}selected{% endif %}>Nota de venta</option>
-          <option value="01" {% if document_type == "01" %}selected{% endif %}>Factura</option>
-          <option value="03" {% if document_type == "03" %}selected{% endif %}>Boleta</option>
-          <option value="07" {% if document_type == "07" %}selected{% endif %}>Nota Crédito</option>
-          <option value="08" {% if document_type == "08" %}selected{% endif %}>Nota Débito</option>
+          {% for type in document_types %}<option value="{{ type.code }}" {% if document_type == type.code %}selected{% endif %}>{{ type.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-md-2">
@@ -73,7 +69,7 @@
           <th>Emisión</th>
           <th>Estado</th>
           <th class="text-end">Total</th>
-          <th></th>
+          <th class="text-center">Operaciones</th>
         </tr>
       </thead>
       <tbody>
@@ -83,12 +79,7 @@
             <a href="{% url 'sales:document_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
           </td>
           <td class="text-muted small">
-            {% if v.document_type == "NV" %}Nota de venta
-            {% elif v.document_type == "01" %}Factura
-            {% elif v.document_type == "03" %}Boleta
-            {% elif v.document_type == "07" %}Nota de Crédito
-            {% elif v.document_type == "08" %}Nota de Débito
-            {% else %}{{ v.document_type }}{% endif %}
+            {{ v.document_type.name }}
           </td>
           <td>
             <div>{{ v.customer_legal_name }}</div>
@@ -103,15 +94,45 @@
             {% else %}<span class="badge bg-muted-lt">{{ v.status }}</span>{% endif %}
           </td>
           <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
-          <td class="text-end">
+          <td class="text-center">
+            <div class="d-inline-flex gap-1 align-items-center">
+            <a href="{% url 'sales:document_detail' v.pk %}"
+               data-preview-url="{% url 'sales:document_preview' v.pk %}"
+               class="btn btn-sm btn-outline-secondary js-document-preview" title="Ver detalle">
+              <i class="ti ti-eye"></i>
+            </a>
             {% if v.status == "DRAFT" and can_manage_sales_documents %}
-            <a href="{% url 'sales:document_edit' v.pk %}" class="btn btn-sm btn-ghost-secondary" title="Editar">
+            <a href="{% url 'sales:document_edit' v.pk %}" class="btn btn-sm btn-outline-primary" title="Editar documento">
               <i class="ti ti-edit"></i>
             </a>
             {% endif %}
-            <a href="{% url 'sales:document_detail' v.pk %}" class="btn btn-sm btn-ghost-secondary" title="Ver">
-              <i class="ti ti-eye"></i>
-            </a>
+            {% if can_manage_sales_documents %}
+            <form method="post" action="{% url 'sales:document_copy' v.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary" title="Copiar documento">
+                <i class="ti ti-copy"></i>
+              </button>
+            </form>
+            {% endif %}
+            {% if v.status == "DRAFT" and can_authorize_sales_documents %}
+            <form method="post" action="{% url 'sales:document_issue' v.pk %}" class="d-inline"
+                  onsubmit="return confirm('¿Aprobar y emitir este documento? Se asignará su correlativo.')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar y emitir">
+                <i class="ti ti-circle-check"></i>
+              </button>
+            </form>
+            {% endif %}
+            {% if v.status == "DRAFT" and can_manage_sales_documents %}
+            <form method="post" action="{% url 'sales:document_delete' v.pk %}" class="d-inline"
+                  onsubmit="return confirm('¿Eliminar definitivamente este documento borrador?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar borrador">
+                <i class="ti ti-trash"></i>
+              </button>
+            </form>
+            {% endif %}
+            </div>
           </td>
         </tr>
         {% empty %}
@@ -138,4 +159,47 @@
   </div>
   {% endif %}
 </div>
+
+<div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="ti ti-file-invoice me-1"></i>Detalle del documento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="document-preview-body">
+        <div class="text-center text-muted py-4">Cargando…</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    'use strict';
+    const modalEl = document.getElementById('documentPreviewModal');
+    const bodyEl = document.getElementById('document-preview-body');
+    if (!modalEl || !bodyEl || !window.bootstrap) return;
+    const modal = new bootstrap.Modal(modalEl);
+
+    document.querySelectorAll('.js-document-preview').forEach(function (btn) {
+      btn.addEventListener('click', async function (event) {
+        event.preventDefault();
+        bodyEl.innerHTML = '<div class="text-center text-muted py-4">Cargando…</div>';
+        modal.show();
+        try {
+          const response = await fetch(btn.dataset.previewUrl, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          if (!response.ok) throw new Error('No se pudo cargar el documento');
+          bodyEl.innerHTML = await response.text();
+        } catch (error) {
+          bodyEl.innerHTML = '<div class="alert alert-danger mb-0">No se pudo cargar el detalle. Intenta nuevamente.</div>';
+        }
+      });
+    });
+  }());
+</script>
 {% endblock %}

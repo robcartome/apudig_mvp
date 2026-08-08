@@ -512,7 +512,8 @@
 
   // ── Memo modal ─────────────────────────────────────────────────────────────
   let _memoRow = null;
-  const memoModal = new bootstrap.Modal(document.getElementById('memoModal'));
+  const memoModalElement = document.getElementById('memoModal');
+  const memoModal = memoModalElement ? new bootstrap.Modal(memoModalElement) : null;
 
   function updateMemoBtnStyle(row) {
     const memoInput = row.querySelector('input[name*="-memo"]');
@@ -529,7 +530,7 @@
 
   linesBody.addEventListener('click', function (e) {
     const btn = e.target.closest('.memo-btn');
-    if (!btn) return;
+    if (!btn || !memoModal) return;
     _memoRow = btn.closest('.line-row');
     const memoInput = _memoRow?.querySelector('input[name*="-memo"]');
     document.getElementById('memo-modal-text').value = memoInput?.value || '';
@@ -537,7 +538,7 @@
   });
 
   document.getElementById('memo-modal-save')?.addEventListener('click', function () {
-    if (!_memoRow) return;
+    if (!_memoRow || !memoModal) return;
     const memoInput = _memoRow.querySelector('input[name*="-memo"]');
     const text      = document.getElementById('memo-modal-text').value.trim().slice(0, 1000);
     if (memoInput) memoInput.value = text;
@@ -548,26 +549,108 @@
 
   // ── Número preview ────────────────────────────────────────────────────────
   const SERIES_NUMBER_URL_TPL = configEl.dataset.seriesNumberUrl || '';
+  const SERIES_OPTIONS_URL = configEl.dataset.seriesOptionsUrl || '';
+  const NUMBER_AVAILABILITY_URL = configEl.dataset.numberAvailabilityUrl || '';
+  const QUOTATION_ID = configEl.dataset.quotationId || '';
+  const documentTypeEl = document.querySelector('select[name="document_type"]');
+  const seriesEl = document.querySelector('select[name="series"]');
+  const numberEl = document.getElementById('id_number');
+  const manualNumberEl = document.getElementById('id_manual_number');
 
-  async function refreshSeriesNumber() {
-    const seriesEl = document.querySelector('select[name="series"]');
+  function useAutomaticNumber() {
+    if (manualNumberEl) manualNumberEl.value = '';
+    if (numberEl) numberEl.readOnly = true;
+    document.getElementById('series-number-conflict')?.classList.add('d-none');
+  }
+
+  async function validateNumberAvailability() {
+    if (!NUMBER_AVAILABILITY_URL || !seriesEl?.value || !numberEl?.value) return true;
+    const params = new URLSearchParams({number: numberEl.value});
+    if (QUOTATION_ID) params.set('exclude', QUOTATION_ID);
+    const warning = document.getElementById('series-number-conflict');
+    try {
+      const availabilityUrl = NUMBER_AVAILABILITY_URL.replace(
+        '00000000-0000-0000-0000-000000000000', seriesEl.value
+      );
+      const data = await window.ApiService.get(`${availabilityUrl}?${params}`);
+      warning?.classList.toggle('d-none', data.available);
+      if (warning && !data.available) {
+        warning.textContent = data.message;
+      }
+      numberEl.classList.toggle('is-invalid', !data.available);
+      return data.available;
+    } catch (err) {
+      console.error('Error al validar correlativo', err);
+      return false;
+    }
+  }
+
+  async function refreshSeriesNumber(force = false) {
     const seriesId = seriesEl?.value;
-    if (!seriesId || !SERIES_NUMBER_URL_TPL) return;
+    if (!seriesId || !SERIES_NUMBER_URL_TPL) {
+      if (numberEl) numberEl.value = '';
+      return;
+    }
+    if (!force && manualNumberEl?.value) return;
     const url = SERIES_NUMBER_URL_TPL.replace('00000000-0000-0000-0000-000000000000', seriesId);
     try {
       const data = await window.ApiService.get(url);
-      const preview = document.getElementById('series-number-preview');
-      if (preview) preview.value = data.formatted || data.next_number || '';
+      if (numberEl) numberEl.value = String(data.next_number || '').padStart(8, '0');
       document.getElementById('series-number-conflict')?.classList.add('d-none');
+      validateNumberAvailability();
     } catch (err) {
       console.error('Error al obtener número de serie', err);
     }
   }
 
-  document.querySelector('select[name="series"]')?.addEventListener('change', refreshSeriesNumber);
-  document.getElementById('refresh-number-btn')?.addEventListener('click', refreshSeriesNumber);
+  async function refreshSeriesOptions() {
+    if (!documentTypeEl || !seriesEl || !SERIES_OPTIONS_URL) return;
+    const previousValue = seriesEl.value;
+    seriesEl.disabled = true;
+    seriesEl.innerHTML = '<option value="">Cargando…</option>';
+    useAutomaticNumber();
+    if (numberEl) numberEl.value = '';
+    try {
+      const url = `${SERIES_OPTIONS_URL}?document_type=${encodeURIComponent(documentTypeEl.value)}`;
+      const data = await window.ApiService.get(url);
+      seriesEl.innerHTML = '<option value="">Seleccionar…</option>';
+      (data.results || []).forEach(item => {
+        const option = new Option(item.text, item.id, false, item.id === previousValue);
+        seriesEl.add(option);
+      });
+      if (!seriesEl.value && data.results?.length) seriesEl.value = data.results[0].id;
+      seriesEl.dispatchEvent(new Event('change'));
+    } catch (err) {
+      seriesEl.innerHTML = '<option value="">No se pudieron cargar las series</option>';
+      console.error('Error al obtener series documentales', err);
+    } finally {
+      seriesEl.disabled = false;
+    }
+  }
+
+  seriesEl?.addEventListener('change', () => {
+    useAutomaticNumber();
+    refreshSeriesNumber(true);
+  });
+  documentTypeEl?.addEventListener('change', refreshSeriesOptions);
+  document.getElementById('edit-number-btn')?.addEventListener('click', () => {
+    if (!numberEl || !seriesEl?.value) return;
+    numberEl.readOnly = false;
+    if (manualNumberEl) manualNumberEl.value = 'on';
+    document.getElementById('series-number-conflict')?.classList.remove('d-none');
+    numberEl.focus();
+    numberEl.select();
+  });
+  numberEl?.addEventListener('input', () => {
+    numberEl.value = numberEl.value.replace(/\D/g, '').slice(0, 8);
+  });
+  numberEl?.addEventListener('blur', validateNumberAvailability);
+  document.getElementById('refresh-number-btn')?.addEventListener('click', () => {
+    useAutomaticNumber();
+    refreshSeriesNumber(true);
+  });
 
   // Cargar al iniciar si ya hay una serie seleccionada
-  if (document.querySelector('select[name="series"]')?.value) refreshSeriesNumber();
+  if (seriesEl?.value && !numberEl?.value) refreshSeriesNumber();
 
 }());

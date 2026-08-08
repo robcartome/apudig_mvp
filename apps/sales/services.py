@@ -17,9 +17,9 @@ from django.utils import timezone
 from apps.core.models import AuditLog
 from apps.inventory.models import MovementOrigin, StockByWarehouse
 from apps.inventory.services import confirm_movement, register_entry, register_exit
+from apps.partners.models import DocumentType
 
 from .models import (
-    BusinessDocumentType,
     DocumentSeries,
     QUOTATION_STATUS_CHOICES,
     SalesQuotation,
@@ -43,6 +43,25 @@ def _next_series_number(series: DocumentSeries) -> int:
     locked.current_number += 1
     locked.save(update_fields=["current_number"])
     return locked.current_number
+
+
+def _reserve_quotation_number(series, requested_number=None, exclude_pk=None):
+    """Reserva o valida un correlativo de cotización bajo bloqueo de serie."""
+    if series is None or not series.active:
+        raise ValueError("Debe seleccionar una serie documental activa.")
+    locked_series = DocumentSeries.objects.select_for_update().get(pk=series.pk)
+    number = int(requested_number) if requested_number else locked_series.current_number + 1
+    duplicate = SalesQuotation.objects.filter(series=locked_series, number=number)
+    if exclude_pk:
+        duplicate = duplicate.exclude(pk=exclude_pk)
+    if duplicate.exists():
+        raise ValueError(
+            f"Ya existe la cotización {locked_series.series}-{number:08d}."
+        )
+    if number > locked_series.current_number:
+        locked_series.current_number = number
+        locked_series.save(update_fields=["current_number"])
+    return locked_series, number
 
 @transaction.atomic
 def create_document_series(
@@ -78,6 +97,7 @@ def toggle_series(series: DocumentSeries) -> DocumentSeries:
 
 
 def get_or_create_series(company_id: str, store_id: str | None, document_type: str, series_code: str) -> DocumentSeries:
+    document_type = DocumentType.objects.get(code=document_type)
     obj, _ = DocumentSeries.objects.get_or_create(
         company_id=company_id,
         store_id=store_id,
@@ -116,7 +136,8 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
            unit_price, discount_amount (opcional), tax_type (opcional),
            igv_rate (opcional), memo (opcional).
     """
-    number = _next_series_number(series)
+    requested_number = kwargs.pop("number", None)
+    series, number = _reserve_quotation_number(series, requested_number)
 
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
@@ -176,6 +197,15 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
     if quotation.status != "DRAFT":
         raise ValueError("Solo se pueden editar cotizaciones en estado Borrador.")
 
+    series = kwargs.pop("series", quotation.series)
+    requested_number = kwargs.pop("number", quotation.number)
+    series, number = _reserve_quotation_number(
+        series, requested_number, exclude_pk=quotation.pk
+    )
+    quotation.series = series
+    quotation.series_code = series.series
+    quotation.number = number
+
     for attr, value in kwargs.items():
         setattr(quotation, attr, value)
 
@@ -189,7 +219,10 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
     quotation.igv_total = igv_total
     quotation.total_discount = total_discount
     quotation.total = total
-    quotation.save(update_fields=list(kwargs.keys()) + ["subtotal", "igv_total", "total_discount", "total"])
+    quotation.save(update_fields=list(kwargs.keys()) + [
+        "series", "series_code", "number", "subtotal", "igv_total",
+        "total_discount", "total",
+    ])
 
     quotation.lines.all().delete()
     for raw, calc in zip(lines, calculated_lines):
@@ -477,14 +510,17 @@ def _validate_sales_document_input(store_id, customer, document_type, series, li
         raise ValueError("El cliente es obligatorio.")
     if not document_type:
         raise ValueError("El tipo de documento es obligatorio.")
+    if not isinstance(document_type, DocumentType):
+        document_type = DocumentType.objects.get(code=document_type)
     if series is None:
         raise ValueError("La serie es obligatoria.")
-    if str(series.store_id) != str(store_id) or series.document_type != document_type:
+    if str(series.store_id) != str(store_id) or series.document_type_id != document_type.id:
         raise ValueError("La serie no corresponde a la sucursal y tipo de documento.")
     if str(customer.company_id) != str(series.company_id):
         raise ValueError("El cliente no pertenece a la empresa activa.")
     if not lines:
         raise ValueError("El documento debe tener al menos una línea.")
+    return document_type
 
 
 def _replace_sales_document_lines(document: SalesDocument, lines, calculated_lines) -> None:
@@ -532,7 +568,7 @@ def _audit_sales_document(document, action: str, user=None, **metadata) -> None:
         entity_id=str(document.pk),
         meta_data={
             "store_id": str(document.store_id) if document.store_id else None,
-            "document_type": document.document_type,
+            "document_type": document.document_type.code,
             "status": document.status,
             "series": document.series_code,
             "number": document.number,
@@ -638,9 +674,10 @@ def create_sales_document_draft(
     Crea un comprobante en estado DRAFT sin asignar número (se reserva en issue_sales_document).
     lines: misma estructura que create_quotation.
     """
-    _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
     calculated_lines = [_calculate_line(line) for line in lines]
     totals = _calc_sales_document_totals(lines, calculated_lines)
+    requested_number = kwargs.pop("number", "")
 
     sales_document = SalesDocument.objects.create(
         store_id=store_id,
@@ -654,7 +691,7 @@ def create_sales_document_draft(
         customer_ubigeo=getattr(customer, "ubigeo", ""),
         series=series,
         series_code=series.series,
-        number="",        # se asignará en issue_sales_document
+        number=requested_number,
         sale_order=sale_order,
         created_by=created_by,
         **{k: v for k, v in {**totals, **kwargs}.items()},
@@ -662,6 +699,70 @@ def create_sales_document_draft(
     _replace_sales_document_lines(sales_document, lines, calculated_lines)
     _audit_sales_document(sales_document, "CREATE", created_by)
     return sales_document
+
+
+@transaction.atomic
+def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
+    """Copia un documento como borrador, sin correlativo ni relaciones de origen."""
+    source = (
+        SalesDocument.objects.select_for_update()
+        .select_related("customer", "document_type", "series")
+        .prefetch_related("lines__product")
+        .get(pk=sales_document_id)
+    )
+    if source.customer is None:
+        raise ValueError("No se puede copiar un documento cuyo cliente fue eliminado.")
+    if source.series is None or not source.series.active:
+        raise ValueError("No se puede copiar el documento porque su serie no está activa.")
+
+    lines = [
+        {
+            "product": line.product,
+            "description": line.description,
+            "quantity": line.quantity,
+            "unit_price": line.unit_price,
+            "unit_code": line.unit_code,
+            "discount_amount": line.discount_amount,
+            "tax_type": line.tax_type,
+            "igv_rate": line.igv_rate,
+            "sunat_product_code": line.sunat_product_code,
+            "product_code": line.product_code,
+        }
+        for line in source.lines.all()
+    ]
+    copied = create_sales_document_draft(
+        store_id=str(source.store_id),
+        customer=source.customer,
+        document_type=source.document_type,
+        series=source.series,
+        lines=lines,
+        created_by=copied_by,
+        issue_date=timezone.now().date(),
+        currency=source.currency,
+        exchange_rate=source.exchange_rate,
+        payment_method=source.payment_method,
+        means_of_payment=source.means_of_payment,
+        seller=source.seller,
+        price_list=source.price_list,
+        register_inventory_movement=source.register_inventory_movement,
+        warehouse=source.warehouse,
+        notes=source.notes,
+        internal_reference=source.internal_reference,
+    )
+    _audit_sales_document(
+        copied, "COPY", copied_by, source_document_id=str(source.pk)
+    )
+    return copied
+
+
+@transaction.atomic
+def delete_sales_document_draft(sales_document_id, deleted_by=None) -> None:
+    """Elimina únicamente documentos que todavía se encuentran en borrador."""
+    document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if document.status != "DRAFT":
+        raise ValueError("Solo se pueden eliminar documentos en Borrador.")
+    _audit_sales_document(document, "DELETE", deleted_by)
+    document.delete()
 
 
 @transaction.atomic
@@ -675,6 +776,8 @@ def create_document_from_quotation(
     warehouse=None,
 ) -> SalesDocument:
     """Convierte una cotización aprobada en un único borrador de venta."""
+    if not isinstance(document_type, DocumentType):
+        document_type = DocumentType.objects.get(code=document_type)
     quotation = SalesQuotation.objects.select_for_update().get(pk=quotation_id)
     if quotation.status != "APPROVED":
         raise ValueError("Solo se pueden convertir cotizaciones aprobadas.")
@@ -684,7 +787,7 @@ def create_document_from_quotation(
         raise ValueError("La cotización no tiene una sucursal válida.")
     if (
         not series.active
-        or series.document_type != document_type
+        or series.document_type_id != document_type.id
         or series.company_id != quotation.store.company_id
         or series.store_id != quotation.store_id
     ):
@@ -747,9 +850,10 @@ def update_sales_document_draft(
 
     store_id = kwargs.get("store_id", document.store_id)
     document_type = kwargs.get("document_type", document.document_type)
-    _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
     calculated_lines = [_calculate_line(line) for line in lines]
     totals = _calc_sales_document_totals(lines, calculated_lines)
+    requested_number = kwargs.pop("number", "")
 
     document.customer = customer
     document.customer_document_type = customer.document_type
@@ -759,6 +863,7 @@ def update_sales_document_draft(
     document.customer_ubigeo = getattr(customer, "ubigeo", "")
     document.series = series
     document.series_code = series.series
+    document.number = requested_number
     for field, value in {**kwargs, **totals}.items():
         setattr(document, field, value)
     document.save()
@@ -783,14 +888,23 @@ def issue_sales_document(sales_document_id, issued_by=None) -> SalesDocument:
         raise ValueError("La serie documental no está activa.")
     if (
         sales_document.series.store_id != sales_document.store_id
-        or sales_document.series.document_type != sales_document.document_type
+        or sales_document.series.document_type_id != sales_document.document_type_id
     ):
         raise ValueError("La serie no corresponde a la sucursal y tipo del documento.")
     if not sales_document.lines.exists():
         raise ValueError("El documento debe tener al menos una línea para ser emitido.")
 
-    number = _next_series_number(sales_document.series)
-    number_str = f"{number:08d}"
+    locked_series = DocumentSeries.objects.select_for_update().get(pk=sales_document.series_id)
+    if sales_document.number:
+        number = int(sales_document.number)
+        number_str = f"{number:08d}"
+        if number > locked_series.current_number:
+            locked_series.current_number = number
+            locked_series.save(update_fields=["current_number"])
+    else:
+        locked_series.current_number += 1
+        locked_series.save(update_fields=["current_number"])
+        number_str = f"{locked_series.current_number:08d}"
 
     # Verificar unicidad
     if SalesDocument.objects.filter(
@@ -873,7 +987,7 @@ def create_credit_note(
         raise ValueError("Solo se puede generar nota de crédito de comprobantes emitidos.")
     if (
         not series.active
-        or series.document_type != "07"
+        or series.document_type.code != "07"
         or series.company_id != original.store.company_id
         or series.store_id != original.store_id
     ):
@@ -899,7 +1013,7 @@ def create_credit_note(
     note = create_sales_document_draft(
         store_id=str(original.store_id) if original.store_id else None,
         customer=original.customer,
-        document_type="07",
+        document_type=DocumentType.objects.get(code="07"),
         series=series,
         lines=lines,
         created_by=created_by,

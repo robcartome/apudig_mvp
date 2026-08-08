@@ -1,4 +1,4 @@
-"""Pruebas transaccionales de numeración concurrente de documentos de venta."""
+﻿"""Pruebas transaccionales de numeraciÃ³n concurrente de documentos de venta."""
 
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
-from apps.partners.models import Customer
+from apps.partners.models import Customer, DocumentType
 from apps.sales.models import DocumentSeries
 from apps.sales.services import create_sales_document_draft, issue_sales_document
 
@@ -28,10 +28,10 @@ class SalesDocumentConcurrencyTest(TransactionTestCase):
             legal_name="Cliente concurrencia",
         )
         self.series = DocumentSeries.objects.create(
-            company=company, store=self.store, document_type="01", series="F900"
+            company=company, store=self.store, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0], series="F900"
         )
         unit = Unit.objects.create(name="Unidad concurrencia", code="UCN")
-        category = Category.objects.create(name="Categoría concurrencia")
+        category = Category.objects.create(name="CategorÃ­a concurrencia")
         self.product = Product.objects.create(
             name="Producto concurrencia",
             sku="CONC-1",
@@ -44,7 +44,7 @@ class SalesDocumentConcurrencyTest(TransactionTestCase):
         return create_sales_document_draft(
             store_id=str(self.store.pk),
             customer=self.customer,
-            document_type="01",
+            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.series,
             lines=[{
                 "product": self.product,
@@ -76,3 +76,4 @@ class SalesDocumentConcurrencyTest(TransactionTestCase):
         self.assertEqual(sorted(numbers), ["00000001", "00000002"])
         self.series.refresh_from_db()
         self.assertEqual(self.series.current_number, 2)
+

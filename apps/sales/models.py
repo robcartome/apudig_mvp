@@ -9,17 +9,6 @@ from apps.core.models import TimeStampedModel
 
 # ── Enums / choices ───────────────────────────────────────────────────────────
 
-SALES_DOCUMENT_TYPE_CHOICES = [
-    ("NV", "Nota de Venta"),
-    ("01", "Factura"),
-    ("03", "Boleta de Venta"),
-    ("07", "Nota de Crédito"),
-    ("08", "Nota de Débito"),
-    ("09", "Guía de Remisión"),
-    ("OV", "Orden de Venta"),
-    ("COT", "Cotización"),
-]
-
 SALES_DOCUMENT_STATUS_CHOICES = [
     ("DRAFT", "Borrador"),
     ("ISSUED", "Emitido"),
@@ -110,26 +99,6 @@ class MeansOfPayment(TimeStampedModel):
 
 # ── Catálogos de documento ────────────────────────────────────────────────────
 
-class BusinessDocumentType(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=10, unique=True)
-    name = models.CharField(max_length=120)
-    category = models.CharField(max_length=20, choices=DOC_CATEGORY_CHOICES)
-    is_sunat = models.BooleanField(default=False)
-    sunat_code = models.CharField(max_length=4, blank=True)
-    affects_stock = models.BooleanField(default=False)
-    affects_accounting = models.BooleanField(default=False)
-    active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "business_document_types"
-        ordering = ["code"]
-
-    def __str__(self) -> str:
-        return f"{self.code} - {self.name}"
-
-
 class DocumentSeries(TimeStampedModel):
     objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -137,7 +106,9 @@ class DocumentSeries(TimeStampedModel):
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="document_series"
     )
-    document_type = models.CharField(max_length=10, choices=SALES_DOCUMENT_TYPE_CHOICES)
+    document_type = models.ForeignKey(
+        "partners.DocumentType", on_delete=models.PROTECT, related_name="document_series"
+    )
     series = models.CharField(max_length=4)
     current_number = models.IntegerField(default=0)
     active = models.BooleanField(default=True)
@@ -147,7 +118,7 @@ class DocumentSeries(TimeStampedModel):
         unique_together = ("company", "store", "document_type", "series")
 
     def __str__(self) -> str:
-        return f"{self.series} ({self.document_type})"
+        return f"{self.series} ({self.document_type.code})"
 
     def next_number(self) -> int:
         self.current_number += 1
@@ -228,6 +199,13 @@ class SalesQuotation(TimeStampedModel):
     class Meta:
         db_table = "sales_quotations"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("series", "number"),
+                condition=models.Q(number__isnull=False),
+                name="uniq_sales_quotation_series_number",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"COT {self.series_code}-{self.number or ''} ({self.status})"
@@ -256,7 +234,7 @@ class SaleOrder(TimeStampedModel):
     customer_address = models.CharField(max_length=500, blank=True)
     customer_ubigeo = models.CharField(max_length=6, blank=True)
     document_type = models.ForeignKey(
-        BusinessDocumentType, on_delete=models.PROTECT, related_name="sale_orders"
+        "partners.DocumentType", on_delete=models.PROTECT, related_name="sale_orders"
     )
     status = models.CharField(max_length=20, choices=SALE_ORDER_STATUS_CHOICES, default="DRAFT")
     currency = models.CharField(max_length=3, default="PEN")
@@ -308,7 +286,9 @@ class SalesDocument(TimeStampedModel):
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
     )
-    document_type = models.CharField(max_length=10, choices=SALES_DOCUMENT_TYPE_CHOICES)
+    document_type = models.ForeignKey(
+        "partners.DocumentType", on_delete=models.PROTECT, related_name="sales_documents"
+    )
     status = models.CharField(max_length=20, choices=SALES_DOCUMENT_STATUS_CHOICES, default="DRAFT")
     customer = models.ForeignKey(
         "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_documents"
@@ -422,7 +402,7 @@ class SalesDocument(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.document_type} {self.series_code}-{self.number}"
+        return f"{self.document_type.code} {self.series_code}-{self.number}"
 
 
 class SalesDocumentLine(SaleLineBase):

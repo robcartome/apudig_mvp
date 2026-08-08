@@ -22,6 +22,8 @@
      data-create-url="{% url 'inventory:api_product_create' %}"
      data-price-list-url="{% url 'inventory:api_price_list_prices' pk='00000000-0000-0000-0000-000000000000' %}"
      data-series-number-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-number-availability-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-quotation-id="{{ quotation.pk|default:'' }}"
      data-default-price-list-id="{{ default_price_list_id|default:'' }}"
      data-payment-method-search-url="{% url 'sales:api_payment_method_search' %}"
      data-payment-method-create-url="{% url 'sales:api_payment_method_create' %}"
@@ -100,17 +102,14 @@
           <div class="mb-2">
             <label class="form-label">Número</label>
             <div class="input-group input-group-sm">
-              <input type="text" id="series-number-preview" class="form-control bg-light" readonly
-                     value="{{ quotation.number|default:'—' }}"
-                     placeholder="(se asigna al guardar)">
-              {% if not quotation.number %}
-              <button type="button" id="refresh-number-btn" class="btn btn-outline-secondary" title="Ver siguiente número disponible">
-                <i class="ti ti-refresh"></i>
+              {{ header_form.number }}
+              <button type="button" id="edit-number-btn" class="btn btn-outline-secondary" title="Editar correlativo" aria-label="Editar correlativo">
+                <i class="ti ti-pencil"></i>
               </button>
-              {% endif %}
             </div>
+            {% if header_form.number.errors %}<div class="text-danger small mt-1">{{ header_form.number.errors.0 }}</div>{% endif %}
             <div id="series-number-conflict" class="text-warning small mt-1 d-none">
-              <i class="ti ti-alert-triangle me-1"></i>El número puede haber cambiado. Actualiza para verificar.
+              <i class="ti ti-alert-triangle me-1"></i>Verifique que la combinación serie–número no esté registrada.
             </div>
           </div>
 
@@ -468,7 +467,7 @@
 <script src="{% static 'js/api.js' %}"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/product-picker.js' %}"></script>
-<script src="{% static 'js/sales/document-lines.js' %}"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260808-3"></script>
 <script>
 (function () {
   const cfg = document.getElementById('sales-form-config');

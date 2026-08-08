@@ -1,5 +1,5 @@
-"""
-sales/tests/test_quotations.py — Tests del módulo de cotizaciones.
+﻿"""
+sales/tests/test_quotations.py â€” Tests del mÃ³dulo de cotizaciones.
 """
 from decimal import Decimal
 
@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
-from apps.partners.models import Customer
+from apps.partners.models import Customer, DocumentType
 from apps.sales.models import DocumentSeries, SalesDocument, SalesQuotation
 from apps.sales.services import (
     approve_quotation,
@@ -24,7 +24,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-# ── Fixture helper ────────────────────────────────────────────────────────────
+# â”€â”€ Fixture helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _make_product(name="Producto Test", unit=None):
     if unit is None:
@@ -61,11 +61,11 @@ class QuotationServiceTest(TestCase):
             legal_name="Cliente SAC",
         )
         self.series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="COT", series="C001",
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="COT", defaults={"name": "COT", "category": "INTERNAL"})[0], series="C001",
         )
         self.product = _make_product()
         self.sales_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="NV", series="NV01"
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0], series="NV01"
         )
 
     def _create(self, lines=None):
@@ -96,6 +96,31 @@ class QuotationServiceTest(TestCase):
         q2 = self._create()
         self.assertEqual(q2.number, q1.number + 1)
 
+    def test_create_accepts_manual_number_and_advances_series(self):
+        quotation = create_quotation(
+            store_id=str(self.store.id),
+            customer=self.customer,
+            series=self.series,
+            lines=[_make_line(self.product)],
+            issue_date=timezone.now().date(),
+            number=25,
+        )
+        self.series.refresh_from_db()
+        self.assertEqual(quotation.number, 25)
+        self.assertEqual(self.series.current_number, 25)
+
+    def test_duplicate_series_number_is_rejected(self):
+        self._create()
+        with self.assertRaisesRegex(ValueError, "Ya existe la cotización"):
+            create_quotation(
+                store_id=str(self.store.id),
+                customer=self.customer,
+                series=self.series,
+                lines=[_make_line(self.product)],
+                issue_date=timezone.now().date(),
+                number=1,
+            )
+
     def test_approve_transition(self):
         q = self._create()
         self.assertEqual(q.status, "DRAFT")
@@ -107,7 +132,7 @@ class QuotationServiceTest(TestCase):
         q = self._create()
         approve_quotation(q.pk)
         with self.assertRaises(ValueError):
-            approve_quotation(q.pk)  # APPROVED → APPROVED invalid
+            approve_quotation(q.pk)  # APPROVED â†’ APPROVED invalid
 
     def test_reject_transition(self):
         q = self._create()
@@ -160,7 +185,7 @@ class QuotationServiceTest(TestCase):
 
         document = create_document_from_quotation(
             quotation.pk,
-            document_type="NV",
+            document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0],
             series=self.sales_series,
             register_inventory_movement=False,
         )
@@ -175,7 +200,7 @@ class QuotationServiceTest(TestCase):
         with self.assertRaisesRegex(ValueError, "ya fue convertida"):
             create_document_from_quotation(
                 quotation.pk,
-                document_type="NV",
+                document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0],
                 series=self.sales_series,
                 register_inventory_movement=False,
             )
@@ -192,11 +217,11 @@ class QuotationViewsTest(TestCase):
             document_type="6", document_number="20111111111", legal_name="Cliente Demo SAC"
         )
         self.series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="COT", series="C001",
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="COT", defaults={"name": "COT", "category": "INTERNAL"})[0], series="C001",
         )
         self.product = _make_product("Prod A")
         self.sales_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="NV", series="NV01"
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0], series="NV01"
         )
         self.client.login(username="test@demo.com", password="pass1234")
         s = self.client.session
@@ -211,10 +236,12 @@ class QuotationViewsTest(TestCase):
     def test_create_get(self):
         resp = self.client.get(reverse("sales:quotation_create"))
         self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'name="number"')
+        self.assertContains(resp, 'id="edit-number-btn"')
 
-    def _post_create(self):
+    def _post_create(self, number=None):
         today = timezone.now().date().isoformat()
-        return self.client.post(reverse("sales:quotation_create"), {
+        data = {
             "store": str(self.store.id),
             "series": str(self.series.id),
             "customer": str(self.customer.id),
@@ -237,13 +264,39 @@ class QuotationViewsTest(TestCase):
             "lines-0-tax_type": "10",
             "lines-0-igv_rate": "18",
             "lines-0-memo": "",
-        })
+        }
+        if number is not None:
+            data["number"] = str(number)
+        return self.client.post(reverse("sales:quotation_create"), data)
 
     def test_create_post_ok(self):
         resp = self._post_create()
         self.assertEqual(SalesQuotation.objects.count(), 1)
         q = SalesQuotation.objects.first()
         self.assertRedirects(resp, reverse("sales:quotation_detail", args=[q.pk]))
+
+    def test_duplicate_number_shows_form_error(self):
+        self._post_create(number=7)
+        response = self._post_create(number=7)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ya existe la cotización C001-00000007")
+        self.assertEqual(SalesQuotation.objects.count(), 1)
+
+    def test_number_availability_api_reports_conflict(self):
+        quotation = create_quotation(
+            store_id=str(self.store.id), customer=self.customer, series=self.series,
+            lines=[_make_line(self.product)], issue_date=timezone.now().date(), number=9,
+        )
+        response = self.client.get(
+            reverse("sales:api_series_next_number", args=[self.series.pk]),
+            {"number": "9"},
+        )
+        self.assertFalse(response.json()["available"])
+        excluded = self.client.get(
+            reverse("sales:api_series_next_number", args=[self.series.pk]),
+            {"number": "9", "exclude": str(quotation.pk)},
+        )
+        self.assertTrue(excluded.json()["available"])
 
     def test_convert_approved_quotation_to_document(self):
         self._post_create()
@@ -286,3 +339,4 @@ class QuotationViewsTest(TestCase):
         self.client.logout()
         resp = self.client.get(reverse("sales:quotation_list"))
         self.assertEqual(resp.status_code, 302)
+

@@ -22,6 +22,8 @@
      data-search-url="{% url 'inventory:api_product_search' %}"
      data-create-url="{% url 'inventory:api_product_create' %}"
      data-price-list-url="{% url 'inventory:api_price_list_prices' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-series-options-url="{% url 'sales:api_series_options' %}"
+     data-series-number-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
      data-igv-rate="{{ igv_rate }}"
      style="display:none"></div>
 
@@ -84,9 +86,9 @@
         </div>
       </div>
 
-      {# ── Fila 2: Sucursal, Tipo, Serie, Moneda ── #}
+      {# ── Fila 2: Sucursal, Tipo, Serie, Correlativo, Moneda ── #}
       <div class="row g-3 mb-3">
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-2">
           <label class="form-label required">Sucursal</label>
           {{ header_form.store }}
           {% if header_form.store.errors %}<div class="text-danger small mt-1">{{ header_form.store.errors.0 }}</div>{% endif %}
@@ -96,12 +98,26 @@
           {{ header_form.document_type }}
           {% if header_form.document_type.errors %}<div class="text-danger small mt-1">{{ header_form.document_type.errors.0 }}</div>{% endif %}
         </div>
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-2">
           <label class="form-label required">Serie</label>
           {{ header_form.series }}
           {% if header_form.series.errors %}<div class="text-danger small mt-1">{{ header_form.series.errors.0 }}</div>{% endif %}
         </div>
         <div class="col-12 col-md-3">
+          <label class="form-label required">Correlativo</label>
+          {{ header_form.manual_number }}
+          <div class="input-group">
+            {{ header_form.number }}
+            <button type="button" id="edit-number-btn" class="btn btn-outline-secondary" title="Editar correlativo" aria-label="Editar correlativo">
+              <i class="ti ti-pencil"></i>
+            </button>
+          </div>
+          {% if header_form.number.errors %}<div class="text-danger small mt-1">{{ header_form.number.errors.0 }}</div>{% endif %}
+          <div id="series-number-conflict" class="text-warning small mt-1 d-none">
+            <i class="ti ti-alert-triangle me-1"></i>Verifique que el correlativo esté disponible.
+          </div>
+        </div>
+        <div class="col-12 col-md-2">
           <label class="form-label required">Moneda</label>
           {{ header_form.currency }}
         </div>
@@ -366,5 +382,5 @@
 <script src="{% static 'js/api.js' %}"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/product-picker.js' %}"></script>
-<script src="{% static 'js/sales/document-lines.js' %}"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260808-3"></script>
 {% endblock %}

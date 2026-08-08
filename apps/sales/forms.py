@@ -2,17 +2,17 @@
 sales/forms.py — Formularios del módulo de ventas.
 """
 from decimal import Decimal
+from uuid import UUID
 
 from django import forms
 
 from apps.core.managers import filter_by_company
 from apps.companies.models import Store
 from apps.inventory.models import PriceList, Product, Warehouse
-from apps.partners.models import Customer
+from apps.partners.models import Customer, DocumentType
 from apps.users.models import Employee
 
 from .models import (
-    BusinessDocumentType,
     DocumentSeries,
     PaymentMethod,
     MeansOfPayment,
@@ -21,7 +21,6 @@ from .models import (
     SaleOrder,
     SalesDocument,
     TAX_TYPE_CHOICES,
-    SALES_DOCUMENT_TYPE_CHOICES,
     DOC_CATEGORY_CHOICES,
 )
 
@@ -56,11 +55,11 @@ class DocumentSeriesForm(forms.ModelForm):
         return self.cleaned_data["series"].upper().strip()
 
 
-class BusinessDocumentTypeForm(forms.ModelForm):
+class DocumentTypeForm(forms.ModelForm):
     """Formulario para tipos de documento comercial."""
 
     class Meta:
-        model = BusinessDocumentType
+        model = DocumentType
         fields = (
             "code",
             "name",
@@ -110,7 +109,9 @@ class MeansOfPaymentForm(forms.ModelForm):
 # ── Cotizaciones ──────────────────────────────────────────────────────────────
 
 class QuotationHeaderForm(forms.ModelForm):
-    """Cabecera de cotización — campos editables (sin totales ni número de serie)."""
+    """Cabecera de cotización con serie y correlativo editables."""
+
+    number = forms.CharField(required=False, max_length=8)
 
     # ── Campos de solo-UI (no se guardan directamente en el modelo) ───────────
     igv_rate_default = forms.ChoiceField(
@@ -150,7 +151,7 @@ class QuotationHeaderForm(forms.ModelForm):
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                document_type="COT",
+                document_type__code="COT",
                 active=True,
             )
         if company_id:
@@ -166,6 +167,14 @@ class QuotationHeaderForm(forms.ModelForm):
         self.fields["notes"].widget.attrs.update(_textarea)
         self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
         self.fields["exchange_rate"].required = False
+        self.fields["number"].widget.attrs.update({
+            **_text,
+            "readonly": "readonly",
+            "inputmode": "numeric",
+            "autocomplete": "off",
+        })
+        if self.instance.pk and self.instance.number and not self.is_bound:
+            self.initial["number"] = f"{self.instance.number:08d}"
         # Fechas con datetime-local — se crea un nuevo widget para que input_type se aplique
         # correctamente (DateInput.__init__ hace pop de "type" y lo asigna a input_type)
         for fname in ("issue_date", "valid_until"):
@@ -177,10 +186,29 @@ class QuotationHeaderForm(forms.ModelForm):
                 '%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d',
             ]
 
+    def clean(self):
+        cleaned_data = super().clean()
+        series = cleaned_data.get("series")
+        number = (cleaned_data.get("number") or "").strip()
+        if number and (not number.isdigit() or int(number) < 1):
+            self.add_error("number", "Ingrese un correlativo numérico mayor que cero.")
+        elif series and number:
+            numeric_number = int(number)
+            cleaned_data["number"] = numeric_number
+            duplicate = SalesQuotation.objects.filter(series=series, number=numeric_number)
+            if self.instance.pk:
+                duplicate = duplicate.exclude(pk=self.instance.pk)
+            if duplicate.exists():
+                self.add_error(
+                    "number",
+                    f"Ya existe la cotización {series.series}-{numeric_number:08d}.",
+                )
+        return cleaned_data
+
     class Meta:
         model = SalesQuotation
         fields = (
-            "store", "customer", "series", "issue_date", "valid_until",
+            "store", "customer", "series", "number", "issue_date", "valid_until",
             "currency", "exchange_rate", "notes", "internal_reference",
             "payment_method", "means_of_payment",
         )
@@ -274,13 +302,13 @@ class SaleOrderHeaderForm(forms.ModelForm):
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget.attrs.update(_select)
-        self.fields["document_type"].queryset = BusinessDocumentType.objects.filter(active=True).order_by("code")
+        self.fields["document_type"].queryset = DocumentType.objects.filter(active=True).order_by("code")
         self.fields["document_type"].widget.attrs.update(_select)
         if company_id and store_id:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                document_type="OV",
+                document_type__code="OV",
                 active=True,
             )
         self.fields["series"].widget.attrs.update(_select)
@@ -380,15 +408,6 @@ SaleOrderLineFormSet = forms.formset_factory(
 
 # ── Documentos de venta ──────────────────────────────────────────────────────
 
-# Tipos admitidos por el flujo de documentos de venta.
-_SALES_DOCUMENT_FISCAL_TYPES = [
-    ("NV", "Nota de Venta"),
-    ("01", "Factura"),
-    ("03", "Boleta de Venta"),
-    ("07", "Nota de Crédito"),
-    ("08", "Nota de Débito"),
-]
-
 _NOTE_REASON_CODES = [
     ("01", "01 - Anulación de la operación"),
     ("02", "02 - Anulación por error en el RUC"),
@@ -405,6 +424,9 @@ _NOTE_REASON_CODES = [
 class SalesDocumentHeaderForm(forms.ModelForm):
     """Cabecera de un documento de venta."""
 
+    number = forms.CharField(required=False, max_length=8)
+    manual_number = forms.BooleanField(required=False, widget=forms.HiddenInput())
+
     def __init__(self, *args, company_id=None, store_id=None, document_type=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].queryset = filter_by_company(
@@ -418,11 +440,22 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         if store_id:
             self.fields["store"].queryset = self.fields["store"].queryset.filter(pk=store_id)
         self.fields["document_type"].widget.attrs.update(_select)
+        self.fields["document_type"].queryset = DocumentType.objects.filter(
+            active=True, category__in=("SALES", "BILLING")
+        ).order_by("code")
+        selected_document_type = None
+        if document_type:
+            try:
+                selected_document_type = DocumentType.objects.filter(pk=UUID(str(document_type))).first()
+            except ValueError:
+                selected_document_type = DocumentType.objects.filter(code=document_type).first()
+            if selected_document_type and not self.is_bound:
+                self.initial["document_type"] = selected_document_type.pk
         if company_id and store_id and document_type:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                document_type=document_type,
+                document_type=selected_document_type,
                 active=True,
             )
         else:
@@ -450,11 +483,27 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         ):
             self.fields[field_name].widget.attrs.update(_select)
         self.fields["notes"].widget.attrs.update(_textarea)
-        self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
+        self.fields["issue_date"].widget = forms.DateInput(
+            format="%Y-%m-%dT%H:%M",
+            attrs={"class": "form-control", "type": "datetime-local"},
+        )
+        self.fields["issue_date"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d",
+        ]
         self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
         self.fields["exchange_rate"].required = False
         self.fields["internal_reference"].widget.attrs.update(_text)
         self.fields["register_inventory_movement"].widget.attrs.update(_check)
+        self.fields["number"].widget.attrs.update({
+            **_text,
+            "readonly": "readonly",
+            "inputmode": "numeric",
+            "autocomplete": "off",
+        })
+        if self.instance.pk and self.instance.number and not self.is_bound:
+            self.initial["manual_number"] = True
 
     def clean(self):
         cleaned_data = super().clean()
@@ -462,15 +511,26 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         series = cleaned_data.get("series")
         document_type = cleaned_data.get("document_type")
         warehouse = cleaned_data.get("warehouse")
+        number = (cleaned_data.get("number") or "").strip()
+        manual_number = cleaned_data.get("manual_number", False)
 
-        if series and store and (
-            series.store_id != store.id or series.document_type != document_type
+        if series and store and document_type and (
+            series.store_id != store.id or series.document_type_id != document_type.id
         ):
             self.add_error("series", "La serie no corresponde a la sucursal y tipo de documento.")
         if cleaned_data.get("register_inventory_movement") and not warehouse:
             self.add_error("warehouse", "Seleccione un almacén para registrar la salida.")
         if warehouse and store and warehouse.store_id != store.id:
             self.add_error("warehouse", "El almacén no pertenece a la sucursal seleccionada.")
+        if manual_number:
+            if not number.isdigit() or int(number) < 1:
+                self.add_error("number", "Ingrese un correlativo numérico mayor que cero.")
+            elif len(number) > 8:
+                self.add_error("number", "El correlativo admite como máximo 8 dígitos.")
+            else:
+                cleaned_data["number"] = number.zfill(8)
+        else:
+            cleaned_data["number"] = ""
         return cleaned_data
 
     class Meta:
@@ -480,6 +540,8 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             "customer",
             "document_type",
             "series",
+            "number",
+            "manual_number",
             "issue_date",
             "currency",
             "exchange_rate",
@@ -493,7 +555,6 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             "internal_reference",
         )
         widgets = {
-            "document_type": forms.Select(choices=_SALES_DOCUMENT_FISCAL_TYPES, attrs=_select),
             "currency": forms.Select(
                 choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
                 attrs=_select,
@@ -601,6 +662,6 @@ class CreditNoteReasonForm(forms.Form):
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
                 store_id=store_id,
-                document_type="07",
+                document_type__code="07",
                 active=True,
             )

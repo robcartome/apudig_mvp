@@ -17,6 +17,7 @@ from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.sales.forms import (
     CreditNoteReasonForm,
@@ -33,14 +34,17 @@ from apps.sales.models import (
 from apps.sales.selectors import get_document_detail, search_sales_documents, get_series_for_store
 from apps.sales.services import (
     cancel_sales_document,
+    copy_sales_document,
     create_credit_note,
     create_document_from_quotation,
     create_sales_document_draft,
+    delete_sales_document_draft,
     issue_sales_document,
     update_sales_document_draft,
     void_sales_document,
 )
 from apps.inventory.models import PriceList, Warehouse
+from apps.partners.models import DocumentType
 from apps.core.models import AuditLog
 from apps.users.permissions import user_has_company_permission
 
@@ -123,6 +127,7 @@ def _document_service_fields(cleaned_data):
         "warehouse": cleaned_data.get("warehouse"),
         "notes": cleaned_data.get("notes", ""),
         "internal_reference": cleaned_data.get("internal_reference", ""),
+        "number": cleaned_data.get("number", "") if cleaned_data.get("manual_number") else "",
     }
 
 
@@ -140,7 +145,7 @@ def document_list(request):
 
     qs = search_sales_documents(store_id, query=q or None, status=status or None)
     if document_type:
-        qs = qs.filter(document_type=document_type)
+        qs = qs.filter(document_type__code=document_type)
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
@@ -151,6 +156,9 @@ def document_list(request):
         "status": status,
         "document_type": document_type,
         "status_choices": SALES_DOCUMENT_STATUS_CHOICES,
+        "document_types": DocumentType.objects.filter(
+            active=True, category__in=("SALES", "BILLING")
+        ).order_by("code"),
         **_document_permissions_context(request),
     }
     return render(request, "sales/document_list.html", context)
@@ -221,7 +229,7 @@ def document_edit(request, pk):
         return redirect("sales:document_detail", pk=pk)
 
     if request.method == "POST":
-        document_type = request.POST.get("document_type", document.document_type)
+        document_type = request.POST.get("document_type", document.document_type_id)
         header_form = SalesDocumentHeaderForm(
             request.POST,
             instance=document,
@@ -256,7 +264,7 @@ def document_edit(request, pk):
             instance=document,
             company_id=company_id,
             store_id=store_id,
-            document_type=document.document_type,
+            document_type=document.document_type_id,
         )
         initial_lines = [
             {
@@ -311,7 +319,7 @@ def document_from_order(request, pk):
             pk=series_id,
             company_id=company_id,
             store_id=store_id,
-            document_type=document_type,
+            document_type__code=document_type,
             active=True,
         )
         lines = [
@@ -332,7 +340,7 @@ def document_from_order(request, pk):
         sales_document = create_sales_document_draft(
             store_id=str(order.store_id) if order.store_id else None,
             customer=order.customer,
-            document_type=document_type,
+            document_type=series.document_type,
             series=series,
             lines=lines,
             sale_order=order,
@@ -363,7 +371,7 @@ def document_from_quotation(request, pk):
         pk=request.POST.get("series_id"),
         company_id=company_id,
         store_id=store_id,
-        document_type__in=("NV", "01", "03"),
+        document_type__code__in=("NV", "01", "03"),
         active=True,
     )
     document_type = series.document_type
@@ -413,6 +421,54 @@ def document_detail(request, pk):
         ).select_related("user")[:50],
         **_document_permissions_context(request),
     })
+
+
+@require_GET
+def document_preview(request, pk):
+    redirect_resp = _require_document_permission(request, "read")
+    if redirect_resp:
+        return redirect_resp
+    _, store_id = _get_ids(request)
+    try:
+        sales_document = get_document_detail(pk, store_id=store_id)
+    except SalesDocument.DoesNotExist:
+        raise Http404
+    return render(
+        request,
+        "sales/partials/document_preview_content.html",
+        {"sales_document": sales_document},
+    )
+
+
+@require_POST
+def document_copy(request, pk):
+    redirect_resp = _require_document_permission(request, "manage")
+    if redirect_resp:
+        return redirect_resp
+    _, store_id = _get_ids(request)
+    get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    try:
+        copied = copy_sales_document(pk, copied_by=request.user)
+        messages.success(request, "Documento copiado como borrador.")
+        return redirect("sales:document_edit", pk=copied.pk)
+    except (SalesDocument.DoesNotExist, ValueError) as exc:
+        messages.error(request, str(exc))
+        return redirect("sales:document_list")
+
+
+@require_POST
+def document_delete(request, pk):
+    redirect_resp = _require_document_permission(request, "manage")
+    if redirect_resp:
+        return redirect_resp
+    _, store_id = _get_ids(request)
+    get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    try:
+        delete_sales_document_draft(pk, deleted_by=request.user)
+        messages.success(request, "Documento borrador eliminado.")
+    except (SalesDocument.DoesNotExist, ValueError) as exc:
+        messages.error(request, str(exc))
+    return redirect("sales:document_list")
 
 
 def document_issue(request, pk):

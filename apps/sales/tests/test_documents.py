@@ -1,5 +1,5 @@
-"""
-sales/tests/test_sales_documents.py — Tests del módulo de comprobantes.
+﻿"""
+sales/tests/test_sales_documents.py â€” Tests del mÃ³dulo de comprobantes.
 """
 from decimal import Decimal
 
@@ -20,7 +20,7 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.inventory.selectors import get_movement_traceability_report
-from apps.partners.models import Customer
+from apps.partners.models import Customer, DocumentType
 from apps.sales.models import (
     DocumentSeries,
     SaleOrder,
@@ -42,7 +42,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-# ── Fixture helpers ───────────────────────────────────────────────────────────
+# â”€â”€ Fixture helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _make_product(name="Producto Vch", unit=None):
     if unit is None:
@@ -58,7 +58,7 @@ def _make_product(name="Producto Vch", unit=None):
 def _make_line(product, qty="2", price="100.00"):
     return {
         "product": product,
-        "description": "Línea test sales_document",
+        "description": "LÃ­nea test sales_document",
         "quantity": Decimal(qty),
         "unit_price": Decimal(price),
         "unit_code": "NIU",
@@ -79,21 +79,21 @@ class SalesDocumentServiceTest(TestCase):
             legal_name="Cliente Vch SAC",
         )
         self.fac_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="01", series="F001",
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0], series="F001",
         )
         self.cn_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="07", series="FC01",
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="07", defaults={"name": "07", "category": "INTERNAL"})[0], series="FC01",
         )
         self.product = _make_product()
         self.warehouse = Warehouse.objects.create(
-            store=self.store, name="Almacén ventas", is_default=True
+            store=self.store, name="AlmacÃ©n ventas", is_default=True
         )
 
     def _create_draft(self, series=None, lines=None):
         return create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            document_type="01",
+            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=series or self.fac_series,
             lines=lines or [_make_line(self.product)],
             created_by=None,
@@ -124,19 +124,19 @@ class SalesDocumentServiceTest(TestCase):
         series = DocumentSeries.objects.create(
             company=self.company,
             store=self.store,
-            document_type="NV",
+            document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0],
             series="NV01",
         )
         document = create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            document_type="NV",
+            document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0],
             series=series,
             lines=[_make_line(self.product)],
             issue_date=timezone.now().date(),
         )
-        self.assertEqual(document.document_type, "NV")
-        self.assertEqual(document.get_document_type_display(), "Nota de Venta")
+        self.assertEqual(document.document_type.code, "NV")
+        self.assertEqual(document.document_type.name, "NV")
 
     def test_server_separates_export_and_free_totals(self):
         export_line = _make_line(self.product, qty="1", price="50")
@@ -156,7 +156,7 @@ class SalesDocumentServiceTest(TestCase):
             series=self.fac_series,
             lines=[_make_line(self.product, qty="3", price="10")],
             store_id=str(self.store.pk),
-            document_type="01",
+            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             issue_date=timezone.now().date(),
         )
         self.assertEqual(updated.subtotal, Decimal("30.00"))
@@ -181,6 +181,22 @@ class SalesDocumentServiceTest(TestCase):
             ).exists()
         )
 
+    def test_issue_respects_manual_number_and_advances_series(self):
+        document = create_sales_document_draft(
+            store_id=str(self.store.id),
+            customer=self.customer,
+            document_type=self.fac_series.document_type,
+            series=self.fac_series,
+            lines=[_make_line(self.product)],
+            issue_date=timezone.now().date(),
+            number="00000025",
+            register_inventory_movement=False,
+        )
+        issued = issue_sales_document(document.pk)
+        self.fac_series.refresh_from_db()
+        self.assertEqual(issued.number, "00000025")
+        self.assertEqual(self.fac_series.current_number, 25)
+
     def test_issue_creates_confirmed_stock_exit(self):
         StockByWarehouse.objects.create(
             product=self.product, warehouse=self.warehouse, quantity=Decimal("10")
@@ -188,7 +204,7 @@ class SalesDocumentServiceTest(TestCase):
         document = create_sales_document_draft(
             store_id=str(self.store.pk),
             customer=self.customer,
-            document_type="01",
+            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series,
             lines=[_make_line(self.product, qty="2")],
             issue_date=timezone.now().date(),
@@ -214,7 +230,7 @@ class SalesDocumentServiceTest(TestCase):
             product=self.product, warehouse=self.warehouse, quantity=Decimal("1")
         )
         document = create_sales_document_draft(
-            store_id=str(self.store.pk), customer=self.customer, document_type="01",
+            store_id=str(self.store.pk), customer=self.customer, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series, lines=[_make_line(self.product, qty="2")],
             issue_date=timezone.now().date(), warehouse=self.warehouse,
             register_inventory_movement=True,
@@ -230,18 +246,18 @@ class SalesDocumentServiceTest(TestCase):
 
     def test_issue_requires_warehouse_when_stock_control_is_enabled(self):
         document = create_sales_document_draft(
-            store_id=str(self.store.pk), customer=self.customer, document_type="01",
+            store_id=str(self.store.pk), customer=self.customer, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series, lines=[_make_line(self.product)],
             issue_date=timezone.now().date(), register_inventory_movement=True,
         )
-        with self.assertRaisesRegex(ValueError, "seleccionar un almacén"):
+        with self.assertRaisesRegex(ValueError, "seleccionar un almacÃ©n"):
             issue_sales_document(document.pk)
 
     def test_issue_allows_negative_stock_only_when_warehouse_enables_it(self):
         self.warehouse.allow_negative_stock = True
         self.warehouse.save(update_fields=["allow_negative_stock"])
         document = create_sales_document_draft(
-            store_id=str(self.store.pk), customer=self.customer, document_type="01",
+            store_id=str(self.store.pk), customer=self.customer, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series, lines=[_make_line(self.product, qty="2")],
             issue_date=timezone.now().date(), warehouse=self.warehouse,
             register_inventory_movement=True,
@@ -256,7 +272,7 @@ class SalesDocumentServiceTest(TestCase):
         self.product.tracks_inventory = False
         self.product.save(update_fields=["tracks_inventory"])
         document = create_sales_document_draft(
-            store_id=str(self.store.pk), customer=self.customer, document_type="01",
+            store_id=str(self.store.pk), customer=self.customer, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series, lines=[_make_line(self.product)],
             issue_date=timezone.now().date(), warehouse=self.warehouse,
             register_inventory_movement=True,
@@ -270,7 +286,7 @@ class SalesDocumentServiceTest(TestCase):
             product=self.product, warehouse=self.warehouse, quantity=Decimal("5")
         )
         document = create_sales_document_draft(
-            store_id=str(self.store.pk), customer=self.customer, document_type="01",
+            store_id=str(self.store.pk), customer=self.customer, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series, lines=[_make_line(self.product, qty="2")],
             issue_date=timezone.now().date(), warehouse=self.warehouse,
             register_inventory_movement=True,
@@ -309,18 +325,17 @@ class SalesDocumentServiceTest(TestCase):
         document = self._create_draft()
         self.fac_series.active = False
         self.fac_series.save(update_fields=["active"])
-        with self.assertRaisesRegex(ValueError, "serie documental no está activa"):
+        with self.assertRaisesRegex(ValueError, "serie documental no estÃ¡ activa"):
             issue_sales_document(document.pk)
         self.fac_series.refresh_from_db()
         self.assertEqual(self.fac_series.current_number, 0)
 
     def test_issue_marks_order_invoiced(self):
-        from apps.sales.models import BusinessDocumentType
-        doc_type, _ = BusinessDocumentType.objects.get_or_create(
+        doc_type, _ = DocumentType.objects.get_or_create(
             code="OV_V", defaults={"name": "Orden Venta Vch", "category": "SALES"}
         )
         ov_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="OV", series="OV0V",
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="OV", defaults={"name": "OV", "category": "INTERNAL"})[0], series="OV0V",
         )
         order = create_sale_order(
             store_id=str(self.store.id),
@@ -334,7 +349,7 @@ class SalesDocumentServiceTest(TestCase):
         v = create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            document_type="01",
+            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series,
             lines=[_make_line(self.product)],
             sale_order=order,
@@ -375,10 +390,10 @@ class SalesDocumentServiceTest(TestCase):
         note = create_credit_note(
             sales_document_id=v.pk,
             reason_code="01",
-            reason_description="Anulación",
+            reason_description="AnulaciÃ³n",
             series=self.cn_series,
         )
-        self.assertEqual(note.document_type, "07")
+        self.assertEqual(note.document_type.code, "07")
         self.assertEqual(note.reference_document_id, v.pk)
         self.assertEqual(note.note_reason_code, "01")
         self.assertEqual(note.lines.count(), v.lines.count())
@@ -404,7 +419,7 @@ class SalesDocumentServiceTest(TestCase):
         issue_sales_document(document.pk)
         other_store = Store.objects.create(company=self.company, name="Sucursal alterna")
         other_series = DocumentSeries.objects.create(
-            company=self.company, store=other_store, document_type="07", series="FC99"
+            company=self.company, store=other_store, document_type=DocumentType.objects.get_or_create(code="07", defaults={"name": "07", "category": "INTERNAL"})[0], series="FC99"
         )
         with self.assertRaisesRegex(ValueError, "no corresponde"):
             create_credit_note(
@@ -427,11 +442,11 @@ class SalesDocumentViewsTest(TestCase):
             legal_name="Cliente Views Vch SAC",
         )
         self.fac_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, document_type="01", series="F002",
+            company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0], series="F002",
         )
         self.product = _make_product("Prod Views Vch")
         self.warehouse = Warehouse.objects.create(
-            store=self.store, name="Almacén principal", is_default=True
+            store=self.store, name="AlmacÃ©n principal", is_default=True
         )
         self.user = User.objects.create_user(email="vch@demo.com", password="pass1234")
         session = self.client.session
@@ -459,7 +474,7 @@ class SalesDocumentViewsTest(TestCase):
         return create_sales_document_draft(
             store_id=str(self.store.id),
             customer=self.customer,
-            document_type="01",
+            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
             series=self.fac_series,
             lines=[_make_line(self.product)],
             created_by=self.user,
@@ -477,6 +492,85 @@ class SalesDocumentViewsTest(TestCase):
         resp = self.client.get(reverse("sales:document_list"))
         self.assertEqual(resp.status_code, 200)
 
+    def test_list_shows_document_operations(self):
+        self._login()
+        self._grant_permission("manage")
+        self._grant_permission("authorize")
+        document = self._create_draft()
+
+        response = self.client.get(reverse("sales:document_list"))
+
+        self.assertContains(response, "Operaciones")
+        self.assertContains(
+            response, reverse("sales:document_preview", kwargs={"pk": document.pk})
+        )
+        self.assertContains(
+            response, reverse("sales:document_copy", kwargs={"pk": document.pk})
+        )
+        self.assertContains(
+            response, reverse("sales:document_delete", kwargs={"pk": document.pk})
+        )
+        self.assertContains(
+            response, reverse("sales:document_issue", kwargs={"pk": document.pk})
+        )
+
+    def test_preview_contains_full_detail_link(self):
+        self._login()
+        document = self._create_draft()
+
+        response = self.client.get(
+            reverse("sales:document_preview", kwargs={"pk": document.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, document.customer_legal_name)
+        self.assertContains(
+            response, reverse("sales:document_detail", kwargs={"pk": document.pk})
+        )
+
+    def test_copy_creates_independent_draft_without_number(self):
+        self._login()
+        self._grant_permission("manage")
+        source = self._create_draft()
+        source.number = "00000042"
+        source.save(update_fields=["number"])
+
+        response = self.client.post(
+            reverse("sales:document_copy", kwargs={"pk": source.pk})
+        )
+
+        copied = SalesDocument.objects.exclude(pk=source.pk).get()
+        self.assertRedirects(
+            response,
+            reverse("sales:document_edit", kwargs={"pk": copied.pk}),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(copied.status, "DRAFT")
+        self.assertEqual(copied.number, "")
+        self.assertEqual(copied.lines.count(), source.lines.count())
+        self.assertIsNone(copied.source_quotation_id)
+        self.assertIsNone(copied.sale_order_id)
+
+    def test_delete_only_allows_drafts(self):
+        self._login()
+        self._grant_permission("manage")
+        draft = self._create_draft()
+        response = self.client.post(
+            reverse("sales:document_delete", kwargs={"pk": draft.pk})
+        )
+        self.assertRedirects(
+            response, reverse("sales:document_list"), fetch_redirect_response=False
+        )
+        self.assertFalse(SalesDocument.objects.filter(pk=draft.pk).exists())
+
+        issued = self._create_draft()
+        issued.status = "ISSUED"
+        issued.save(update_fields=["status"])
+        self.client.post(
+            reverse("sales:document_delete", kwargs={"pk": issued.pk})
+        )
+        self.assertTrue(SalesDocument.objects.filter(pk=issued.pk).exists())
+
     def test_create_get(self):
         self._login()
         resp = self.client.get(reverse("sales:document_create"))
@@ -488,6 +582,30 @@ class SalesDocumentViewsTest(TestCase):
         self.assertContains(resp, 'name="seller"')
         self.assertContains(resp, 'name="register_inventory_movement"')
         self.assertContains(resp, 'name="warehouse"')
+        self.assertContains(resp, 'name="number"')
+        self.assertContains(resp, 'name="issue_date"')
+        self.assertContains(resp, 'type="datetime-local"')
+        self.assertContains(resp, 'id="edit-number-btn"')
+        self.assertContains(resp, 'data-series-options-url=')
+
+    def test_series_options_are_filtered_by_document_type(self):
+        self._login()
+        boleta_type = DocumentType.objects.create(
+            code="03", name="Boleta de Venta", category="SALES"
+        )
+        boleta_series = DocumentSeries.objects.create(
+            company=self.company,
+            store=self.store,
+            document_type=boleta_type,
+            series="B001",
+        )
+        response = self.client.get(
+            reverse("sales:api_series_options"),
+            {"document_type": str(boleta_type.pk)},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], str(boleta_series.pk))
+        self.assertNotContains(response, self.fac_series.series)
 
     def test_configured_permissions_deny_user_without_role(self):
         self._login()
@@ -534,7 +652,7 @@ class SalesDocumentViewsTest(TestCase):
         data = {
             "store": str(self.store.pk),
             "customer": str(self.customer.pk),
-            "document_type": "01",
+            "document_type": str(self.fac_series.document_type_id),
             "series": str(self.fac_series.pk),
             "issue_date": timezone.now().date().isoformat(),
             "currency": "PEN",
@@ -570,7 +688,7 @@ class SalesDocumentViewsTest(TestCase):
         data = {
             "store": str(self.store.pk),
             "customer": str(self.customer.pk),
-            "document_type": "01",
+            "document_type": str(self.fac_series.document_type_id),
             "series": str(self.fac_series.pk),
             "issue_date": timezone.now().date().isoformat(),
             "currency": "PEN",
@@ -635,7 +753,7 @@ class SalesDocumentViewsTest(TestCase):
         data = {
             "store": str(self.store.pk),
             "customer": str(self.customer.pk),
-            "document_type": "01",
+            "document_type": str(self.fac_series.document_type_id),
             "series": str(self.fac_series.pk),
             "issue_date": timezone.now().date().isoformat(),
             "currency": "PEN",
@@ -664,7 +782,7 @@ class SalesDocumentViewsTest(TestCase):
             resp, reverse("sales:document_edit", kwargs={"pk": v.pk})
         )
         self.assertContains(resp, "Documento de venta")
-        self.assertContains(resp, "Bitácora de auditoría")
+        self.assertContains(resp, "BitÃ¡cora de auditorÃ­a")
 
     def test_detail_is_isolated_by_active_store(self):
         self._login()
@@ -684,7 +802,7 @@ class SalesDocumentViewsTest(TestCase):
         data = {
             "store": str(self.store.pk),
             "customer": str(self.customer.pk),
-            "document_type": "01",
+            "document_type": str(self.fac_series.document_type_id),
             "series": str(self.fac_series.pk),
             "issue_date": timezone.now().date().isoformat(),
             "currency": "PEN",
@@ -744,3 +862,5 @@ class SalesDocumentViewsTest(TestCase):
         )
         v.refresh_from_db()
         self.assertEqual(v.status, "CANCELLED")
+
+

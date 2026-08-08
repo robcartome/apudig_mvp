@@ -65,11 +65,7 @@
   </div>
   <div class="doc-box">
     <div class="doc-type">
-      {% if sales_document.document_type == "01" %}FACTURA ELECTRÓNICA
-      {% elif sales_document.document_type == "03" %}BOLETA DE VENTA
-      {% elif sales_document.document_type == "07" %}NOTA DE CRÉDITO
-      {% elif sales_document.document_type == "08" %}NOTA DE DÉBITO
-      {% else %}COMPROBANTE{% endif %}
+      {{ sales_document.document_type.name|upper }}{% if sales_document.document_type.is_sunat %} ELECTRÓNICA{% endif %}
     </div>
     <div class="doc-num">{{ sales_document.series_code }}-{{ sales_document.number|default:"BORRADOR" }}</div>
     <div style="margin-top:6px;font-size:10px;">{{ sales_document.issue_date|date:"d/m/Y" }}</div>

@@ -126,7 +126,7 @@
         <select name="series_id" class="form-select" required>
           <option value="">Seleccionar…</option>
           {% for series in sales_document_series %}
-          <option value="{{ series.pk }}">{{ series.get_document_type_display }} · {{ series.series }}</option>
+          <option value="{{ series.pk }}">{{ series.document_type.name }} · {{ series.series }}</option>
           {% endfor %}
         </select>
       </div>

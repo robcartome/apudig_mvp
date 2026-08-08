@@ -75,12 +75,7 @@
         <dl class="row mb-0">
           <dt class="col-5 text-muted">Tipo</dt>
           <dd class="col-7">
-            {% if sales_document.document_type == "NV" %}Nota de venta
-            {% elif sales_document.document_type == "01" %}Factura
-            {% elif sales_document.document_type == "03" %}Boleta de Venta
-            {% elif sales_document.document_type == "07" %}Nota de Crédito
-            {% elif sales_document.document_type == "08" %}Nota de Débito
-            {% else %}{{ sales_document.document_type }}{% endif %}
+            {{ sales_document.document_type.name }}
           </dd>
           <dt class="col-5 text-muted">Serie-Número</dt>
           <dd class="col-7 fw-semibold">{{ sales_document.series_code }}-{{ sales_document.number|default:"(sin emitir)" }}</dd>

@@ -4,6 +4,13 @@ from django.db import models
 from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
 
+DOCUMENT_CATEGORY_CHOICES = [
+    ("SALES", "Ventas"),
+    ("BILLING", "Facturación"),
+    ("LOGISTICS", "Logística"),
+    ("INTERNAL", "Interno"),
+]
+
 
 class SalesCustomerContactQuerySet(models.QuerySet):
     def for_company(self, company_id):
@@ -19,12 +26,17 @@ class SalesCustomerContactManager(models.Manager):
 
 
 class DocumentType(models.Model):
-    """document_types - tipos de documento de identidad (DNI, RUC, CE, etc.)"""
+    """Catálogo único de tipos de comprobantes y documentos comerciales."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=5, unique=True)
+    code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)
-    abbreviation = models.CharField(max_length=10)
+    abbreviation = models.CharField(max_length=10, blank=True)
+    category = models.CharField(max_length=20, choices=DOCUMENT_CATEGORY_CHOICES)
+    is_sunat = models.BooleanField(default=False)
+    sunat_code = models.CharField(max_length=4, blank=True)
+    affects_stock = models.BooleanField(default=False)
+    affects_accounting = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

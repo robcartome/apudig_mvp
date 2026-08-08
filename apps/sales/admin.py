@@ -1,7 +1,6 @@
 from django.contrib import admin
 
 from .models import (
-    BusinessDocumentType,
     DocumentSeries,
     SaleOrder,
     SaleOrderLine,
@@ -10,13 +9,6 @@ from .models import (
     SalesDocument,
     SalesDocumentLine,
 )
-
-
-@admin.register(BusinessDocumentType)
-class BusinessDocumentTypeAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "category", "is_sunat", "affects_stock", "active")
-    list_filter = ("category", "is_sunat", "affects_stock", "active")
-    search_fields = ("code", "name")
 
 
 @admin.register(DocumentSeries)

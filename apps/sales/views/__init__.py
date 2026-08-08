@@ -7,6 +7,7 @@ from .catalogs import (
     series_list,
     series_toggle,
     series_update,
+    api_series_options,
     payment_method_list,
     payment_method_create,
     payment_method_update,
@@ -46,13 +47,16 @@ from .orders import (
 from .documents import (
     document_cancel,
     document_create,
+    document_copy,
     document_credit,
+    document_delete,
     document_detail,
     document_edit,
     document_from_quotation,
     document_from_order,
     document_issue,
     document_list,
+    document_preview,
     document_pdf,
     document_void,
 )
@@ -61,7 +65,7 @@ from .pdf import quotation_xlsx
 
 __all__ = [
     # Series / document types
-    "series_list", "series_create", "series_update", "series_toggle",
+    "series_list", "series_create", "series_update", "series_toggle", "api_series_options",
     "doctype_list", "doctype_create", "doctype_update",
     # Payment conditions / methods
     "payment_condition_list", "payment_condition_create", "payment_condition_update", "payment_condition_delete",
@@ -76,7 +80,7 @@ __all__ = [
     "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
     "order_confirm", "order_cancel", "order_copy", "order_pdf",
     # Sales documents
-    "document_list", "document_create", "document_edit", "document_from_order", "document_from_quotation", "document_detail",
+    "document_list", "document_create", "document_copy", "document_delete", "document_edit", "document_from_order", "document_from_quotation", "document_detail", "document_preview",
     "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf",
 ]
 

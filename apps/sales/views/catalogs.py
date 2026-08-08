@@ -1,7 +1,7 @@
 """
 sales/views/catalogs.py — CRUD de catálogos documentales:
   · DocumentSeries (series por empresa/sucursal/tipo)
-  · BusinessDocumentType (tipos de documento comercial)
+  · DocumentType (tipos de comprobante)
   · PaymentMethod (formas de pago: Contado, Crédito 30 días)
   · MeansOfPayment (medios de pago: Efectivo, Yape, Plin)
 """
@@ -13,12 +13,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.sales.forms import (
-    BusinessDocumentTypeForm,
+    DocumentTypeForm,
     DocumentSeriesForm,
     PaymentMethodForm,
     MeansOfPaymentForm,
 )
-from apps.sales.models import BusinessDocumentType, DocumentSeries, PaymentMethod, MeansOfPayment
+from apps.partners.models import DocumentType
+from apps.sales.models import DocumentSeries, PaymentMethod, MeansOfPayment
 from apps.sales.selectors import get_active_document_types, get_series_for_store
 from apps.sales.services import create_document_series, toggle_series
 
@@ -54,16 +55,15 @@ def series_list(request):
 
     document_type = request.GET.get("type", "")
     if document_type:
-        qs = qs.filter(document_type=document_type)
+        qs = qs.filter(document_type__code=document_type)
 
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    from apps.sales.models import SALES_DOCUMENT_TYPE_CHOICES
     return render(request, "sales/series_list.html", {
         "page_obj": page_obj,
         "document_type": document_type,
-        "type_choices": SALES_DOCUMENT_TYPE_CHOICES,
+        "type_choices": DocumentType.objects.filter(active=True).order_by("code"),
     })
 
 
@@ -130,6 +130,37 @@ def series_toggle(request, pk):
     return redirect("sales:series_list")
 
 
+@require_GET
+def api_series_options(request):
+    """Series activas de la empresa/sucursal para un tipo de comprobante."""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    company_id, store_id = _get_ids(request)
+    document_type_id = request.GET.get("document_type")
+    if not company_id or not store_id or not document_type_id:
+        return JsonResponse({"results": []})
+    series = (
+        DocumentSeries.objects.filter(
+            company_id=company_id,
+            store_id=store_id,
+            document_type_id=document_type_id,
+            active=True,
+        )
+        .order_by("series")
+        .values("id", "series", "current_number")
+    )
+    return JsonResponse({
+        "results": [
+            {
+                "id": str(item["id"]),
+                "text": item["series"],
+                "next_number": item["current_number"] + 1,
+            }
+            for item in series
+        ]
+    })
+
+
 # ── Business Document Types ───────────────────────────────────────────────────
 
 def doctype_list(request):
@@ -137,7 +168,7 @@ def doctype_list(request):
     if redirect_resp:
         return redirect_resp
 
-    qs = BusinessDocumentType.objects.all().order_by("code")
+    qs = DocumentType.objects.all().order_by("code")
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get("page"))
     return render(request, "sales/doctype_list.html", {"page_obj": page_obj})
@@ -337,7 +368,7 @@ def doctype_create(request):
         return redirect_resp
 
     if request.method == "POST":
-        form = BusinessDocumentTypeForm(request.POST)
+        form = DocumentTypeForm(request.POST)
         if form.is_valid():
             try:
                 form.save()
@@ -346,7 +377,7 @@ def doctype_create(request):
             except IntegrityError:
                 form.add_error("code", "Ya existe un tipo con ese código.")
     else:
-        form = BusinessDocumentTypeForm()
+        form = DocumentTypeForm()
 
     return render(request, "sales/doctype_form.html", {"form": form, "title": "Nuevo tipo de documento"})
 
@@ -356,10 +387,10 @@ def doctype_update(request, pk):
     if redirect_resp:
         return redirect_resp
 
-    obj = get_object_or_404(BusinessDocumentType, pk=pk)
+    obj = get_object_or_404(DocumentType, pk=pk)
 
     if request.method == "POST":
-        form = BusinessDocumentTypeForm(request.POST, instance=obj)
+        form = DocumentTypeForm(request.POST, instance=obj)
         if form.is_valid():
             try:
                 form.save()
@@ -368,6 +399,6 @@ def doctype_update(request, pk):
             except IntegrityError:
                 form.add_error("code", "Ya existe un tipo con ese código.")
     else:
-        form = BusinessDocumentTypeForm(instance=obj)
+        form = DocumentTypeForm(instance=obj)
 
     return render(request, "sales/doctype_form.html", {"form": form, "title": "Editar tipo de documento", "obj": obj})

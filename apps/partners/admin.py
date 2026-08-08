@@ -5,7 +5,8 @@ from .models import Carrier, Customer, DocumentType, SalesCustomerContact, Sales
 
 @admin.register(DocumentType)
 class DocumentTypeAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "abbreviation", "active")
+    list_display = ("code", "name", "category", "sunat_code", "is_sunat", "active")
+    list_filter = ("category", "is_sunat", "affects_stock", "active")
     search_fields = ("code", "name")
 
 
