@@ -196,7 +196,7 @@ def document_create(request):
                         **_document_service_fields(cd),
                     )
                     messages.success(request, "Documento de venta creado como borrador.")
-                    return redirect("sales:document_detail", pk=sales_document.pk)
+                    return redirect("sales:document_list")
                 except ValueError as exc:
                     messages.error(request, str(exc))
     else:

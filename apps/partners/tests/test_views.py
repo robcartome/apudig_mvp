@@ -1,6 +1,8 @@
 """
 partners/tests/test_views.py — Tests de vistas de socios.
 """
+import json
+
 from django.test import TestCase
 from django.urls import reverse
 
@@ -33,6 +35,50 @@ class PartnersViewsTest(TestCase):
     def test_customer_create_get(self):
         resp = self.client.get(reverse("partners:customer_create"))
         self.assertEqual(resp.status_code, 200)
+
+    def test_customer_quick_create(self):
+        response = self.client.post(
+            reverse("partners:api_customer_create"),
+            data=json.dumps({
+                "document_type": "6", "document_number": "20111111111",
+                "name": "Cliente rápido SAC", "address": "Av. Principal 123",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        customer = Customer.objects.get(pk=response.json()["id"])
+        self.assertEqual(customer.company, self.company)
+        self.assertEqual(customer.legal_name, "Cliente rápido SAC")
+
+    def test_customer_quick_create_rejects_duplicate(self):
+        Customer.objects.create(
+            company=self.company, document_type="6",
+            document_number="20222222222", legal_name="Existente SAC",
+        )
+        response = self.client.post(
+            reverse("partners:api_customer_create"),
+            data=json.dumps({
+                "document_type": "6", "document_number": "20222222222",
+                "name": "Duplicado SAC",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("document_number", response.json()["errors"])
+
+    def test_supplier_quick_create(self):
+        response = self.client.post(
+            reverse("partners:api_supplier_create"),
+            data=json.dumps({
+                "document_number": "20333333333", "name": "Proveedor rápido SAC",
+                "address": "Jr. Compras 456",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        supplier = Supplier.objects.get(pk=response.json()["id"])
+        self.assertEqual(supplier.company, self.company)
+        self.assertEqual(supplier.name, "Proveedor rápido SAC")
 
     def test_customer_create_post(self):
         resp = self.client.post(reverse("partners:customer_create"), {

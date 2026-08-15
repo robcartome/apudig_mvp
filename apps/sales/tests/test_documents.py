@@ -679,6 +679,9 @@ class SalesDocumentViewsTest(TestCase):
         self.assertEqual(
             SalesDocument.objects.filter(store=self.store).count(), 1, diagnostics
         )
+        self.assertRedirects(
+            resp, reverse("sales:document_list"), fetch_redirect_response=False
+        )
 
     def test_http_cycle_create_issue_and_void_restores_stock_and_audits_actor(self):
         self._login()

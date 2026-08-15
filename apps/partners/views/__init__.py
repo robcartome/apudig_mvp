@@ -16,10 +16,12 @@ from .partners import (
     supplier_list,
     supplier_update,
 )
+from .api import customer_quick_create, supplier_quick_create
 
 __all__ = [
     "customer_list", "customer_create", "customer_detail", "customer_update", "customer_delete",
     "contact_create", "contact_delete",
     "supplier_list", "supplier_create", "supplier_update", "supplier_delete",
     "carrier_list", "carrier_create", "carrier_update", "carrier_delete",
+    "customer_quick_create", "supplier_quick_create",
 ]

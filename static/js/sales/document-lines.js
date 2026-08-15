@@ -20,8 +20,6 @@
   let IGV_RATE = parseFloat(document.getElementById('id_igv_rate_default')?.value)
                || parseFloat(configEl.dataset.igvRate) || 18;
   let IGV_MULT = 1 + IGV_RATE / 100;             // e.g. 1.18
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-
   // Build the price-list API URL template (replace the placeholder UUID)
   const PRICE_LIST_URL_TPL = configEl.dataset.priceListUrl;
   const DEFAULT_PRICE_LIST_ID = configEl.dataset.defaultPriceListId || '';
@@ -50,7 +48,6 @@
   ProductPicker.configure({
     searchUrl: configEl.dataset.searchUrl,
     createUrl: configEl.dataset.createUrl,
-    csrfToken,
     getWarehouse: () => '',
     modalId: 'quickCreateModal',
     errorId: 'qc-error',
@@ -327,42 +324,6 @@
       reindex();
     }
     updateSummary();
-  });
-
-  // ── Customer AJAX Select2 ──────────────────────────────────────────────────
-  document.querySelectorAll('.partner-select').forEach(function (el) {
-    const searchUrl   = el.dataset.partnerUrl;
-    const hiddenId    = el.dataset.hiddenId;
-    const placeholder = el.dataset.placeholder || 'Buscar…';
-
-    $(el).select2({
-      theme: 'bootstrap-5',
-      width: '100%',
-      dropdownParent: $('body'),
-      placeholder,
-      allowClear: true,
-      minimumInputLength: 0,
-      ajax: {
-        transport(params, success, failure) {
-          window.ApiService.get(searchUrl + '?q=' + encodeURIComponent(params.data.term || ''))
-            .then(success).catch(failure);
-        },
-        processResults(data) { return { results: data.results || [] }; },
-        delay: 250,
-      },
-    });
-
-    $(el).on('select2:select', function (e) {
-      const hidden = document.getElementById(hiddenId);
-      if (hidden) hidden.value = e.params.data.id || '';
-      // Fill address display
-      const addressDisplay = document.getElementById('customer-address-display');
-      if (addressDisplay) addressDisplay.value = e.params.data.address || '';
-    });
-    $(el).on('select2:unselect select2:clear', function () {
-      const hidden = document.getElementById(hiddenId);
-      if (hidden) hidden.value = '';
-    });
   });
 
   // ── Price list ─────────────────────────────────────────────────────────────

@@ -1,0 +1,55 @@
+{{ field }}
+<select id="{{ field.id_for_label }}-picker"
+        class="partner-select w-100"
+        data-partner-type="{{ partner_type }}"
+        data-partner-url="{{ search_url }}"
+        data-create-url="{{ create_url }}"
+        data-hidden-id="{{ field.id_for_label }}"
+        data-modal-id="{{ field.id_for_label }}-create-modal"
+        data-placeholder="{{ placeholder|default:'Buscar por documento o nombre…' }}">
+  {% if selected_id %}<option value="{{ selected_id }}" selected>{{ selected_label }}</option>{% endif %}
+</select>
+
+<div class="modal fade partner-create-modal" id="{{ field.id_for_label }}-create-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="ti ti-user-plus me-1"></i>
+          {% if partner_type == "supplier" %}Nuevo proveedor{% else %}Nuevo cliente{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="partner-create-error alert alert-danger d-none py-2"></div>
+        {% if partner_type == "customer" %}
+        <div class="mb-3">
+          <label class="form-label required">Tipo de documento</label>
+          <select class="form-select partner-document-type">
+            <option value="6">RUC</option><option value="1">DNI</option>
+            <option value="4">Carné de extranjería</option><option value="7">Pasaporte</option><option value="0">Otro</option>
+          </select>
+        </div>
+        {% endif %}
+        <div class="mb-3">
+          <label class="form-label required">Número de documento</label>
+          <input type="text" class="form-control partner-document-number" autocomplete="off">
+        </div>
+        <div class="mb-3">
+          <label class="form-label required">{% if partner_type == "supplier" %}Nombre{% else %}Razón social / nombre{% endif %}</label>
+          <input type="text" class="form-control partner-name" autocomplete="off">
+        </div>
+        <div>
+          <label class="form-label">Dirección</label>
+          <input type="text" class="form-control partner-address" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary partner-create-save">
+          <i class="ti ti-device-floppy me-1"></i>Crear y seleccionar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

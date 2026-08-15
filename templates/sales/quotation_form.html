@@ -67,15 +67,9 @@
 
           <div class="mb-2">
             <label class="form-label required">Cliente</label>
-            {{ header_form.customer }}{# hidden input #}
-            <select id="customer-select" class="partner-select w-100"
-                    data-partner-url="{% url 'inventory:api_customer_search' %}"
-                    data-hidden-id="{{ header_form.customer.id_for_label }}"
-                    data-placeholder="Buscar por RUC o nombre…">
-              {% if header_form.instance.customer_id %}
-              <option value="{{ header_form.instance.customer_id }}" selected>{{ header_form.instance.customer }}</option>
-              {% endif %}
-            </select>
+            {% url 'inventory:api_customer_search' as customer_search_url %}
+            {% url 'partners:api_customer_create' as customer_create_url %}
+            {% include "components/partner_select.html" with field=header_form.customer partner_type="customer" search_url=customer_search_url create_url=customer_create_url selected_id=header_form.instance.customer_id selected_label=header_form.instance.customer %}
             {% if header_form.customer.errors %}<div class="text-danger small mt-1">{{ header_form.customer.errors.0 }}</div>{% endif %}
           </div>
 
@@ -464,10 +458,11 @@
 {% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
-<script src="{% static 'js/components/product-picker.js' %}"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260808-3"></script>
+<script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260811-1"></script>
 <script>
 (function () {
   const cfg = document.getElementById('sales-form-config');
