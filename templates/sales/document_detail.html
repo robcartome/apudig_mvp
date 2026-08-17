@@ -185,7 +185,10 @@
         <tr>
           <td class="text-muted">{{ forloop.counter }}</td>
           <td>{{ line.product.name }}</td>
-          <td class="text-muted small">{{ line.description }}</td>
+          <td class="text-muted small">
+            {{ line.description }}
+            {% if line.memo %}<div class="mt-1"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
+          </td>
           <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
           <td class="text-end">{{ line.unit_price|floatformat:4 }}</td>
           <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>

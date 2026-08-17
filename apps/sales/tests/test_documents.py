@@ -114,6 +114,25 @@ class SalesDocumentServiceTest(TestCase):
         v = self._create_draft()
         self.assertEqual(v.number, "")
 
+    def test_line_memo_is_persisted_on_create_and_update(self):
+        line = _make_line(self.product)
+        line["memo"] = "Presentación especial para el cliente"
+        document = self._create_draft(lines=[line])
+        self.assertEqual(document.lines.get().memo, line["memo"])
+
+        updated_line = _make_line(self.product)
+        updated_line["memo"] = "Información actualizada"
+        update_sales_document_draft(
+            document.pk,
+            customer=self.customer,
+            series=self.fac_series,
+            lines=[updated_line],
+            store_id=str(self.store.pk),
+            document_type=self.fac_series.document_type,
+            issue_date=timezone.now().date(),
+        )
+        self.assertEqual(document.lines.get().memo, updated_line["memo"])
+
     def test_inventory_integration_can_be_disabled(self):
         document = self._create_draft()
         self.assertFalse(document.register_inventory_movement)
@@ -532,6 +551,7 @@ class SalesDocumentViewsTest(TestCase):
         self._login()
         self._grant_permission("manage")
         source = self._create_draft()
+        source.lines.update(memo="Memo que debe copiarse")
         source.number = "00000042"
         source.save(update_fields=["number"])
 
@@ -548,6 +568,7 @@ class SalesDocumentViewsTest(TestCase):
         self.assertEqual(copied.status, "DRAFT")
         self.assertEqual(copied.number, "")
         self.assertEqual(copied.lines.count(), source.lines.count())
+        self.assertEqual(copied.lines.get().memo, "Memo que debe copiarse")
         self.assertIsNone(copied.source_quotation_id)
         self.assertIsNone(copied.sale_order_id)
 
@@ -587,6 +608,7 @@ class SalesDocumentViewsTest(TestCase):
         self.assertContains(resp, 'type="datetime-local"')
         self.assertContains(resp, 'id="edit-number-btn"')
         self.assertContains(resp, 'data-series-options-url=')
+        self.assertContains(resp, 'id="memoModal"')
 
     def test_series_options_are_filtered_by_document_type(self):
         self._login()

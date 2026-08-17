@@ -20,7 +20,11 @@
       {% for line in sales_document.lines.all %}
       <tr>
         <td class="text-muted">{{ forloop.counter }}</td>
-        <td><div class="fw-semibold">{{ line.product.name }}</div><div class="text-muted small">{{ line.description }}</div></td>
+        <td>
+          <div class="fw-semibold">{{ line.product.name }}</div>
+          <div class="text-muted small">{{ line.description }}</div>
+          {% if line.memo %}<div class="text-muted small"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
+        </td>
         <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
         <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
         <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>

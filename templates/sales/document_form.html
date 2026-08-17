@@ -248,7 +248,6 @@
             <td>
               {{ lf.unit_price }}{# hidden: stores ex-tax value #}
               {{ lf.discount_amount }}{# hidden #}
-              {{ lf.memo }}{# hidden #}
               <input type="number" class="form-control form-control-sm price-unit-input text-end"
                      step="0.01" min="0" value="{{ lf.initial.price_with_igv|default:'' }}"
                      placeholder="0.00">
@@ -263,10 +262,14 @@
             {# Total (readonly, computed) #}
             <td class="num-cell readonly-cell line-total fw-semibold text-end">0.00</td>
 
-            {# OP / Delete #}
-            <td class="text-center">
+            {# OP: memo + eliminar #}
+            <td class="text-center" style="white-space:nowrap">
               {% if lf.DELETE %}<label class="d-none">{{ lf.DELETE }}</label>{% endif %}
               {{ lf.id }}
+              {{ lf.memo }}{# hidden #}
+              <button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Agregar información adicional">
+                <i class="ti ti-notes"></i>
+              </button>
               <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar">
                 <i class="ti ti-x"></i>
               </button>
@@ -283,7 +286,7 @@
             </td>
           </tr>
           <tr>
-            <td colspan="7" />
+            <td colspan="7"></td>
             <td colspan="4" class="pe-3">
               <table class="table table-sm mb-0 ms-auto" style="width:auto; min-width:260px">
                 <tbody>
@@ -342,6 +345,30 @@
   </div>
 </form>
 
+{# Modal de información adicional por línea #}
+<div class="modal fade" id="memoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="ti ti-notes me-2"></i>Información adicional del ítem</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Memo del producto</label>
+        <textarea id="memo-modal-text" class="form-control" rows="5" maxlength="1000"
+                  placeholder="Ej.: color, medida, presentación, instrucciones u otra observación…"></textarea>
+        <div class="text-muted small mt-1">Máximo 500 caracteres.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="memo-modal-save">
+          <i class="ti ti-check me-1"></i>Guardar información
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {# Quick-create product modal #}
 <div class="modal modal-blur fade" id="quickCreateModal" tabindex="-1" role="dialog" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
@@ -380,5 +407,5 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260811-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260817-1"></script>
 {% endblock %}

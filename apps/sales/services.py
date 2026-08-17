@@ -538,6 +538,7 @@ def _replace_sales_document_lines(document: SalesDocument, lines, calculated_lin
             igv_rate=raw.get("igv_rate", Decimal("18")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
+            memo=raw.get("memo", ""),
             subtotal=calc["subtotal"],
             igv_amount=calc["igv_amount"],
             total=calc["total"],
@@ -727,6 +728,7 @@ def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
             "igv_rate": line.igv_rate,
             "sunat_product_code": line.sunat_product_code,
             "product_code": line.product_code,
+            "memo": line.memo,
         }
         for line in source.lines.all()
     ]
@@ -809,6 +811,7 @@ def create_document_from_quotation(
             "igv_rate": line.igv_rate,
             "sunat_product_code": line.sunat_product_code,
             "product_code": line.product_code,
+            "memo": line.memo,
         }
         for line in quotation.lines.select_related("product")
     ]
@@ -1006,6 +1009,7 @@ def create_credit_note(
                 "igv_rate": line.igv_rate,
                 "sunat_product_code": line.sunat_product_code,
                 "product_code": line.product_code,
+                "memo": line.memo,
             }
             for line in original.lines.all()
         ]

@@ -120,6 +120,7 @@
       <td>
         {{ line.product.name }}
         {% if line.description %}<br><small>{{ line.description }}</small>{% endif %}
+        {% if line.memo %}<br><small><strong>Nota:</strong> {{ line.memo }}</small>{% endif %}
       </td>
       <td>{{ line.unit_code }}</td>
       <td class="text-right">{{ line.quantity|floatformat:2 }}</td>

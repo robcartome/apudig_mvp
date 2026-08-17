@@ -281,6 +281,7 @@ def document_edit(request, pk):
                 "discount_amount": line.discount_amount,
                 "tax_type": line.tax_type,
                 "igv_rate": line.igv_rate,
+                "memo": line.memo,
             }
             for line in document.lines.all()
         ]

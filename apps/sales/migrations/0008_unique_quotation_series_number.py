@@ -8,6 +8,7 @@ def ensure_no_duplicate_quotations(apps, schema_editor):
         .values("series_id", "number")
         .annotate(total=models.Count("id"))
         .filter(total__gt=1)
+        .order_by("series_id", "number")
         .first()
     )
     if duplicates:
