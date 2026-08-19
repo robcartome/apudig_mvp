@@ -12,7 +12,7 @@ import io
 from uuid import uuid4
 
 from django.contrib import messages
-from django.db import models
+from django.db import models, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import ListView
@@ -20,8 +20,8 @@ from django.views.generic import ListView
 from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
 from apps.companies.models import Company, Store
 
-from ..forms import BulkImportForm, BrandForm, CategoryForm, ProductForm, UnitForm, WarehouseForm, WarehouseLocationForm
-from ..models import Brand, Category, Product, Unit, Warehouse, WarehouseLocation, PriceList, ProductPrice
+from ..forms import BulkImportForm, BrandForm, CategoryForm, ProductForm, ProductUnitFormSet, UnitForm, WarehouseForm, WarehouseLocationForm
+from ..models import Brand, Category, Product, ProductUnit, Unit, Warehouse, WarehouseLocation, PriceList, ProductPrice
 from ..importers import (
     ENTITY_LABELS,
     build_import_template_workbook,
@@ -454,6 +454,7 @@ def product_list(request):
     })
 
 
+@transaction.atomic
 def product_create(request):
     if not request.user.is_authenticated:
         return redirect("login")
@@ -462,8 +463,17 @@ def product_create(request):
         return err
     price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
     form = ProductForm(request.POST or None, company=company)
-    if request.method == "POST" and form.is_valid():
+    unit_formset = ProductUnitFormSet(
+        request.POST or None, prefix="units", queryset=ProductUnit.objects.none()
+    )
+    if request.method == "POST" and form.is_valid() and unit_formset.is_valid():
         product = form.save()
+        unit_formset.instance = product
+        unit_formset.save()
+        ProductUnit.objects.update_or_create(
+            product=product, unit=product.unit,
+            defaults={"conversion_factor": 1, "active": True},
+        )
         for price_list in price_lists:
             raw = request.POST.get(f"price_list_{price_list.pk}", "").strip()
             if raw == "":
@@ -480,10 +490,11 @@ def product_create(request):
     price_list_data = [{"price_list": price_list, "amount": None} for price_list in price_lists]
     return render(request, "inventory/product_form.html", {
         "form": form, "title": "Nuevo producto", "cancel_url": "inventory:product_list",
-        "price_list_data": price_list_data,
+        "price_list_data": price_list_data, "unit_formset": unit_formset,
     })
 
 
+@transaction.atomic
 def product_update(request, pk):
     if not request.user.is_authenticated:
         return redirect("login")
@@ -495,8 +506,19 @@ def product_update(request, pk):
     existing_prices = {str(pp.price_list_id): pp for pp in obj.prices.all()}
 
     form = ProductForm(request.POST or None, instance=obj, company=company)
-    if request.method == "POST" and form.is_valid():
+    unit_formset = ProductUnitFormSet(
+        request.POST or None,
+        instance=obj,
+        prefix="units",
+        queryset=obj.unit_conversions.exclude(unit=obj.unit),
+    )
+    if request.method == "POST" and form.is_valid() and unit_formset.is_valid():
         form.save()
+        unit_formset.save()
+        ProductUnit.objects.update_or_create(
+            product=obj, unit=obj.unit,
+            defaults={"conversion_factor": 1, "active": True},
+        )
         for price_list in price_lists:
             field_name = f"price_list_{price_list.pk}"
             raw = request.POST.get(field_name, "").strip()
@@ -529,6 +551,7 @@ def product_update(request, pk):
     return render(request, "inventory/product_form.html", {
         "form": form, "title": "Editar producto", "object": obj,
         "cancel_url": "inventory:product_list", "price_list_data": price_list_data,
+        "unit_formset": unit_formset,
     })
 
 

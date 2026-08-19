@@ -172,6 +172,7 @@
           <th>#</th>
           <th>Producto</th>
           <th>Descripción</th>
+          <th>Unidad</th>
           <th class="text-end">Cant.</th>
           <th class="text-end">P. Unit.</th>
           <th class="text-end">Dcto.</th>
@@ -189,6 +190,7 @@
             {{ line.description }}
             {% if line.memo %}<div class="mt-1"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
           </td>
+          <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
           <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
           <td class="text-end">{{ line.unit_price|floatformat:4 }}</td>
           <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>
@@ -200,39 +202,39 @@
       </tbody>
       <tfoot class="table-light">
         <tr>
-          <td colspan="6" class="text-end text-muted">Subtotal gravado</td>
+          <td colspan="7" class="text-end text-muted">Subtotal gravado</td>
           <td colspan="3" class="text-end">{{ sales_document.taxable_amount|floatformat:2 }}</td>
         </tr>
         {% if sales_document.exempt_amount %}
         <tr>
-          <td colspan="6" class="text-end text-muted">Subtotal exonerado</td>
+          <td colspan="7" class="text-end text-muted">Subtotal exonerado</td>
           <td colspan="3" class="text-end">{{ sales_document.exempt_amount|floatformat:2 }}</td>
         </tr>
         {% endif %}
         {% if sales_document.unaffected_amount %}
         <tr>
-          <td colspan="6" class="text-end text-muted">Subtotal inafecto</td>
+          <td colspan="7" class="text-end text-muted">Subtotal inafecto</td>
           <td colspan="3" class="text-end">{{ sales_document.unaffected_amount|floatformat:2 }}</td>
         </tr>
         {% endif %}
         {% if sales_document.export_amount %}
-        <tr><td colspan="6" class="text-end text-muted">Subtotal exportación</td><td colspan="3" class="text-end">{{ sales_document.export_amount|floatformat:2 }}</td></tr>
+        <tr><td colspan="7" class="text-end text-muted">Subtotal exportación</td><td colspan="3" class="text-end">{{ sales_document.export_amount|floatformat:2 }}</td></tr>
         {% endif %}
         {% if sales_document.free_amount %}
-        <tr><td colspan="6" class="text-end text-muted">Operaciones gratuitas</td><td colspan="3" class="text-end">{{ sales_document.free_amount|floatformat:2 }}</td></tr>
+        <tr><td colspan="7" class="text-end text-muted">Operaciones gratuitas</td><td colspan="3" class="text-end">{{ sales_document.free_amount|floatformat:2 }}</td></tr>
         {% endif %}
         <tr>
-          <td colspan="6" class="text-end text-muted">IGV (18%)</td>
+          <td colspan="7" class="text-end text-muted">IGV (18%)</td>
           <td colspan="3" class="text-end">{{ sales_document.igv_total|floatformat:2 }}</td>
         </tr>
         {% if sales_document.total_discount %}
         <tr>
-          <td colspan="6" class="text-end text-muted">Descuentos</td>
+          <td colspan="7" class="text-end text-muted">Descuentos</td>
           <td colspan="3" class="text-end text-danger">- {{ sales_document.total_discount|floatformat:2 }}</td>
         </tr>
         {% endif %}
         <tr class="fw-bold">
-          <td colspan="6" class="text-end">TOTAL {{ sales_document.currency }}</td>
+          <td colspan="7" class="text-end">TOTAL {{ sales_document.currency }}</td>
           <td colspan="3" class="text-end fs-5">{{ sales_document.total|floatformat:2 }}</td>
         </tr>
       </tfoot>

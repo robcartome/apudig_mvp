@@ -53,6 +53,7 @@ def _parse_lines(formset):
         if f.is_valid() and f.cleaned_data and not f.cleaned_data.get("DELETE", False):
             lines.append({
                 "product_id": f.cleaned_data["product"].pk,
+                "unit_id": f.cleaned_data.get("unit"),
                 "quantity": f.cleaned_data["quantity"],
                 "physical_quantity": f.cleaned_data.get("quantity"),
                 "unit_price": f.cleaned_data.get("unit_price", 0),
@@ -129,8 +130,13 @@ def _movement_forms(request, store_id, movement, company_id=None):
         {
             "product":      d.product_id,
             "product_name": d.product.name,
-            "product_unit": d.product.unit.code if d.product.unit else "",
-            "quantity":     d.physical_quantity if movement.type == MovementType.ADJUSTMENT and d.physical_quantity is not None else d.quantity,
+            "unit":          d.unit_id or d.product.unit_id,
+            "product_unit_id": d.unit_id or d.product.unit_id,
+            "product_unit": d.unit_code,
+            "base_unit_id": str(d.product.unit_id),
+            "base_unit_code": d.product.unit.code,
+            "product_units": d.product.unit_conversions.filter(active=True).select_related("unit"),
+            "quantity":     (d.physical_quantity / d.conversion_factor) if movement.type == MovementType.ADJUSTMENT and d.physical_quantity is not None else d.quantity,
             "unit_price":   d.unit_price,
         }
         for d in movement.details.all()
@@ -307,7 +313,7 @@ def entry_create(request):
     company_id = _get_company_id(request)
     form = MovementHeaderForm(
         request.POST or None, store_id=store_id, company_id=company_id, movement_type=MovementType.ENTRY,
-        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
+        initial={"date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
     formset = MovementDetailFormSet(
         request.POST or None, prefix="lines",
@@ -365,7 +371,7 @@ def exit_create(request):
     company_id = _get_company_id(request)
     form = MovementHeaderForm(
         request.POST or None, store_id=store_id, company_id=company_id, movement_type=MovementType.EXIT,
-        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
+        initial={"date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"), "series": "0000", "number": "0"},
     )
     formset = MovementDetailFormSet(
         request.POST or None, prefix="lines",
@@ -423,7 +429,7 @@ def transfer_create(request):
     company_id = _get_company_id(request)
     form = MovementTransferForm(
         request.POST or None, store_id=store_id,
-        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M")},
+        initial={"date": timezone.localtime().strftime("%Y-%m-%dT%H:%M")},
     )
     formset = MovementDetailFormSet(
         request.POST or None, prefix="lines",
@@ -484,7 +490,7 @@ def adjustment_create(request):
         store_id=store_id,
         company_id=company_id,
         movement_type=MovementType.ADJUSTMENT,
-        initial={"date": timezone.now().strftime("%Y-%m-%dT%H:%M"), "reason": "Saldo inicial"},
+        initial={"date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"), "reason": "Saldo inicial"},
     )
     formset = MovementDetailFormSet(
         request.POST or None, prefix="lines",
@@ -554,7 +560,7 @@ def movement_copy(request, pk):
     )
 
     initial_header = {
-        "date": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+        "date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
         "reason": source.reason,
         "description": source.description,
         "reference_doc": "",
@@ -586,9 +592,14 @@ def movement_copy(request, pk):
         {
             "product": d.product_id,
             "product_name": d.product.name,
-            "product_unit": d.product.unit.code if d.product.unit else "",
+            "unit": d.unit_id or d.product.unit_id,
+            "product_unit_id": d.unit_id or d.product.unit_id,
+            "product_unit": d.unit_code,
+            "base_unit_id": str(d.product.unit_id),
+            "base_unit_code": d.product.unit.code,
+            "product_units": d.product.unit_conversions.filter(active=True).select_related("unit"),
             "quantity": (
-                d.physical_quantity
+                d.physical_quantity / d.conversion_factor
                 if source.type == MovementType.ADJUSTMENT and d.physical_quantity is not None
                 else d.quantity
             ),

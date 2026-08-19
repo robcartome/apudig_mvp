@@ -15,6 +15,7 @@ from apps.inventory.models import (
     MovementOrigin,
     MovementStatus,
     Product,
+    ProductUnit,
     StockByWarehouse,
     Unit,
     Warehouse,
@@ -243,6 +244,35 @@ class SalesDocumentServiceTest(TestCase):
         entry = report["products"][0]["entries"][0]
         self.assertEqual(entry["origin"], MovementOrigin.SALE)
         self.assertEqual(entry["sales_document_id"], str(document.pk))
+
+    def test_alternate_unit_keeps_commercial_quantity_and_moves_base_stock(self):
+        box = Unit.objects.create(code="BX", name="Caja")
+        ProductUnit.objects.create(
+            product=self.product, unit=self.product.unit, conversion_factor=1,
+        )
+        ProductUnit.objects.create(
+            product=self.product, unit=box, conversion_factor=Decimal("20"),
+            sale_price=Decimal("1800"),
+        )
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("100")
+        )
+        line = _make_line(self.product, qty="2", price="1800")
+        line["unit"] = box
+        document = create_sales_document_draft(
+            store_id=str(self.store.pk), customer=self.customer,
+            document_type=self.fac_series.document_type, series=self.fac_series,
+            lines=[line], issue_date=timezone.now().date(), warehouse=self.warehouse,
+            register_inventory_movement=True,
+        )
+
+        saved_line = document.lines.get()
+        self.assertEqual(saved_line.quantity, Decimal("2"))
+        self.assertEqual(saved_line.unit_code, "BX")
+        self.assertEqual(saved_line.stock_quantity, Decimal("40"))
+        issue_sales_document(document.pk)
+        stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
+        self.assertEqual(stock.quantity, Decimal("60"))
 
     def test_issue_with_insufficient_stock_rolls_back_number(self):
         StockByWarehouse.objects.create(

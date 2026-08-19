@@ -1,0 +1,11 @@
+<div class="fw-semibold">
+  {{ item.unit_code }}{% if item.unit.name %} - {{ item.unit.name }}{% endif %}
+</div>
+{% if item.unit_id != item.product.unit_id %}
+<div class="text-muted" style="font-size:.72rem;white-space:nowrap">
+  1 {{ item.unit_code }} = {{ item.conversion_factor|floatformat:"-6" }} {{ item.product.unit.code }}
+</div>
+<div class="text-muted" style="font-size:.72rem;white-space:nowrap">
+  Equivalente total: {{ item.stock_quantity|floatformat:"-6" }} {{ item.product.unit.code }}
+</div>
+{% endif %}

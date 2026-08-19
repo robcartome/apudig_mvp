@@ -183,7 +183,7 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
         Movement.objects.for_store(store_id)
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
                         "supplier", "customer", "document_type", "created_by")
-        .prefetch_related("details__product__unit")
+        .prefetch_related("details__product__unit", "details__unit")
     )
     if movement_type:
         qs = qs.filter(type=movement_type)
@@ -204,7 +204,7 @@ def search_movements(store_id: str, query: str, movement_type: str | None = None
 def get_movement_detail(pk):
     return (
         Movement.objects
-        .prefetch_related("details__product__unit", "audit_logs__changed_by")
+        .prefetch_related("details__product__unit", "details__unit", "audit_logs__changed_by")
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
                         "supplier", "customer", "carrier", "document_type", "created_by", "confirmed_by", "closed_by")
         .get(pk=pk)

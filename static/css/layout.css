@@ -1,0 +1,5 @@
+/* Global application layout overrides. */
+.container-xxl {
+  width: 95%;
+  max-width: 1800px;
+}

@@ -1,10 +1,11 @@
 from decimal import Decimal
 
 from django import forms
+from django.utils import timezone
 
 from apps.partners.models import Carrier, Customer, DocumentType, Supplier
 
-from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, Unit, Warehouse, WarehouseLocation
+from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductUnit, Unit, Warehouse, WarehouseLocation
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -126,17 +127,19 @@ class ProductForm(forms.ModelForm):
             "barcode": forms.TextInput(attrs={**_text, "placeholder": "Código de barras"}),
             "description": forms.Textarea(attrs={**_text, "rows": 3}),
             "model": forms.TextInput(attrs=_text),
-            "price_purchase": forms.NumberInput(attrs={**_text, "step": "0.01"}),
+            "price_purchase": forms.NumberInput(attrs={**_text, "step": "0.01", "placeholder": "0"}),
             "price_sale": forms.NumberInput(attrs={**_text, "step": "0.01"}),
             "category": forms.HiddenInput(),
             "brand": forms.HiddenInput(),
-            "unit": forms.Select(attrs=_select),
+            "unit": forms.Select(attrs={"class": "form-select form-select-sm"}),
             "active": forms.CheckboxInput(attrs=_check),
         }
 
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._company = company
+        if not self.is_bound and not self.instance.pk:
+            self.fields["unit"].initial = Unit.objects.filter(code="NIU").first()
         if company is not None:
             self.fields["category"].queryset = Category.objects.filter(
                 company=company, active=True
@@ -153,6 +156,43 @@ class ProductForm(forms.ModelForm):
             instance.save()
         return instance
 
+
+class ProductUnitForm(forms.ModelForm):
+    class Meta:
+        model = ProductUnit
+        fields = (
+            "unit", "conversion_factor", "sale_price", "purchase_price", "active",
+        )
+        widgets = {
+            "unit": forms.Select(attrs={"class": "form-select form-select-sm"}),
+            "conversion_factor": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.000001", "min": "0.000001"}),
+            "sale_price": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.000001", "min": "0"}),
+            "purchase_price": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.000001", "min": "0"}),
+            "active": forms.CheckboxInput(attrs=_check),
+        }
+
+
+class BaseProductUnitFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+
+        for form in self.forms:
+            data = getattr(form, "cleaned_data", None) or {}
+            if not data or data.get("DELETE"):
+                continue
+            if self.instance.unit_id and data.get("unit") == self.instance.unit:
+                raise forms.ValidationError(
+                    "La unidad principal no debe repetirse como presentación adicional."
+                )
+
+
+ProductUnitFormSet = forms.inlineformset_factory(
+    Product, ProductUnit, form=ProductUnitForm, formset=BaseProductUnitFormSet,
+    extra=2, can_delete=True,
+)
+
 _date = {"class": "form-control", "type": "datetime-local"}
 _date_format = "%Y-%m-%dT%H:%M"
 _date_input_formats = (
@@ -161,6 +201,13 @@ _date_input_formats = (
     "%Y-%m-%d %H:%M",
 )
 _textarea = {"class": "form-control", "rows": 2}
+
+
+def _set_default_movement_date(form):
+    """Set the current local datetime only for new, unbound movements."""
+    if form.is_bound or form.instance.pk or form.initial.get("date"):
+        return
+    form.initial["date"] = timezone.localtime().strftime(_date_format)
 
 
 class MovementHeaderForm(forms.ModelForm):
@@ -188,6 +235,7 @@ class MovementHeaderForm(forms.ModelForm):
     def __init__(self, *args, store_id=None, company_id=None, movement_type="ENTRY", **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["date"].input_formats = _date_input_formats
+        _set_default_movement_date(self)
         self.fields["date"].required = True
         self.fields["warehouse"].required = movement_type in (
             MovementType.ENTRY,
@@ -249,6 +297,7 @@ class MovementTransferForm(forms.ModelForm):
     def __init__(self, *args, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["date"].input_formats = _date_input_formats
+        _set_default_movement_date(self)
         self.fields["warehouse_origin"].required = True
         self.fields["warehouse_dest"].required = True
         self.fields["reason"].required = False
@@ -278,6 +327,7 @@ class MovementDetailForm(forms.Form):
         widget=forms.HiddenInput(),  # UI managed by JS product-picker
         label="Producto",
     )
+    unit = forms.UUIDField(required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(
         max_digits=10, decimal_places=3, min_value=Decimal("0.001"),
         widget=forms.NumberInput(attrs={"class": _sm, "step": "0.001", "min": "0.001"}),

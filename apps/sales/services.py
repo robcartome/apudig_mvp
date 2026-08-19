@@ -15,7 +15,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.core.models import AuditLog
-from apps.inventory.models import MovementOrigin, StockByWarehouse
+from apps.inventory.models import MovementOrigin, ProductUnit, StockByWarehouse
 from apps.inventory.services import confirm_movement, register_entry, register_exit
 from apps.partners.models import DocumentType
 
@@ -127,6 +127,37 @@ def _calculate_line(line: dict) -> dict:
     }
 
 
+def _normalize_line_uom(line: dict) -> dict:
+    """Valida la presentación del producto y congela su conversión a stock."""
+    normalized = dict(line)
+    product = normalized["product"]
+    requested_unit = normalized.get("unit") or normalized.get("unit_id")
+    conversions = ProductUnit.objects.select_related("unit").filter(product=product, active=True)
+    if requested_unit:
+        unit_id = getattr(requested_unit, "pk", requested_unit)
+        conversion = conversions.filter(unit_id=unit_id).first()
+        if conversion is None:
+            raise ValueError(f"La unidad seleccionada no está habilitada para {product.name}.")
+    else:
+        conversion = conversions.filter(unit_id=product.unit_id).first()
+        if conversion is None:
+            conversion = ProductUnit.objects.create(
+                product=product, unit=product.unit, conversion_factor=1,
+            )
+    factor = Decimal(str(conversion.conversion_factor))
+    normalized.update({
+        "unit": conversion.unit,
+        "unit_code": conversion.unit.code,
+        "conversion_factor": factor,
+        "stock_quantity": Decimal(str(normalized["quantity"])) * factor,
+    })
+    return normalized
+
+
+def _normalize_lines_uom(lines):
+    return [_normalize_line_uom(line) for line in lines]
+
+
 
 @transaction.atomic
 def create_quotation(store_id: str, customer, series: DocumentSeries, lines: list[dict], created_by=None, **kwargs) -> SalesQuotation:
@@ -139,6 +170,7 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
     requested_number = kwargs.pop("number", None)
     series, number = _reserve_quotation_number(series, requested_number)
 
+    lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
     igv_total = sum(l["igv_amount"] for l in calculated_lines)
@@ -170,7 +202,8 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
             description=raw.get("description", ""),
             quantity=raw["quantity"],
             unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
+            unit=raw["unit"], unit_code=raw["unit_code"],
+            conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
             igv_rate=raw.get("igv_rate", Decimal("18")),
@@ -209,6 +242,7 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
     for attr, value in kwargs.items():
         setattr(quotation, attr, value)
 
+    lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
     igv_total = sum(l["igv_amount"] for l in calculated_lines)
@@ -232,7 +266,8 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
             description=raw.get("description", ""),
             quantity=raw["quantity"],
             unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
+            unit=raw["unit"], unit_code=raw["unit_code"],
+            conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
             igv_rate=raw.get("igv_rate", Decimal("18")),
@@ -291,6 +326,7 @@ def create_sale_order(
     """
     number = _next_series_number(series)
 
+    lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
     igv_total = sum(l["igv_amount"] for l in calculated_lines)
@@ -325,7 +361,8 @@ def create_sale_order(
             description=raw.get("description", ""),
             quantity=raw["quantity"],
             unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
+            unit=raw["unit"], unit_code=raw["unit_code"],
+            conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
             igv_rate=raw.get("igv_rate", Decimal("18")),
@@ -360,6 +397,7 @@ def create_order_from_quotation(
             "description": line.description,
             "quantity": line.quantity,
             "unit_price": line.unit_price,
+            "unit": line.unit_id,
             "unit_code": line.unit_code,
             "discount_amount": line.discount_amount,
             "tax_type": line.tax_type,
@@ -401,6 +439,7 @@ def update_sale_order(order_id, lines: list[dict], **kwargs) -> SaleOrder:
     for attr, value in kwargs.items():
         setattr(order, attr, value)
 
+    lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
     igv_total = sum(l["igv_amount"] for l in calculated_lines)
@@ -425,7 +464,8 @@ def update_sale_order(order_id, lines: list[dict], **kwargs) -> SaleOrder:
             description=raw.get("description", ""),
             quantity=raw["quantity"],
             unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
+            unit=raw["unit"], unit_code=raw["unit_code"],
+            conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
             igv_rate=raw.get("igv_rate", Decimal("18")),
@@ -532,7 +572,8 @@ def _replace_sales_document_lines(document: SalesDocument, lines, calculated_lin
             description=raw.get("description", ""),
             quantity=raw["quantity"],
             unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
+            unit=raw["unit"], unit_code=raw["unit_code"],
+            conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
             igv_rate=raw.get("igv_rate", Decimal("18")),
@@ -557,7 +598,7 @@ def _inventory_lines_for_document(document: SalesDocument) -> list[dict]:
                 "quantity": Decimal("0"),
                 "unit_price": line.unit_price,
             }
-        grouped[product_id]["quantity"] += line.quantity
+        grouped[product_id]["quantity"] += line.stock_quantity
     return list(grouped.values())
 
 
@@ -676,6 +717,7 @@ def create_sales_document_draft(
     lines: misma estructura que create_quotation.
     """
     document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(line) for line in lines]
     totals = _calc_sales_document_totals(lines, calculated_lines)
     requested_number = kwargs.pop("number", "")
@@ -722,6 +764,7 @@ def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
             "description": line.description,
             "quantity": line.quantity,
             "unit_price": line.unit_price,
+            "unit": line.unit_id,
             "unit_code": line.unit_code,
             "discount_amount": line.discount_amount,
             "tax_type": line.tax_type,
@@ -805,6 +848,7 @@ def create_document_from_quotation(
             "description": line.description,
             "quantity": line.quantity,
             "unit_price": line.unit_price,
+            "unit": line.unit_id,
             "unit_code": line.unit_code,
             "discount_amount": line.discount_amount,
             "tax_type": line.tax_type,
@@ -854,6 +898,7 @@ def update_sales_document_draft(
     store_id = kwargs.get("store_id", document.store_id)
     document_type = kwargs.get("document_type", document.document_type)
     document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(line) for line in lines]
     totals = _calc_sales_document_totals(lines, calculated_lines)
     requested_number = kwargs.pop("number", "")
@@ -1003,6 +1048,7 @@ def create_credit_note(
                 "description": line.description,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
+                "unit": line.unit_id,
                 "unit_code": line.unit_code,
                 "discount_amount": line.discount_amount,
                 "tax_type": line.tax_type,
