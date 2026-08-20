@@ -1,43 +1,79 @@
-# APUDIG MVP (Django)
+# APUDIG MVP
 
-Proyecto nuevo e independiente para la migración FastAPI -> Django monolito.
+Sistema ERP multiempresa construido como monolito Django. El repositorio organiza los dominios en `apps/`, con módulos para ventas, inventario, socios comerciales, empresas, usuarios y APIs versionadas.
 
-## 1) Crear entorno virtual propio
+## Requisitos
+
+- Python 3.13
+- PostgreSQL 16 para desarrollo integrado o SQLite para ejecución básica
+- Dependencias declaradas en `requirements.txt`
+
+## Instalación local
 
 ```bash
-cd apudig_mvp
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
 pip install -r requirements.txt
-cp .env.example .env
 ```
 
-## 2) Ejecutar en local (SQLite)
+Active el entorno virtual y copie `.env.example` como `.env`. Después ejecute:
 
 ```bash
 python manage.py migrate
-python manage.py createsuperuser
+python manage.py seed
 python manage.py runserver
 ```
 
-Abrir: http://127.0.0.1:8000/login/
+En PowerShell, active el entorno con `.\.venv\Scripts\Activate.ps1`. La aplicación estará disponible en [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
-## 3) Ejecutar con Docker + PostgreSQL
+## Docker y PostgreSQL
 
-1. Edita `.env` y activa valores PostgreSQL.
-2. Levanta:
+Configure PostgreSQL en `.env` y levante los servicios con:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose_apudig.yml up --build
 ```
 
-## 4) Flujo MVP implementado
+El contenedor publica Django en el puerto `8000` y PostgreSQL en el puerto local `5434`.
 
-- Login (`/login`)
-- Selección empresa/sucursal (`/companies/select/`)
-- Dashboard base (`/dashboard/`)
+## Estructura principal
 
-## 5) Próximo paso recomendado
+- `config/`: configuración y URLs generales de Django.
+- `apps/sales/`: cotizaciones, pedidos y documentos de venta.
+- `apps/inventory/`: productos, almacenes, movimientos, stock y trazabilidad.
+- `apps/partners/`: clientes, proveedores y transportistas.
+- `apps/companies/`: empresas, sucursales y acceso multiempresa.
+- `apps/users/`: usuarios, roles y permisos.
+- `apps/api/v1/`: API REST versionada.
+- `templates/` y `static/`: interfaz web y JavaScript.
 
-- Migrar auth multiempresa real desde APUDIG (tabla usuarios, roles y acceso por store).
-- Incorporar apps de fase 2 (`partners`, `inventory`).
+## Documentos de venta
+
+Notas de venta (`NV`), facturas (`01`) y boletas (`03`) se almacenan exclusivamente en `SalesDocument` y `SalesDocumentLine`. No se deben crear modelos paralelos como `Voucher`, `Sale` o `BillingInvoice`. La aplicación `billing` permanece únicamente para ejecutar migraciones históricas.
+
+El flujo implementado incluye:
+
+- Creación y edición de borradores en `/sales/documents/`.
+- Numeración correlativa segura al emitir.
+- Conversión idempotente de cotizaciones aprobadas.
+- Salidas de inventario para productos inventariables.
+- Validación configurable de stock negativo por almacén.
+- Reversión trazable de inventario al anular.
+- Auditoría de creación, edición, emisión, cancelación y anulación.
+- Aislamiento por empresa y sucursal.
+
+Los permisos disponibles son `read.sales.documents`, `manage.sales.documents` y `authorize.sales.documents`. Consulte [docs/sales_documents.md](docs/sales_documents.md) para las reglas completas.
+
+## Pruebas y validación
+
+```bash
+python manage.py test apps.sales
+python manage.py test
+python manage.py check
+python manage.py makemigrations --check --dry-run
+```
+
+Las pruebas de ventas incluyen concurrencia de correlativos, cálculo tributario, permisos, auditoría, conversión desde cotización e integración con inventario. La suite global conserva cuatro pruebas antiguas de catálogo que esperan rutas sin versionar (`/catalog/products`); el API vigente utiliza `/api/v1/catalog/products/`.
+
+## Seguridad
+
+No confirme `.env`, credenciales ni datos productivos. Registre nuevas variables en `.env.example` usando valores seguros y valide siempre el alcance de empresa, sucursal y almacén en consultas nuevas.

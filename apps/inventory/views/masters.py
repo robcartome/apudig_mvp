@@ -462,7 +462,6 @@ def product_create(request):
         return err
     price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
     form = ProductForm(request.POST or None, company=company)
-    print(form)
     if request.method == "POST" and form.is_valid():
         product = form.save()
         for price_list in price_lists:

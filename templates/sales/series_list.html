@@ -34,8 +34,8 @@
     <form method="get" class="ms-auto">
       <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:200px">
         <option value="">Todos los tipos</option>
-        {% for code, label in type_choices %}
-        <option value="{{ code }}" {% if voucher_type == code %}selected{% endif %}>{{ label }}</option>
+        {% for type in type_choices %}
+        <option value="{{ type.code }}" {% if document_type == type.code %}selected{% endif %}>{{ type.name }}</option>
         {% endfor %}
       </select>
     </form>
@@ -56,7 +56,7 @@
         {% for obj in page_obj %}
         <tr>
           <td class="fw-semibold">{{ obj.series }}</td>
-          <td class="text-muted small">{{ obj.get_voucher_type_display }}</td>
+          <td class="text-muted small">{{ obj.document_type.name }}</td>
           <td class="text-muted small">{{ obj.store.name|default:"(todas las sucursales)" }}</td>
           <td class="text-end text-muted small">{{ obj.current_number }}</td>
           <td class="text-center">

@@ -1,43 +1,84 @@
-/**
- * api.js — Centralized HTTP service layer (plain JS, no framework)
- * Exposes: window.ApiService  { get(url), post(url, body, csrf) }
- */
+/** Centralized HTTP service layer. */
 window.ApiService = (function () {
   'use strict';
 
-  const HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
+  const DEFAULT_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
 
-  async function get(url) {
-    const response = await fetch(url, { headers: HEADERS });
-    if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}`);
-      error.status = response.status;
-      throw error;
+  class ApiError extends Error {
+    constructor(message, response, data) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = response.status;
+      this.data = data;
     }
-    return response.json();
   }
 
-  async function post(url, body, csrf) {
+  function getCookie(name) {
+    const cookie = document.cookie.split(';').map(value => value.trim())
+      .find(value => value.startsWith(`${name}=`));
+    return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : '';
+  }
+
+  function csrfToken(explicitToken) {
+    return explicitToken
+      || document.querySelector('[name=csrfmiddlewaretoken]')?.value
+      || getCookie('csrftoken');
+  }
+
+  function validationMessage(errors) {
+    return Object.values(errors || {}).flat()
+      .map(item => (typeof item === 'object' ? item.message : item))
+      .filter(Boolean).join(' ');
+  }
+
+  function errorMessage(data, status) {
+    return data?.error || data?.detail || validationMessage(data?.errors) || `HTTP ${status}`;
+  }
+
+  async function parseResponse(response) {
+    if (response.status === 204) return null;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) return response.json().catch(() => ({}));
+    return response.text();
+  }
+
+  async function request(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const headers = { ...DEFAULT_HEADERS, ...(options.headers || {}) };
+    let body = options.body;
+
+    if (body !== undefined && body !== null && !(body instanceof FormData)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      if (headers['Content-Type'].includes('application/json') && typeof body !== 'string') {
+        body = JSON.stringify(body);
+      }
+    }
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      const token = csrfToken(options.csrf);
+      if (token) headers['X-CSRFToken'] = token;
+    }
+
     const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        ...HEADERS,
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrf,
-      },
-      body: JSON.stringify(body),
+      method,
+      headers,
+      body,
+      signal: options.signal,
+      credentials: options.credentials || 'same-origin',
     });
-
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(json.error || `HTTP ${response.status}`);
-      error.status = response.status;
-      error.data = json;
-      throw error;
-    }
-
-    return json;
+    const data = await parseResponse(response);
+    if (!response.ok) throw new ApiError(errorMessage(data, response.status), response, data);
+    return data;
   }
 
-  return { get, post };
+  function get(url, options = {}) {
+    return request(url, { ...options, method: 'GET' });
+  }
+
+  // The string third argument is retained for backwards compatibility.
+  function post(url, body, csrfOrOptions = {}) {
+    const options = typeof csrfOrOptions === 'string' ? { csrf: csrfOrOptions } : csrfOrOptions;
+    return request(url, { ...options, method: 'POST', body });
+  }
+
+  return { request, get, post, ApiError };
 }());

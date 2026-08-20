@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ voucher.series_code }}-{{ voucher.number|default:"Borrador" }}</title>
+  <title>{{ sales_document.series_code }}-{{ sales_document.number|default:"Borrador" }}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #333; margin: 0; padding: 16px; }
@@ -48,7 +48,7 @@
 <div class="no-print">
   <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
   &nbsp;
-  <a href="{% url 'sales:voucher_detail' voucher.pk %}">← Volver</a>
+  <a href="{% url 'sales:document_detail' sales_document.pk %}">← Volver</a>
 </div>
 
 <div class="doc-header">
@@ -65,38 +65,34 @@
   </div>
   <div class="doc-box">
     <div class="doc-type">
-      {% if voucher.voucher_type == "01" %}FACTURA ELECTRÓNICA
-      {% elif voucher.voucher_type == "03" %}BOLETA DE VENTA
-      {% elif voucher.voucher_type == "07" %}NOTA DE CRÉDITO
-      {% elif voucher.voucher_type == "08" %}NOTA DE DÉBITO
-      {% else %}COMPROBANTE{% endif %}
+      {{ sales_document.document_type.name|upper }}{% if sales_document.document_type.is_sunat %} ELECTRÓNICA{% endif %}
     </div>
-    <div class="doc-num">{{ voucher.series_code }}-{{ voucher.number|default:"BORRADOR" }}</div>
-    <div style="margin-top:6px;font-size:10px;">{{ voucher.issue_date|date:"d/m/Y" }}</div>
+    <div class="doc-num">{{ sales_document.series_code }}-{{ sales_document.number|default:"BORRADOR" }}</div>
+    <div style="margin-top:6px;font-size:10px;">{{ sales_document.issue_date|date:"d/m/Y" }}</div>
     <div style="margin-top:4px;font-size:10px;font-weight:bold;">
-      {% if voucher.status == "ISSUED" %}EMITIDO
-      {% elif voucher.status == "DRAFT" %}BORRADOR
-      {% elif voucher.status == "VOIDED" %}ANULADO
-      {% else %}{{ voucher.status }}{% endif %}
+      {% if sales_document.status == "ISSUED" %}EMITIDO
+      {% elif sales_document.status == "DRAFT" %}BORRADOR
+      {% elif sales_document.status == "VOIDED" %}ANULADO
+      {% else %}{{ sales_document.status }}{% endif %}
     </div>
   </div>
 </div>
 
 <div class="section">
   <div class="section-title">Cliente</div>
-  <div class="info-row"><span class="info-label">Razón Social:</span><span>{{ voucher.customer_legal_name }}</span></div>
-  <div class="info-row"><span class="info-label">{{ voucher.customer_document_type }}:</span><span>{{ voucher.customer_document_number }}</span></div>
-  {% if voucher.customer_address %}
-  <div class="info-row"><span class="info-label">Dirección:</span><span>{{ voucher.customer_address }}</span></div>
+  <div class="info-row"><span class="info-label">Razón Social:</span><span>{{ sales_document.customer_legal_name }}</span></div>
+  <div class="info-row"><span class="info-label">{{ sales_document.customer_document_type }}:</span><span>{{ sales_document.customer_document_number }}</span></div>
+  {% if sales_document.customer_address %}
+  <div class="info-row"><span class="info-label">Dirección:</span><span>{{ sales_document.customer_address }}</span></div>
   {% endif %}
 </div>
 
-{% if voucher.reference_series %}
+{% if sales_document.reference_series %}
 <div class="section">
   <div class="section-title">Referencia</div>
-  <div class="info-row"><span class="info-label">Comprobante:</span><span>{{ voucher.reference_series }}-{{ voucher.reference_number }}</span></div>
-  {% if voucher.note_reason_description %}
-  <div class="info-row"><span class="info-label">Motivo:</span><span>{{ voucher.note_reason_code }} — {{ voucher.note_reason_description }}</span></div>
+  <div class="info-row"><span class="info-label">Documento original:</span><span>{{ sales_document.reference_series }}-{{ sales_document.reference_number }}</span></div>
+  {% if sales_document.note_reason_description %}
+  <div class="info-row"><span class="info-label">Motivo:</span><span>{{ sales_document.note_reason_code }} — {{ sales_document.note_reason_description }}</span></div>
   {% endif %}
 </div>
 {% endif %}
@@ -117,13 +113,14 @@
     </tr>
   </thead>
   <tbody>
-    {% for line in voucher.lines.all %}
+    {% for line in sales_document.lines.all %}
     <tr>
       <td>{{ forloop.counter }}</td>
       <td>{{ line.product.sku }}</td>
       <td>
         {{ line.product.name }}
         {% if line.description %}<br><small>{{ line.description }}</small>{% endif %}
+        {% if line.memo %}<br><small><strong>Nota:</strong> {{ line.memo }}</small>{% endif %}
       </td>
       <td>{{ line.unit_code }}</td>
       <td class="text-right">{{ line.quantity|floatformat:2 }}</td>
@@ -141,42 +138,42 @@
   <tbody>
     <tr>
       <td>Op. Gravadas</td>
-      <td class="text-right">{{ voucher.currency }} {{ voucher.taxable_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency }} {{ sales_document.taxable_amount|floatformat:2 }}</td>
     </tr>
-    {% if voucher.exempt_amount %}
+    {% if sales_document.exempt_amount %}
     <tr>
       <td>Op. Exoneradas</td>
-      <td class="text-right">{{ voucher.currency }} {{ voucher.exempt_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency }} {{ sales_document.exempt_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
-    {% if voucher.unaffected_amount %}
+    {% if sales_document.unaffected_amount %}
     <tr>
       <td>Op. Inafectas</td>
-      <td class="text-right">{{ voucher.currency }} {{ voucher.unaffected_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency }} {{ sales_document.unaffected_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
-    {% if voucher.total_discount %}
+    {% if sales_document.total_discount %}
     <tr>
       <td>Dctos. globales</td>
-      <td class="text-right">- {{ voucher.currency }} {{ voucher.total_discount|floatformat:2 }}</td>
+      <td class="text-right">- {{ sales_document.currency }} {{ sales_document.total_discount|floatformat:2 }}</td>
     </tr>
     {% endif %}
     <tr>
       <td>IGV (18%)</td>
-      <td class="text-right">{{ voucher.currency }} {{ voucher.igv_total|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency }} {{ sales_document.igv_total|floatformat:2 }}</td>
     </tr>
     <tr>
       <td>TOTAL A PAGAR</td>
-      <td class="text-right">{{ voucher.currency }} {{ voucher.total|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency }} {{ sales_document.total|floatformat:2 }}</td>
     </tr>
   </tbody>
 </table>
 
-{% if voucher.notes %}
-<div class="notes"><strong>Notas:</strong> {{ voucher.notes }}</div>
+{% if sales_document.notes %}
+<div class="notes"><strong>Notas:</strong> {{ sales_document.notes }}</div>
 {% endif %}
 
-<div class="footer">Documento generado por APUDIG — {{ voucher.issue_date|date:"d/m/Y" }}</div>
+<div class="footer">Documento generado por APUDIG — {{ sales_document.issue_date|date:"d/m/Y" }}</div>
 
 </body>
 </html>

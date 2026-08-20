@@ -12,10 +12,12 @@ from .views import (
     customer_detail,
     customer_list,
     customer_update,
+    customer_quick_create,
     supplier_create,
     supplier_delete,
     supplier_list,
     supplier_update,
+    supplier_quick_create,
 )
 
 app_name = "partners"
@@ -24,6 +26,7 @@ urlpatterns = [
     # Customers
     path("customers/", customer_list, name="customer_list"),
     path("customers/new/", customer_create, name="customer_create"),
+    path("api/customers/create/", customer_quick_create, name="api_customer_create"),
     path("customers/<uuid:pk>/", customer_detail, name="customer_detail"),
     path("customers/<uuid:pk>/edit/", customer_update, name="customer_update"),
     path("customers/<uuid:pk>/delete/", customer_delete, name="customer_delete"),
@@ -33,6 +36,7 @@ urlpatterns = [
     # Suppliers
     path("suppliers/", supplier_list, name="supplier_list"),
     path("suppliers/new/", supplier_create, name="supplier_create"),
+    path("api/suppliers/create/", supplier_quick_create, name="api_supplier_create"),
     path("suppliers/<uuid:pk>/edit/", supplier_update, name="supplier_update"),
     path("suppliers/<uuid:pk>/delete/", supplier_delete, name="supplier_delete"),
     # Carriers

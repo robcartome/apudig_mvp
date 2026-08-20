@@ -18,7 +18,6 @@ window.ProductPicker = (function ($) {
   const DEFAULTS = {
     searchUrl: '',
     createUrl: '',
-    csrfToken: '',
     getWarehouse: () => '',
     modalId: 'quickCreateModal',
     errorId: 'qc-error',
@@ -37,8 +36,8 @@ window.ProductPicker = (function ($) {
   }
 
   function ensureConfigured() {
-    if (!settings.searchUrl || !settings.createUrl || !settings.csrfToken) {
-      throw new Error('ProductPicker requires searchUrl, createUrl and csrfToken.');
+    if (!settings.searchUrl || !settings.createUrl) {
+      throw new Error('ProductPicker requires searchUrl and createUrl.');
     }
   }
 
@@ -111,8 +110,7 @@ window.ProductPicker = (function ($) {
       try {
         const product = await ApiService.post(
           settings.createUrl,
-          { name, sku, unit_id: unitId },
-          settings.csrfToken
+          { name, sku, unit_id: unitId }
         );
 
         bootstrap.Modal.getInstance(getElement(settings.modalId)).hide();
@@ -204,9 +202,14 @@ window.ProductPicker = (function ($) {
         delay: 300,
         transport(params, success, failure) {
           const term = (params.data.q || '').trim();
+          const controller = new AbortController();
           ApiService.get(
-            `${settings.searchUrl}?q=${encodeURIComponent(term)}&warehouse=${encodeURIComponent(getWarehouse())}`
-          ).then(success).catch(failure);
+            `${settings.searchUrl}?q=${encodeURIComponent(term)}&warehouse=${encodeURIComponent(getWarehouse())}`,
+            { signal: controller.signal }
+          ).then(success).catch(error => {
+            if (error.name !== 'AbortError') failure(error);
+          });
+          return { abort: () => controller.abort() };
         },
         data: params => ({ q: params.term || '' }),
         processResults(data, params) {

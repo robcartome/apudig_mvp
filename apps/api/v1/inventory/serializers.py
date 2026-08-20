@@ -41,7 +41,10 @@ class WarehouseUpdateSerializer(serializers.ModelSerializer):
 class DocumentTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentType
-        fields = ("id", "code", "name", "abbreviation", "active")
+        fields = (
+            "id", "code", "name", "abbreviation", "category", "is_sunat",
+            "sunat_code", "affects_stock", "affects_accounting", "active",
+        )
 
 
 class ProductPriceSerializer(serializers.ModelSerializer):
