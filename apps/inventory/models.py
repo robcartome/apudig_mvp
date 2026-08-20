@@ -102,6 +102,10 @@ class Product(TimeStampedModel):
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="products")
     active = models.BooleanField(default=True)
+    tracks_inventory = models.BooleanField(
+        default=True,
+        help_text="Desmarcar para servicios u otros conceptos que no modifican stock.",
+    )
 
     class Meta:
         db_table = "products"
@@ -135,6 +139,7 @@ class Warehouse(TimeStampedModel):
     description = models.CharField(max_length=500, blank=True)
     active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
+    allow_negative_stock = models.BooleanField(default=False)
 
     class Meta:
         db_table = "warehouses"
@@ -201,13 +206,25 @@ class MovementStatus(models.TextChoices):
     CLOSED = "CLOSED", "Cerrado"
 
 
+class MovementOrigin(models.TextChoices):
+    MANUAL = "MANUAL", "Manual"
+    SALE = "SALE", "Venta"
+    SALE_REVERSAL = "SALE_REVERSAL", "Reversión de venta"
+
+
 class Movement(TimeStampedModel):
     objects = CompanyScopedManager()
     MOVEMENT_TYPES = MovementType.choices
     STATUS_CHOICES = MovementStatus.choices
+    ORIGIN_CHOICES = MovementOrigin.choices
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
+    origin = models.CharField(
+        max_length=30,
+        choices=ORIGIN_CHOICES,
+        default=MovementOrigin.MANUAL,
+    )
     store = models.ForeignKey(
         "companies.Store", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )
@@ -226,6 +243,13 @@ class Movement(TimeStampedModel):
     series = models.CharField(max_length=10, blank=True)
     number = models.CharField(max_length=20, blank=True)
     reference_doc = models.CharField(max_length=100, blank=True)
+    reversal_of = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversal",
+    )
     supplier = models.ForeignKey(
         "partners.Supplier", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )

@@ -1,7 +1,7 @@
 """
 sales/services.py — Lógica de negocio del ciclo comercial.
 
-Flujo principal: SalesQuotation → SaleOrder → Voucher
+Flujo principal: SalesQuotation → SaleOrder → SalesDocument
 
 Reglas:
 - Toda creación de documento usa transaction.atomic().
@@ -14,8 +14,12 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.core.models import AuditLog
+from apps.inventory.models import MovementOrigin, StockByWarehouse
+from apps.inventory.services import confirm_movement, register_entry, register_exit
+from apps.partners.models import DocumentType
+
 from .models import (
-    BusinessDocumentType,
     DocumentSeries,
     QUOTATION_STATUS_CHOICES,
     SalesQuotation,
@@ -23,8 +27,8 @@ from .models import (
     SaleOrder,
     SaleOrderLine,
     TAX_TYPE_CHOICES,
-    Voucher,
-    VoucherLine,
+    SalesDocument,
+    SalesDocumentLine,
 )
 
 
@@ -34,17 +38,36 @@ def _next_series_number(series: DocumentSeries) -> int:
     Siempre llamar dentro de transaction.atomic().
     """
     if series is None:
-        raise ValueError("Debe seleccionar una serie de cotización activa.")
+        raise ValueError("Debe seleccionar una serie documental activa.")
     locked = DocumentSeries.objects.select_for_update().get(pk=series.pk)
     locked.current_number += 1
     locked.save(update_fields=["current_number"])
     return locked.current_number
 
+
+def _reserve_quotation_number(series, requested_number=None, exclude_pk=None):
+    """Reserva o valida un correlativo de cotización bajo bloqueo de serie."""
+    if series is None or not series.active:
+        raise ValueError("Debe seleccionar una serie documental activa.")
+    locked_series = DocumentSeries.objects.select_for_update().get(pk=series.pk)
+    number = int(requested_number) if requested_number else locked_series.current_number + 1
+    duplicate = SalesQuotation.objects.filter(series=locked_series, number=number)
+    if exclude_pk:
+        duplicate = duplicate.exclude(pk=exclude_pk)
+    if duplicate.exists():
+        raise ValueError(
+            f"Ya existe la cotización {locked_series.series}-{number:08d}."
+        )
+    if number > locked_series.current_number:
+        locked_series.current_number = number
+        locked_series.save(update_fields=["current_number"])
+    return locked_series, number
+
 @transaction.atomic
 def create_document_series(
     company_id: str,
     store_id: str | None,
-    voucher_type: str,
+    document_type: str,
     series_code: str,
 ) -> DocumentSeries:
     """
@@ -54,14 +77,14 @@ def create_document_series(
     if DocumentSeries.objects.filter(
         company_id=company_id,
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         series=series_code,
     ).exists():
         raise ValueError(f"Ya existe la serie '{series_code}' para este tipo y sucursal.")
     return DocumentSeries.objects.create(
         company_id=company_id,
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         series=series_code,
     )
 
@@ -73,11 +96,12 @@ def toggle_series(series: DocumentSeries) -> DocumentSeries:
     return series
 
 
-def get_or_create_series(company_id: str, store_id: str | None, voucher_type: str, series_code: str) -> DocumentSeries:
+def get_or_create_series(company_id: str, store_id: str | None, document_type: str, series_code: str) -> DocumentSeries:
+    document_type = DocumentType.objects.get(code=document_type)
     obj, _ = DocumentSeries.objects.get_or_create(
         company_id=company_id,
         store_id=store_id,
-        voucher_type=voucher_type,
+        document_type=document_type,
         series=series_code,
     )
     return obj
@@ -112,7 +136,8 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
            unit_price, discount_amount (opcional), tax_type (opcional),
            igv_rate (opcional), memo (opcional).
     """
-    number = _next_series_number(series)
+    requested_number = kwargs.pop("number", None)
+    series, number = _reserve_quotation_number(series, requested_number)
 
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
@@ -172,6 +197,15 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
     if quotation.status != "DRAFT":
         raise ValueError("Solo se pueden editar cotizaciones en estado Borrador.")
 
+    series = kwargs.pop("series", quotation.series)
+    requested_number = kwargs.pop("number", quotation.number)
+    series, number = _reserve_quotation_number(
+        series, requested_number, exclude_pk=quotation.pk
+    )
+    quotation.series = series
+    quotation.series_code = series.series
+    quotation.number = number
+
     for attr, value in kwargs.items():
         setattr(quotation, attr, value)
 
@@ -185,7 +219,10 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
     quotation.igv_total = igv_total
     quotation.total_discount = total_discount
     quotation.total = total
-    quotation.save(update_fields=list(kwargs.keys()) + ["subtotal", "igv_total", "total_discount", "total"])
+    quotation.save(update_fields=list(kwargs.keys()) + [
+        "series", "series_code", "number", "subtotal", "igv_total",
+        "total_discount", "total",
+    ])
 
     quotation.lines.all().delete()
     for raw, calc in zip(lines, calculated_lines):
@@ -425,66 +462,72 @@ def cancel_order(order_id) -> SaleOrder:
 
 # ── Comprobantes ──────────────────────────────────────────────────────────────
 
-@transaction.atomic
-def create_voucher_draft(
-    store_id,
-    customer,
-    voucher_type: str,
-    series: DocumentSeries,
-    lines: list[dict],
-    sale_order=None,
-    created_by=None,
-    **kwargs,
-) -> Voucher:
-    """
-    Crea un comprobante en estado DRAFT sin asignar número.
-    El número se asigna al emitir (issue_voucher).
-    """
-    calculated_lines = [_calculate_line(l) for l in lines]
-    taxable = sum(
-        calc["subtotal"] for calc, raw in zip(calculated_lines, lines)
-        if raw.get("tax_type", "10") == "10"
-    )
-    exempt = sum(
-        calc["subtotal"] for calc, raw in zip(calculated_lines, lines)
-        if raw.get("tax_type", "10") == "20"
-    )
-    unaffected = sum(
-        calc["subtotal"] for calc, raw in zip(calculated_lines, lines)
-        if raw.get("tax_type", "10") == "30"
-    )
-    igv_total = sum(calc["igv_amount"] for calc in calculated_lines)
-    subtotal = sum(calc["subtotal"] for calc in calculated_lines)
-    total_discount = sum(
-        Decimal(str(l.get("discount_amount", 0))) for l in lines
-    )
-    total = subtotal + igv_total
+def _calc_sales_document_totals(lines: list[dict], calculated: list[dict]) -> dict:
+    """Calcula los totales tributarios sin confiar en importes del navegador."""
+    taxable = Decimal("0")
+    exempt = Decimal("0")
+    unaffected = Decimal("0")
+    export = Decimal("0")
+    free = Decimal("0")
+    igv_total = Decimal("0")
+    total_discount = Decimal("0")
 
-    voucher = Voucher.objects.create(
-        store_id=store_id,
-        customer=customer,
-        customer_document_type=customer.document_type,
-        customer_document_number=customer.document_number,
-        customer_legal_name=customer.legal_name,
-        customer_address=getattr(customer, "address", ""),
-        customer_ubigeo=getattr(customer, "ubigeo", ""),
-        voucher_type=voucher_type,
-        series=series,
-        series_code=series.series,
-        sale_order=sale_order,
-        subtotal=subtotal,
-        taxable_amount=taxable,
-        exempt_amount=exempt,
-        unaffected_amount=unaffected,
-        igv_total=igv_total,
-        total_discount=total_discount,
-        total=total,
-        created_by=created_by,
-        **kwargs,
-    )
+    for raw, calc in zip(lines, calculated):
+        tax_type = raw.get("tax_type", "10")
+        if tax_type == "10":
+            taxable += calc["subtotal"]
+        elif tax_type == "20":
+            exempt += calc["subtotal"]
+        elif tax_type == "30":
+            unaffected += calc["subtotal"]
+        elif tax_type == "40":
+            export += calc["subtotal"]
+        elif tax_type == "11":
+            free += calc["subtotal"]
+        else:
+            raise ValueError(f"Tipo de IGV no soportado: '{tax_type}'.")
+        igv_total += calc["igv_amount"]
+        total_discount += Decimal(str(raw.get("discount_amount", 0)))
+
+    subtotal = taxable + exempt + unaffected + export
+    return {
+        "subtotal": subtotal,
+        "taxable_amount": taxable,
+        "exempt_amount": exempt,
+        "unaffected_amount": unaffected,
+        "export_amount": export,
+        "free_amount": free,
+        "igv_total": igv_total,
+        "total_discount": total_discount,
+        "total": (subtotal + igv_total).quantize(Decimal("0.01")),
+    }
+
+
+def _validate_sales_document_input(store_id, customer, document_type, series, lines) -> None:
+    if not store_id:
+        raise ValueError("La sucursal es obligatoria.")
+    if customer is None:
+        raise ValueError("El cliente es obligatorio.")
+    if not document_type:
+        raise ValueError("El tipo de documento es obligatorio.")
+    if not isinstance(document_type, DocumentType):
+        document_type = DocumentType.objects.get(code=document_type)
+    if series is None:
+        raise ValueError("La serie es obligatoria.")
+    if str(series.store_id) != str(store_id) or series.document_type_id != document_type.id:
+        raise ValueError("La serie no corresponde a la sucursal y tipo de documento.")
+    if str(customer.company_id) != str(series.company_id):
+        raise ValueError("El cliente no pertenece a la empresa activa.")
+    if not lines:
+        raise ValueError("El documento debe tener al menos una línea.")
+    return document_type
+
+
+def _replace_sales_document_lines(document: SalesDocument, lines, calculated_lines) -> None:
+    document.lines.all().delete()
     for raw, calc in zip(lines, calculated_lines):
-        VoucherLine.objects.create(
-            voucher=voucher,
+        SalesDocumentLine.objects.create(
+            sales_document=document,
             product=raw["product"],
             description=raw.get("description", ""),
             quantity=raw["quantity"],
@@ -495,85 +538,183 @@ def create_voucher_draft(
             igv_rate=raw.get("igv_rate", Decimal("18")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
+            memo=raw.get("memo", ""),
             subtotal=calc["subtotal"],
             igv_amount=calc["igv_amount"],
             total=calc["total"],
         )
-    return voucher
+
+
+def _inventory_lines_for_document(document: SalesDocument) -> list[dict]:
+    """Agrupa únicamente productos configurados para controlar existencias."""
+    grouped = {}
+    lines = document.lines.select_related("product").filter(product__tracks_inventory=True)
+    for line in lines:
+        product_id = line.product_id
+        if product_id not in grouped:
+            grouped[product_id] = {
+                "product_id": product_id,
+                "quantity": Decimal("0"),
+                "unit_price": line.unit_price,
+            }
+        grouped[product_id]["quantity"] += line.quantity
+    return list(grouped.values())
+
+
+def _audit_sales_document(document, action: str, user=None, **metadata) -> None:
+    AuditLog.objects.create(
+        user=user,
+        action=action,
+        entity="SalesDocument",
+        entity_id=str(document.pk),
+        meta_data={
+            "store_id": str(document.store_id) if document.store_id else None,
+            "document_type": document.document_type.code,
+            "status": document.status,
+            "series": document.series_code,
+            "number": document.number,
+            **metadata,
+        },
+    )
+
+
+def _validate_stock_for_sale(document: SalesDocument, lines: list[dict]) -> None:
+    if not document.warehouse_id:
+        raise ValueError("Debe seleccionar un almacén antes de emitir el documento.")
+    if document.warehouse.store_id != document.store_id:
+        raise ValueError("El almacén no pertenece a la sucursal del documento.")
+    if document.warehouse.allow_negative_stock:
+        return
+
+    for line in lines:
+        stock, _ = StockByWarehouse.objects.select_for_update().get_or_create(
+            product_id=line["product_id"],
+            warehouse_id=document.warehouse_id,
+            defaults={"quantity": Decimal("0")},
+        )
+        required = Decimal(str(line["quantity"]))
+        if stock.quantity < required:
+            raise ValueError(
+                f"Stock insuficiente para {stock.product}. "
+                f"Disponible: {stock.quantity}; requerido: {required}."
+            )
+
+
+def _register_sale_inventory_exit(document: SalesDocument):
+    if not document.register_inventory_movement:
+        return None
+    if document.inventory_movement_id:
+        return document.inventory_movement
+
+    lines = _inventory_lines_for_document(document)
+    if not lines:
+        return None
+    _validate_stock_for_sale(document, lines)
+    movement = register_exit(
+        store_id=str(document.store_id),
+        warehouse_id=str(document.warehouse_id),
+        date=timezone.now(),
+        lines=lines,
+        created_by=document.created_by,
+        origin=MovementOrigin.SALE,
+        customer=document.customer,
+        series=document.series_code,
+        number=document.number,
+        reference_doc=str(document.pk),
+        reason="Venta",
+        description=f"Salida por documento {document.series_code}-{document.number}",
+    )
+    return confirm_movement(movement, confirmed_by=document.created_by)
+
+
+def _register_sale_inventory_reversal(document: SalesDocument):
+    original = document.inventory_movement
+    if original is None:
+        return None
+    if hasattr(original, "reversal"):
+        return original.reversal
+
+    lines = [
+        {
+            "product_id": detail.product_id,
+            "quantity": detail.quantity,
+            "unit_price": detail.unit_price,
+        }
+        for detail in original.details.all()
+    ]
+    movement = register_entry(
+        store_id=str(document.store_id),
+        warehouse_id=str(original.warehouse_id),
+        date=timezone.now(),
+        lines=lines,
+        created_by=document.created_by,
+        origin=MovementOrigin.SALE_REVERSAL,
+        reversal_of=original,
+        customer=document.customer,
+        series=document.series_code,
+        number=document.number,
+        reference_doc=str(document.pk),
+        reason="Anulación de venta",
+        description=f"Reversión de {document.series_code}-{document.number}",
+    )
+    return confirm_movement(movement, confirmed_by=document.created_by)
 
 
 @transaction.atomic
-def issue_voucher(voucher_id) -> Voucher:
-    """
-    Asigna número de serie y cambia estado a ISSUED.
-    Usa select_for_update para garantizar numeración sin gaps.
-    """
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
-        raise ValueError("Solo se pueden emitir comprobantes en estado Borrador.")
-    if not voucher.series_id:
-        raise ValueError("El comprobante no tiene serie asignada.")
-
-    number = _next_series_number(voucher.series)
-    formatted = f"{number:08d}"
-
-    # Verificar unicidad (defensa extra)
-    if Voucher.objects.filter(
-        series=voucher.series,
-        number=formatted,
-    ).exclude(pk=voucher_id).exists():
-        raise ValueError(f"El número {voucher.series_code}-{formatted} ya existe.")
-
-    voucher.number = formatted
-    voucher.status = "ISSUED"
-    voucher.save(update_fields=["number", "status"])
-
-    # Marcar orden vinculada como INVOICED
-    if voucher.sale_order_id:
-        SaleOrder.objects.filter(pk=voucher.sale_order_id).update(status="INVOICED")
-
-    return voucher
-
-
-@transaction.atomic
-def void_voucher(voucher_id, reason: str = "") -> Voucher:
-    """Anula un comprobante ISSUED."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "ISSUED":
-        raise ValueError("Solo se pueden anular comprobantes en estado Emitido.")
-    voucher.status = "VOIDED"
-    voucher.notes = (voucher.notes + f"\nAnulado: {reason}").strip() if reason else voucher.notes
-    voucher.save(update_fields=["status", "notes"])
-    return voucher
-
-
-@transaction.atomic
-def cancel_voucher(voucher_id) -> Voucher:
-    """Cancela un comprobante DRAFT (antes de emitir)."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
-        raise ValueError("Solo se pueden cancelar comprobantes en estado Borrador.")
-    voucher.status = "CANCELLED"
-    voucher.save(update_fields=["status"])
-    return voucher
-
-
-@transaction.atomic
-def create_credit_note(
-    voucher_id,
-    reason_code: str,
-    reason_description: str,
+def create_sales_document_draft(
+    store_id: str,
+    customer,
+    document_type: str,
     series: DocumentSeries,
+    lines: list[dict],
+    sale_order=None,
     created_by=None,
-) -> Voucher:
+    **kwargs,
+) -> SalesDocument:
     """
-    Crea una nota de crédito (tipo 07) que referencia al comprobante original.
-    Copia todas las líneas del comprobante original.
-    La nota queda en DRAFT; se emite con issue_voucher().
+    Crea un comprobante en estado DRAFT sin asignar número (se reserva en issue_sales_document).
+    lines: misma estructura que create_quotation.
     """
-    original = Voucher.objects.get(pk=voucher_id)
-    if original.status != "ISSUED":
-        raise ValueError("Solo se puede crear una nota de crédito desde un comprobante Emitido.")
+    document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    calculated_lines = [_calculate_line(line) for line in lines]
+    totals = _calc_sales_document_totals(lines, calculated_lines)
+    requested_number = kwargs.pop("number", "")
+
+    sales_document = SalesDocument.objects.create(
+        store_id=store_id,
+        document_type=document_type,
+        status="DRAFT",
+        customer=customer,
+        customer_document_type=customer.document_type,
+        customer_document_number=customer.document_number,
+        customer_legal_name=customer.legal_name,
+        customer_address=getattr(customer, "address", ""),
+        customer_ubigeo=getattr(customer, "ubigeo", ""),
+        series=series,
+        series_code=series.series,
+        number=requested_number,
+        sale_order=sale_order,
+        created_by=created_by,
+        **{k: v for k, v in {**totals, **kwargs}.items()},
+    )
+    _replace_sales_document_lines(sales_document, lines, calculated_lines)
+    _audit_sales_document(sales_document, "CREATE", created_by)
+    return sales_document
+
+
+@transaction.atomic
+def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
+    """Copia un documento como borrador, sin correlativo ni relaciones de origen."""
+    source = (
+        SalesDocument.objects.select_for_update()
+        .select_related("customer", "document_type", "series")
+        .prefetch_related("lines__product")
+        .get(pk=sales_document_id)
+    )
+    if source.customer is None:
+        raise ValueError("No se puede copiar un documento cuyo cliente fue eliminado.")
+    if source.series is None or not source.series.active:
+        raise ValueError("No se puede copiar el documento porque su serie no está activa.")
 
     lines = [
         {
@@ -587,190 +728,273 @@ def create_credit_note(
             "igv_rate": line.igv_rate,
             "sunat_product_code": line.sunat_product_code,
             "product_code": line.product_code,
+            "memo": line.memo,
         }
-        for line in original.lines.all()
+        for line in source.lines.all()
     ]
+    copied = create_sales_document_draft(
+        store_id=str(source.store_id),
+        customer=source.customer,
+        document_type=source.document_type,
+        series=source.series,
+        lines=lines,
+        created_by=copied_by,
+        issue_date=timezone.now().date(),
+        currency=source.currency,
+        exchange_rate=source.exchange_rate,
+        payment_method=source.payment_method,
+        means_of_payment=source.means_of_payment,
+        seller=source.seller,
+        price_list=source.price_list,
+        register_inventory_movement=source.register_inventory_movement,
+        warehouse=source.warehouse,
+        notes=source.notes,
+        internal_reference=source.internal_reference,
+    )
+    _audit_sales_document(
+        copied, "COPY", copied_by, source_document_id=str(source.pk)
+    )
+    return copied
 
-    note = create_voucher_draft(
-        store_id=str(original.store_id) if original.store_id else None,
-        customer=original.customer,
-        voucher_type="07",
+
+@transaction.atomic
+def delete_sales_document_draft(sales_document_id, deleted_by=None) -> None:
+    """Elimina únicamente documentos que todavía se encuentran en borrador."""
+    document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if document.status != "DRAFT":
+        raise ValueError("Solo se pueden eliminar documentos en Borrador.")
+    _audit_sales_document(document, "DELETE", deleted_by)
+    document.delete()
+
+
+@transaction.atomic
+def create_document_from_quotation(
+    quotation_id,
+    *,
+    document_type: str,
+    series: DocumentSeries,
+    created_by=None,
+    register_inventory_movement=True,
+    warehouse=None,
+) -> SalesDocument:
+    """Convierte una cotización aprobada en un único borrador de venta."""
+    if not isinstance(document_type, DocumentType):
+        document_type = DocumentType.objects.get(code=document_type)
+    quotation = SalesQuotation.objects.select_for_update().get(pk=quotation_id)
+    if quotation.status != "APPROVED":
+        raise ValueError("Solo se pueden convertir cotizaciones aprobadas.")
+    if SalesDocument.objects.filter(source_quotation=quotation).exists():
+        raise ValueError("La cotización ya fue convertida en un documento de venta.")
+    if quotation.store_id is None:
+        raise ValueError("La cotización no tiene una sucursal válida.")
+    if (
+        not series.active
+        or series.document_type_id != document_type.id
+        or series.company_id != quotation.store.company_id
+        or series.store_id != quotation.store_id
+    ):
+        raise ValueError("La serie no corresponde a la cotización y tipo seleccionados.")
+    if register_inventory_movement and warehouse is None:
+        raise ValueError("Debe seleccionar un almacén para registrar el movimiento.")
+    if warehouse is not None and warehouse.store_id != quotation.store_id:
+        raise ValueError("El almacén no pertenece a la sucursal de la cotización.")
+
+    lines = [
+        {
+            "product": line.product,
+            "description": line.description,
+            "quantity": line.quantity,
+            "unit_price": line.unit_price,
+            "unit_code": line.unit_code,
+            "discount_amount": line.discount_amount,
+            "tax_type": line.tax_type,
+            "igv_rate": line.igv_rate,
+            "sunat_product_code": line.sunat_product_code,
+            "product_code": line.product_code,
+            "memo": line.memo,
+        }
+        for line in quotation.lines.select_related("product")
+    ]
+    document = create_sales_document_draft(
+        store_id=str(quotation.store_id),
+        customer=quotation.customer,
+        document_type=document_type,
         series=series,
         lines=lines,
         created_by=created_by,
         issue_date=timezone.now().date(),
-        currency=original.currency,
-        reference_voucher=original,
-        reference_series=original.series_code,
-        reference_number=original.number,
-        note_reason_code=reason_code,
-        note_reason_description=reason_description,
+        currency=quotation.currency,
+        exchange_rate=quotation.exchange_rate,
+        payment_method=quotation.payment_method,
+        means_of_payment=quotation.means_of_payment,
+        notes=quotation.notes,
+        internal_reference=quotation.internal_reference,
+        source_quotation=quotation,
+        register_inventory_movement=register_inventory_movement,
+        warehouse=warehouse,
     )
-    return note
-
-
-# ── Comprobantes ──────────────────────────────────────────────────────────────
-
-def _calc_voucher_totals(lines: list[dict], calculated: list[dict]) -> dict:
-    """Calcula totales desagregados para comprobante (gravado / exonerado / inafecto)."""
-    taxable = Decimal("0")
-    exempt = Decimal("0")
-    unaffected = Decimal("0")
-    igv_total = Decimal("0")
-    total_discount = Decimal("0")
-
-    for raw, calc in zip(lines, calculated):
-        tax_type = raw.get("tax_type", "10")
-        if tax_type == "10":
-            taxable += calc["subtotal"]
-        elif tax_type == "20":
-            exempt += calc["subtotal"]
-        else:
-            unaffected += calc["subtotal"]
-        igv_total += calc["igv_amount"]
-        total_discount += Decimal(str(raw.get("discount_amount", 0)))
-
-    subtotal = taxable + exempt + unaffected
-    return {
-        "subtotal": subtotal,
-        "taxable_amount": taxable,
-        "exempt_amount": exempt,
-        "unaffected_amount": unaffected,
-        "igv_total": igv_total,
-        "total_discount": total_discount,
-        "total": (subtotal + igv_total).quantize(Decimal("0.01")),
-    }
+    _audit_sales_document(
+        document,
+        "CREATE_FROM_QUOTATION",
+        created_by,
+        source_quotation_id=str(quotation.pk),
+    )
+    return document
 
 
 @transaction.atomic
-def create_voucher_draft(
-    store_id: str,
-    customer,
-    voucher_type: str,
-    series: DocumentSeries,
-    lines: list[dict],
-    sale_order=None,
-    created_by=None,
-    **kwargs,
-) -> Voucher:
-    """
-    Crea un comprobante en estado DRAFT sin asignar número (se reserva en issue_voucher).
-    lines: misma estructura que create_quotation.
-    """
-    calculated_lines = [_calculate_line(l) for l in lines]
-    totals = _calc_voucher_totals(lines, calculated_lines)
+def update_sales_document_draft(
+    sales_document_id, *, customer, series, lines, updated_by=None, **kwargs
+) -> SalesDocument:
+    """Actualiza cabecera y líneas, exclusivamente mientras el documento sea borrador."""
+    document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if document.status != "DRAFT":
+        raise ValueError("Solo se pueden editar documentos en Borrador.")
 
-    voucher = Voucher.objects.create(
-        store_id=store_id,
-        voucher_type=voucher_type,
-        status="DRAFT",
-        customer=customer,
-        customer_document_type=customer.document_type,
-        customer_document_number=customer.document_number,
-        customer_legal_name=customer.legal_name,
-        customer_address=getattr(customer, "address", ""),
-        customer_ubigeo=getattr(customer, "ubigeo", ""),
-        series=series,
-        series_code=series.series,
-        number="",        # se asignará en issue_voucher
-        sale_order=sale_order,
-        created_by=created_by,
-        **{k: v for k, v in {**totals, **kwargs}.items()},
-    )
-    for raw, calc in zip(lines, calculated_lines):
-        VoucherLine.objects.create(
-            voucher=voucher,
-            product=raw["product"],
-            description=raw.get("description", ""),
-            quantity=raw["quantity"],
-            unit_price=raw["unit_price"],
-            unit_code=raw.get("unit_code", "NIU"),
-            discount_amount=raw.get("discount_amount", Decimal("0")),
-            tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
-            sunat_product_code=raw.get("sunat_product_code", ""),
-            product_code=raw.get("product_code", ""),
-            subtotal=calc["subtotal"],
-            igv_amount=calc["igv_amount"],
-            total=calc["total"],
-        )
-    return voucher
+    store_id = kwargs.get("store_id", document.store_id)
+    document_type = kwargs.get("document_type", document.document_type)
+    document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    calculated_lines = [_calculate_line(line) for line in lines]
+    totals = _calc_sales_document_totals(lines, calculated_lines)
+    requested_number = kwargs.pop("number", "")
+
+    document.customer = customer
+    document.customer_document_type = customer.document_type
+    document.customer_document_number = customer.document_number
+    document.customer_legal_name = customer.legal_name
+    document.customer_address = getattr(customer, "address", "")
+    document.customer_ubigeo = getattr(customer, "ubigeo", "")
+    document.series = series
+    document.series_code = series.series
+    document.number = requested_number
+    for field, value in {**kwargs, **totals}.items():
+        setattr(document, field, value)
+    document.save()
+    _replace_sales_document_lines(document, lines, calculated_lines)
+    _audit_sales_document(document, "UPDATE", updated_by)
+    return document
 
 
 @transaction.atomic
-def issue_voucher(voucher_id) -> Voucher:
+def issue_sales_document(sales_document_id, issued_by=None) -> SalesDocument:
     """
     Emite el comprobante: asigna número correlativo con bloqueo pesimista.
     Valida unicidad (series + number). Cambia status a ISSUED.
     Si tiene sale_order → la marca INVOICED.
     """
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
+    sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if sales_document.status != "DRAFT":
         raise ValueError(
-            f"Solo se pueden emitir comprobantes en Borrador. Estado actual: '{voucher.status}'."
+            f"Solo se pueden emitir comprobantes en Borrador. Estado actual: '{sales_document.status}'."
         )
+    if sales_document.series is None or not sales_document.series.active:
+        raise ValueError("La serie documental no está activa.")
+    if (
+        sales_document.series.store_id != sales_document.store_id
+        or sales_document.series.document_type_id != sales_document.document_type_id
+    ):
+        raise ValueError("La serie no corresponde a la sucursal y tipo del documento.")
+    if not sales_document.lines.exists():
+        raise ValueError("El documento debe tener al menos una línea para ser emitido.")
 
-    number = _next_series_number(voucher.series)
-    number_str = f"{number:08d}"
+    locked_series = DocumentSeries.objects.select_for_update().get(pk=sales_document.series_id)
+    if sales_document.number:
+        number = int(sales_document.number)
+        number_str = f"{number:08d}"
+        if number > locked_series.current_number:
+            locked_series.current_number = number
+            locked_series.save(update_fields=["current_number"])
+    else:
+        locked_series.current_number += 1
+        locked_series.save(update_fields=["current_number"])
+        number_str = f"{locked_series.current_number:08d}"
 
     # Verificar unicidad
-    if Voucher.objects.filter(
-        series=voucher.series, number=number_str
-    ).exclude(pk=voucher.pk).exists():
+    if SalesDocument.objects.filter(
+        series=sales_document.series, number=number_str
+    ).exclude(pk=sales_document.pk).exists():
         raise ValueError(
-            f"Ya existe un comprobante con el número {voucher.series_code}-{number_str}."
+            f"Ya existe un comprobante con el número {sales_document.series_code}-{number_str}."
         )
 
-    voucher.number = number_str
-    voucher.status = "ISSUED"
-    voucher.save(update_fields=["number", "status"])
+    sales_document.number = number_str
+    inventory_movement = _register_sale_inventory_exit(sales_document)
+    sales_document.inventory_movement = inventory_movement
+    sales_document.status = "ISSUED"
+    sales_document.save(update_fields=["number", "inventory_movement", "status"])
+    _audit_sales_document(
+        sales_document,
+        "ISSUE",
+        issued_by or sales_document.created_by,
+        inventory_movement_id=(
+            str(inventory_movement.pk) if inventory_movement is not None else None
+        ),
+    )
 
-    if voucher.sale_order_id:
-        SaleOrder.objects.filter(pk=voucher.sale_order_id).update(status="INVOICED")
+    if sales_document.sale_order_id:
+        SaleOrder.objects.filter(pk=sales_document.sale_order_id).update(status="INVOICED")
 
-    return voucher
+    return sales_document
 
 
 @transaction.atomic
-def void_voucher(voucher_id, reason: str = "") -> Voucher:
+def void_sales_document(sales_document_id, reason: str = "", voided_by=None) -> SalesDocument:
     """Anula un comprobante ISSUED."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "ISSUED":
+    sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if sales_document.status != "ISSUED":
         raise ValueError("Solo se pueden anular comprobantes emitidos.")
-    voucher.status = "VOIDED"
+    reversal = _register_sale_inventory_reversal(sales_document)
+    sales_document.status = "VOIDED"
     if reason:
-        voucher.notes = (voucher.notes + "\n" + reason).strip()
-    voucher.save(update_fields=["status", "notes"])
-    return voucher
+        sales_document.notes = (sales_document.notes + "\n" + reason).strip()
+    sales_document.save(update_fields=["status", "notes"])
+    _audit_sales_document(
+        sales_document,
+        "VOID",
+        voided_by or sales_document.created_by,
+        reason=reason,
+        inventory_reversal_id=str(reversal.pk) if reversal is not None else None,
+    )
+    return sales_document
 
 
 @transaction.atomic
-def cancel_voucher(voucher_id) -> Voucher:
+def cancel_sales_document(sales_document_id, cancelled_by=None) -> SalesDocument:
     """Cancela un comprobante DRAFT."""
-    voucher = Voucher.objects.select_for_update().get(pk=voucher_id)
-    if voucher.status != "DRAFT":
+    sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
+    if sales_document.status != "DRAFT":
         raise ValueError("Solo se pueden cancelar comprobantes en Borrador.")
-    voucher.status = "CANCELLED"
-    voucher.save(update_fields=["status"])
-    return voucher
+    sales_document.status = "CANCELLED"
+    sales_document.save(update_fields=["status"])
+    _audit_sales_document(
+        sales_document, "CANCEL", cancelled_by or sales_document.created_by
+    )
+    return sales_document
 
 
 @transaction.atomic
 def create_credit_note(
-    voucher_id,
+    sales_document_id,
     reason_code: str,
     reason_description: str,
     series: DocumentSeries,
     lines: list[dict] | None = None,
     created_by=None,
-) -> Voucher:
+) -> SalesDocument:
     """
     Crea una nota de crédito (tipo 07) referenciando el comprobante original.
     Si no se pasan líneas, copia todas las del comprobante original.
     """
-    original = Voucher.objects.select_related("customer", "store").get(pk=voucher_id)
+    original = SalesDocument.objects.select_related("customer", "store").get(pk=sales_document_id)
     if original.status != "ISSUED":
         raise ValueError("Solo se puede generar nota de crédito de comprobantes emitidos.")
+    if (
+        not series.active
+        or series.document_type.code != "07"
+        or series.company_id != original.store.company_id
+        or series.store_id != original.store_id
+    ):
+        raise ValueError("La serie de nota de crédito no corresponde al documento original.")
 
     if lines is None:
         lines = [
@@ -785,23 +1009,32 @@ def create_credit_note(
                 "igv_rate": line.igv_rate,
                 "sunat_product_code": line.sunat_product_code,
                 "product_code": line.product_code,
+                "memo": line.memo,
             }
             for line in original.lines.all()
         ]
 
-    note = create_voucher_draft(
+    note = create_sales_document_draft(
         store_id=str(original.store_id) if original.store_id else None,
         customer=original.customer,
-        voucher_type="07",
+        document_type=DocumentType.objects.get(code="07"),
         series=series,
         lines=lines,
         created_by=created_by,
         issue_date=timezone.now().date(),
         currency=original.currency,
-        reference_voucher=original,
+        reference_document=original,
         reference_series=original.series_code,
         reference_number=original.number,
         note_reason_code=reason_code,
         note_reason_description=reason_description,
+        register_inventory_movement=False,
+    )
+    _audit_sales_document(
+        note,
+        "CREATE_CREDIT_NOTE",
+        created_by,
+        reference_document_id=str(original.pk),
+        reason_code=reason_code,
     )
     return note

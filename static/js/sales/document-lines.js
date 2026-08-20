@@ -1,5 +1,5 @@
 /**
- * quotation-form.js — Sales quotation form behavior.
+ * document-lines.js — Shared behavior for sales document line forms.
  *
  * Column layout: # | Producto | UND | Cantidad | Tipo IGV | Valor Unit.(%) | Precio Unit. | SubTotal | Impuesto | Total | [x]
  *
@@ -16,12 +16,10 @@
   const linesBody = document.getElementById('lines-body');
   if (!linesBody) return;
 
-  const configEl  = document.getElementById('quot-form-config');
+  const configEl  = document.getElementById('sales-form-config');
   let IGV_RATE = parseFloat(document.getElementById('id_igv_rate_default')?.value)
                || parseFloat(configEl.dataset.igvRate) || 18;
   let IGV_MULT = 1 + IGV_RATE / 100;             // e.g. 1.18
-  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-
   // Build the price-list API URL template (replace the placeholder UUID)
   const PRICE_LIST_URL_TPL = configEl.dataset.priceListUrl;
   const DEFAULT_PRICE_LIST_ID = configEl.dataset.defaultPriceListId || '';
@@ -35,7 +33,7 @@
     ['11', 'IGV retiro'],
   ];
 
-  const TAXED = new Set(['10', '11']);
+  const TAXED = new Set(['10']);
 
   // ── IGV rate header select ────────────────────────────────────────────────
   document.getElementById('id_igv_rate_default')?.addEventListener('change', function () {
@@ -50,7 +48,6 @@
   ProductPicker.configure({
     searchUrl: configEl.dataset.searchUrl,
     createUrl: configEl.dataset.createUrl,
-    csrfToken,
     getWarehouse: () => '',
     modalId: 'quickCreateModal',
     errorId: 'qc-error',
@@ -71,6 +68,9 @@
   }
 
   function fmt(n) { return isFinite(n) ? n.toFixed(2) : '0.00'; }
+  function priceListSelect() {
+    return document.getElementById('id_price_list') || document.getElementById('price-list-select');
+  }
 
   // ── Per-row calculation ────────────────────────────────────────────────────
   function calcRow(row) {
@@ -109,27 +109,38 @@
     const valorCell = row.querySelector('.valor-unit-display');
     if (valorCell) valorCell.value = fmt(unitPriceEx);
 
-    return { subtotal, igvAmt, lineTotal, discount };
+    return { subtotal, igvAmt, lineTotal, discount, taxType };
   }
 
   // ── Grand totals ───────────────────────────────────────────────────────────
   function updateSummary() {
-    let sumSub = 0, sumDisc = 0, sumBase = 0, sumIgv = 0, sumTotal = 0;
+    let sumSub = 0, sumDisc = 0, sumBase = 0, sumExempt = 0;
+    let sumUnaffected = 0, sumExport = 0, sumFree = 0, sumIgv = 0, sumTotal = 0;
 
     linesBody.querySelectorAll('.line-row').forEach(row => {
       if (row.style.opacity === '0.3') return;          // deleted rows
-      const { subtotal, igvAmt, lineTotal, discount } = calcRow(row);
+      const { subtotal, igvAmt, lineTotal, discount, taxType } = calcRow(row);
       sumSub   += subtotal;
       sumDisc  += discount;
-      sumBase  += (igvAmt > 0 ? subtotal : 0);         // taxable base
-      sumIgv   += igvAmt;
-      sumTotal += lineTotal;
+      if (taxType === '10') sumBase += subtotal;
+      if (taxType === '20') sumExempt += subtotal;
+      if (taxType === '30') sumUnaffected += subtotal;
+      if (taxType === '40') sumExport += subtotal;
+      if (taxType === '11') sumFree += subtotal;
+      if (taxType !== '11') {
+        sumIgv += igvAmt;
+        sumTotal += lineTotal;
+      }
     });
 
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
     set('summary-subtotal', sumSub);
     set('summary-discount', sumDisc);
     set('summary-base',     sumBase);
+    set('summary-exempt',   sumExempt);
+    set('summary-unaffected', sumUnaffected);
+    set('summary-export',   sumExport);
+    set('summary-free',     sumFree);
     set('summary-igv',      sumIgv);
     set('summary-total',    sumTotal);
   }
@@ -212,7 +223,6 @@
 
       <td class="text-center" style="white-space:nowrap">
         <input type="hidden" name="lines-${index}-id" value="">
-        <input type="hidden" name="lines-${index}-memo" id="id_lines-${index}-memo" value="">
         <button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Agregar memo">
           <i class="ti ti-notes"></i>
         </button>
@@ -244,7 +254,7 @@
     updateSummary();
 
     // Auto-apply selected price list price (overrides price_sale if found)
-    const plId = document.getElementById('price-list-select')?.value;
+    const plId = priceListSelect()?.value;
     if (plId && PRICE_LIST_URL_TPL && product.id) {
       const url = PRICE_LIST_URL_TPL.replace('00000000-0000-0000-0000-000000000000', plId)
                   + '?products=' + product.id;
@@ -316,53 +326,17 @@
     updateSummary();
   });
 
-  // ── Customer AJAX Select2 ──────────────────────────────────────────────────
-  document.querySelectorAll('.partner-select').forEach(function (el) {
-    const searchUrl   = el.dataset.partnerUrl;
-    const hiddenId    = el.dataset.hiddenId;
-    const placeholder = el.dataset.placeholder || 'Buscar…';
-
-    $(el).select2({
-      theme: 'bootstrap-5',
-      width: '100%',
-      dropdownParent: $('body'),
-      placeholder,
-      allowClear: true,
-      minimumInputLength: 0,
-      ajax: {
-        transport(params, success, failure) {
-          window.ApiService.get(searchUrl + '?q=' + encodeURIComponent(params.data.term || ''))
-            .then(success).catch(failure);
-        },
-        processResults(data) { return { results: data.results || [] }; },
-        delay: 250,
-      },
-    });
-
-    $(el).on('select2:select', function (e) {
-      const hidden = document.getElementById(hiddenId);
-      if (hidden) hidden.value = e.params.data.id || '';
-      // Fill address display
-      const addressDisplay = document.getElementById('customer-address-display');
-      if (addressDisplay) addressDisplay.value = e.params.data.address || '';
-    });
-    $(el).on('select2:unselect select2:clear', function () {
-      const hidden = document.getElementById(hiddenId);
-      if (hidden) hidden.value = '';
-    });
-  });
-
   // ── Price list ─────────────────────────────────────────────────────────────
   let pendingPriceListId = null;
 
   // Pre-select default price list if none already chosen
-  const plSelect = document.getElementById('price-list-select');
+  const plSelect = priceListSelect();
   if (plSelect && !plSelect.value && DEFAULT_PRICE_LIST_ID) {
     plSelect.value = DEFAULT_PRICE_LIST_ID;
     pendingPriceListId = DEFAULT_PRICE_LIST_ID;
   }
 
-  document.getElementById('price-list-select')?.addEventListener('change', function () {
+  plSelect?.addEventListener('change', function () {
     const plId = this.value;
     if (!plId) { pendingPriceListId = null; hidePriceAlert(); return; }
 
@@ -384,7 +358,7 @@
 
   document.getElementById('price-list-cancel')?.addEventListener('click', function () {
     pendingPriceListId = null;
-    document.getElementById('price-list-select').value = '';
+    if (plSelect) plSelect.value = '';
     hidePriceAlert();
   });
 
@@ -499,7 +473,8 @@
 
   // ── Memo modal ─────────────────────────────────────────────────────────────
   let _memoRow = null;
-  const memoModal = new bootstrap.Modal(document.getElementById('memoModal'));
+  const memoModalElement = document.getElementById('memoModal');
+  const memoModal = memoModalElement ? new bootstrap.Modal(memoModalElement) : null;
 
   function updateMemoBtnStyle(row) {
     const memoInput = row.querySelector('input[name*="-memo"]');
@@ -516,7 +491,7 @@
 
   linesBody.addEventListener('click', function (e) {
     const btn = e.target.closest('.memo-btn');
-    if (!btn) return;
+    if (!btn || !memoModal) return;
     _memoRow = btn.closest('.line-row');
     const memoInput = _memoRow?.querySelector('input[name*="-memo"]');
     document.getElementById('memo-modal-text').value = memoInput?.value || '';
@@ -524,7 +499,7 @@
   });
 
   document.getElementById('memo-modal-save')?.addEventListener('click', function () {
-    if (!_memoRow) return;
+    if (!_memoRow || !memoModal) return;
     const memoInput = _memoRow.querySelector('input[name*="-memo"]');
     const text      = document.getElementById('memo-modal-text').value.trim().slice(0, 1000);
     if (memoInput) memoInput.value = text;
@@ -535,26 +510,108 @@
 
   // ── Número preview ────────────────────────────────────────────────────────
   const SERIES_NUMBER_URL_TPL = configEl.dataset.seriesNumberUrl || '';
+  const SERIES_OPTIONS_URL = configEl.dataset.seriesOptionsUrl || '';
+  const NUMBER_AVAILABILITY_URL = configEl.dataset.numberAvailabilityUrl || '';
+  const QUOTATION_ID = configEl.dataset.quotationId || '';
+  const documentTypeEl = document.querySelector('select[name="document_type"]');
+  const seriesEl = document.querySelector('select[name="series"]');
+  const numberEl = document.getElementById('id_number');
+  const manualNumberEl = document.getElementById('id_manual_number');
 
-  async function refreshSeriesNumber() {
-    const seriesEl = document.querySelector('select[name="series"]');
+  function useAutomaticNumber() {
+    if (manualNumberEl) manualNumberEl.value = '';
+    if (numberEl) numberEl.readOnly = true;
+    document.getElementById('series-number-conflict')?.classList.add('d-none');
+  }
+
+  async function validateNumberAvailability() {
+    if (!NUMBER_AVAILABILITY_URL || !seriesEl?.value || !numberEl?.value) return true;
+    const params = new URLSearchParams({number: numberEl.value});
+    if (QUOTATION_ID) params.set('exclude', QUOTATION_ID);
+    const warning = document.getElementById('series-number-conflict');
+    try {
+      const availabilityUrl = NUMBER_AVAILABILITY_URL.replace(
+        '00000000-0000-0000-0000-000000000000', seriesEl.value
+      );
+      const data = await window.ApiService.get(`${availabilityUrl}?${params}`);
+      warning?.classList.toggle('d-none', data.available);
+      if (warning && !data.available) {
+        warning.textContent = data.message;
+      }
+      numberEl.classList.toggle('is-invalid', !data.available);
+      return data.available;
+    } catch (err) {
+      console.error('Error al validar correlativo', err);
+      return false;
+    }
+  }
+
+  async function refreshSeriesNumber(force = false) {
     const seriesId = seriesEl?.value;
-    if (!seriesId || !SERIES_NUMBER_URL_TPL) return;
+    if (!seriesId || !SERIES_NUMBER_URL_TPL) {
+      if (numberEl) numberEl.value = '';
+      return;
+    }
+    if (!force && manualNumberEl?.value) return;
     const url = SERIES_NUMBER_URL_TPL.replace('00000000-0000-0000-0000-000000000000', seriesId);
     try {
       const data = await window.ApiService.get(url);
-      const preview = document.getElementById('series-number-preview');
-      if (preview) preview.value = data.formatted || data.next_number || '';
+      if (numberEl) numberEl.value = String(data.next_number || '').padStart(8, '0');
       document.getElementById('series-number-conflict')?.classList.add('d-none');
+      validateNumberAvailability();
     } catch (err) {
       console.error('Error al obtener número de serie', err);
     }
   }
 
-  document.querySelector('select[name="series"]')?.addEventListener('change', refreshSeriesNumber);
-  document.getElementById('refresh-number-btn')?.addEventListener('click', refreshSeriesNumber);
+  async function refreshSeriesOptions() {
+    if (!documentTypeEl || !seriesEl || !SERIES_OPTIONS_URL) return;
+    const previousValue = seriesEl.value;
+    seriesEl.disabled = true;
+    seriesEl.innerHTML = '<option value="">Cargando…</option>';
+    useAutomaticNumber();
+    if (numberEl) numberEl.value = '';
+    try {
+      const url = `${SERIES_OPTIONS_URL}?document_type=${encodeURIComponent(documentTypeEl.value)}`;
+      const data = await window.ApiService.get(url);
+      seriesEl.innerHTML = '<option value="">Seleccionar…</option>';
+      (data.results || []).forEach(item => {
+        const option = new Option(item.text, item.id, false, item.id === previousValue);
+        seriesEl.add(option);
+      });
+      if (!seriesEl.value && data.results?.length) seriesEl.value = data.results[0].id;
+      seriesEl.dispatchEvent(new Event('change'));
+    } catch (err) {
+      seriesEl.innerHTML = '<option value="">No se pudieron cargar las series</option>';
+      console.error('Error al obtener series documentales', err);
+    } finally {
+      seriesEl.disabled = false;
+    }
+  }
+
+  seriesEl?.addEventListener('change', () => {
+    useAutomaticNumber();
+    refreshSeriesNumber(true);
+  });
+  documentTypeEl?.addEventListener('change', refreshSeriesOptions);
+  document.getElementById('edit-number-btn')?.addEventListener('click', () => {
+    if (!numberEl || !seriesEl?.value) return;
+    numberEl.readOnly = false;
+    if (manualNumberEl) manualNumberEl.value = 'on';
+    document.getElementById('series-number-conflict')?.classList.remove('d-none');
+    numberEl.focus();
+    numberEl.select();
+  });
+  numberEl?.addEventListener('input', () => {
+    numberEl.value = numberEl.value.replace(/\D/g, '').slice(0, 8);
+  });
+  numberEl?.addEventListener('blur', validateNumberAvailability);
+  document.getElementById('refresh-number-btn')?.addEventListener('click', () => {
+    useAutomaticNumber();
+    refreshSeriesNumber(true);
+  });
 
   // Cargar al iniciar si ya hay una serie seleccionada
-  if (document.querySelector('select[name="series"]')?.value) refreshSeriesNumber();
+  if (seriesEl?.value && !numberEl?.value) refreshSeriesNumber();
 
 }());

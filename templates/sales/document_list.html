@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Documentos de venta — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Documentos de venta</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Inicio</a></li>
+          <li class="breadcrumb-item active">Documentos de venta</li>
+        </ol>
+      </nav>
+    </div>
+    {% if can_manage_sales_documents %}<div class="col-auto">
+      <a href="{% url 'sales:document_create' %}" class="btn btn-primary btn-sm">
+        <i class="ti ti-plus me-1"></i>Nuevo documento
+      </a>
+    </div>{% endif %}
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+               placeholder="Buscar por cliente, RUC o número…">
+      </div>
+      <div class="col-md-2">
+        <select name="document_type" class="form-select form-select-sm">
+          <option value="">Todos los tipos</option>
+          {% for type in document_types %}<option value="{{ type.code }}" {% if document_type == type.code %}selected{% endif %}>{{ type.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Todos los estados</option>
+          {% for code, label in status_choices %}
+          <option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
+        <a href="{% url 'sales:document_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table">
+      <thead>
+        <tr>
+          <th>Documento</th>
+          <th>Tipo</th>
+          <th>Cliente</th>
+          <th>Emisión</th>
+          <th>Estado</th>
+          <th class="text-end">Total</th>
+          <th class="text-center">Operaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in page_obj %}
+        <tr>
+          <td class="fw-semibold">
+            <a href="{% url 'sales:document_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
+          </td>
+          <td class="text-muted small">
+            {{ v.document_type.name }}
+          </td>
+          <td>
+            <div>{{ v.customer_legal_name }}</div>
+            <div class="text-muted small">{{ v.customer_document_number }}</div>
+          </td>
+          <td class="text-muted small">{{ v.issue_date|date:"d/m/Y" }}</td>
+          <td>
+            {% if v.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
+            {% elif v.status == "ISSUED" %}<span class="badge bg-success-lt">Emitido</span>
+            {% elif v.status == "VOIDED" %}<span class="badge bg-danger-lt">Anulado</span>
+            {% elif v.status == "CANCELLED" %}<span class="badge bg-muted-lt">Cancelado</span>
+            {% else %}<span class="badge bg-muted-lt">{{ v.status }}</span>{% endif %}
+          </td>
+          <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
+          <td class="text-center">
+            <div class="d-inline-flex gap-1 align-items-center">
+            <a href="{% url 'sales:document_detail' v.pk %}"
+               data-preview-url="{% url 'sales:document_preview' v.pk %}"
+               class="btn btn-sm btn-outline-secondary js-document-preview" title="Ver detalle">
+              <i class="ti ti-eye"></i>
+            </a>
+            {% if v.status == "DRAFT" and can_manage_sales_documents %}
+            <a href="{% url 'sales:document_edit' v.pk %}" class="btn btn-sm btn-outline-primary" title="Editar documento">
+              <i class="ti ti-edit"></i>
+            </a>
+            {% endif %}
+            {% if can_manage_sales_documents %}
+            <form method="post" action="{% url 'sales:document_copy' v.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary" title="Copiar documento">
+                <i class="ti ti-copy"></i>
+              </button>
+            </form>
+            {% endif %}
+            {% if v.status == "DRAFT" and can_authorize_sales_documents %}
+            <form method="post" action="{% url 'sales:document_issue' v.pk %}" class="d-inline"
+                  onsubmit="return confirm('¿Aprobar y emitir este documento? Se asignará su correlativo.')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar y emitir">
+                <i class="ti ti-circle-check"></i>
+              </button>
+            </form>
+            {% endif %}
+            {% if v.status == "DRAFT" and can_manage_sales_documents %}
+            <form method="post" action="{% url 'sales:document_delete' v.pk %}" class="d-inline"
+                  onsubmit="return confirm('¿Eliminar definitivamente este documento borrador?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar borrador">
+                <i class="ti ti-trash"></i>
+              </button>
+            </form>
+            {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer d-flex align-items-center">
+    <p class="m-0 text-muted">
+      Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} documentos
+    </p>
+    <ul class="pagination m-0 ms-auto">
+      {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&document_type={{ document_type }}">ant</a></li>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&document_type={{ document_type }}">sig</a></li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="ti ti-file-invoice me-1"></i>Detalle del documento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="document-preview-body">
+        <div class="text-center text-muted py-4">Cargando…</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    'use strict';
+    const modalEl = document.getElementById('documentPreviewModal');
+    const bodyEl = document.getElementById('document-preview-body');
+    if (!modalEl || !bodyEl || !window.bootstrap) return;
+    const modal = new bootstrap.Modal(modalEl);
+
+    document.querySelectorAll('.js-document-preview').forEach(function (btn) {
+      btn.addEventListener('click', async function (event) {
+        event.preventDefault();
+        bodyEl.innerHTML = '<div class="text-center text-muted py-4">Cargando…</div>';
+        modal.show();
+        try {
+          const response = await fetch(btn.dataset.previewUrl, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          if (!response.ok) throw new Error('No se pudo cargar el documento');
+          bodyEl.innerHTML = await response.text();
+        } catch (error) {
+          bodyEl.innerHTML = '<div class="alert alert-danger mb-0">No se pudo cargar el detalle. Intenta nuevamente.</div>';
+        }
+      });
+    });
+  }());
+</script>
+{% endblock %}

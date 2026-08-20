@@ -1,12 +1,13 @@
-"""
-sales/tests/test_catalogs.py — Tests de vistas de catálogos de ventas.
+﻿"""
+sales/tests/test_catalogs.py â€” Tests de vistas de catÃ¡logos de ventas.
 """
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from apps.companies.models import Company, Store
-from apps.sales.models import BusinessDocumentType, DocumentSeries
+from apps.partners.models import DocumentType
+from apps.sales.models import DocumentSeries
 
 User = get_user_model()
 
@@ -17,6 +18,7 @@ class CatalogViewsTest(TestCase):
         self.user = User.objects.create_user(email="ventas@demo.com", password="test1234")
         self.company = Company.objects.create(name="Empresa Test", ruc="20000000099")
         self.store = Store.objects.create(company=self.company, name="Sucursal 1")
+        self.cot_type = DocumentType.objects.create(code="COT", name="CotizaciÃ³n", category="INTERNAL")
 
         self.client.login(username="ventas@demo.com", password="test1234")
         session = self.client.session
@@ -24,7 +26,7 @@ class CatalogViewsTest(TestCase):
         session["active_store_id"] = str(self.store.id)
         session.save()
 
-    # ── Series ────────────────────────────────────────────────────────────────
+    # â”€â”€ Series â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_series_list_ok(self):
         resp = self.client.get(reverse("sales:series_list"))
@@ -41,7 +43,7 @@ class CatalogViewsTest(TestCase):
             reverse("sales:series_create"),
             {
                 "store": str(self.store.id),
-                "voucher_type": "COT",
+                "document_type": str(self.cot_type.pk),
                 "series": "C001",
                 "active": "on",
             },
@@ -54,7 +56,7 @@ class CatalogViewsTest(TestCase):
         DocumentSeries.objects.create(
             company=self.company,
             store=self.store,
-            voucher_type="COT",
+            document_type=self.cot_type,
             series="C001",
         )
         # Intentar duplicado
@@ -62,7 +64,7 @@ class CatalogViewsTest(TestCase):
             reverse("sales:series_create"),
             {
                 "store": str(self.store.id),
-                "voucher_type": "COT",
+                "document_type": str(self.cot_type.pk),
                 "series": "C001",
                 "active": "on",
             },
@@ -74,7 +76,7 @@ class CatalogViewsTest(TestCase):
         obj = DocumentSeries.objects.create(
             company=self.company,
             store=self.store,
-            voucher_type="COT",
+            document_type=self.cot_type,
             series="T001",
             active=True,
         )
@@ -83,7 +85,7 @@ class CatalogViewsTest(TestCase):
         obj.refresh_from_db()
         self.assertFalse(obj.active)
 
-    # ── BusinessDocumentType ──────────────────────────────────────────────────
+    # â”€â”€ BusinessDocumentType â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_doctype_list_ok(self):
         resp = self.client.get(reverse("sales:doctype_list"))
@@ -95,7 +97,7 @@ class CatalogViewsTest(TestCase):
             reverse("sales:doctype_create"),
             {
                 "code": "FAC",
-                "name": "Factura Electrónica",
+                "name": "Factura ElectrÃ³nica",
                 "category": "SALES",
                 "is_sunat": "on",
                 "sunat_code": "01",
@@ -105,7 +107,7 @@ class CatalogViewsTest(TestCase):
             },
         )
         self.assertRedirects(resp, reverse("sales:doctype_list"))
-        self.assertTrue(BusinessDocumentType.objects.filter(code="FAC").exists())
+        self.assertTrue(DocumentType.objects.filter(code="FAC").exists())
 
     def test_anonymous_redirect(self):
         self.client.logout()
@@ -113,7 +115,7 @@ class CatalogViewsTest(TestCase):
         self.assertEqual(resp.status_code, 302)
 
     def test_doctype_update_ok(self):
-        obj = BusinessDocumentType.objects.create(
+        obj = DocumentType.objects.create(
             code="BOL",
             name="Boleta de Venta",
             category="SALES",
@@ -134,3 +136,4 @@ class CatalogViewsTest(TestCase):
         self.assertRedirects(resp, reverse("sales:doctype_list"))
         obj.refresh_from_db()
         self.assertEqual(obj.name, "Boleta de Venta Actualizada")
+

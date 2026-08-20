@@ -16,12 +16,14 @@
 
 {% block content %}
 {# Config div with data attrs for JS #}
-<div id="quot-form-config"
+<div id="sales-form-config"
      data-customer-url="{% url 'inventory:api_customer_search' %}"
      data-search-url="{% url 'inventory:api_product_search' %}"
      data-create-url="{% url 'inventory:api_product_create' %}"
      data-price-list-url="{% url 'inventory:api_price_list_prices' pk='00000000-0000-0000-0000-000000000000' %}"
      data-series-number-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-number-availability-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
+     data-quotation-id="{{ quotation.pk|default:'' }}"
      data-default-price-list-id="{{ default_price_list_id|default:'' }}"
      data-payment-method-search-url="{% url 'sales:api_payment_method_search' %}"
      data-payment-method-create-url="{% url 'sales:api_payment_method_create' %}"
@@ -47,7 +49,7 @@
 {% endfor %}
 {% endif %}
 
-<form method="post" novalidate id="quotation-form">
+<form method="post" novalidate id="sales-form">
   {% csrf_token %}
 
   {# ── Cabecera — 3 columnas ── #}
@@ -65,15 +67,9 @@
 
           <div class="mb-2">
             <label class="form-label required">Cliente</label>
-            {{ header_form.customer }}{# hidden input #}
-            <select id="customer-select" class="partner-select w-100"
-                    data-partner-url="{% url 'inventory:api_customer_search' %}"
-                    data-hidden-id="{{ header_form.customer.id_for_label }}"
-                    data-placeholder="Buscar por RUC o nombre…">
-              {% if header_form.instance.customer_id %}
-              <option value="{{ header_form.instance.customer_id }}" selected>{{ header_form.instance.customer }}</option>
-              {% endif %}
-            </select>
+            {% url 'inventory:api_customer_search' as customer_search_url %}
+            {% url 'partners:api_customer_create' as customer_create_url %}
+            {% include "components/partner_select.html" with field=header_form.customer partner_type="customer" search_url=customer_search_url create_url=customer_create_url selected_id=header_form.instance.customer_id selected_label=header_form.instance.customer %}
             {% if header_form.customer.errors %}<div class="text-danger small mt-1">{{ header_form.customer.errors.0 }}</div>{% endif %}
           </div>
 
@@ -100,17 +96,14 @@
           <div class="mb-2">
             <label class="form-label">Número</label>
             <div class="input-group input-group-sm">
-              <input type="text" id="series-number-preview" class="form-control bg-light" readonly
-                     value="{{ quotation.number|default:'—' }}"
-                     placeholder="(se asigna al guardar)">
-              {% if not quotation.number %}
-              <button type="button" id="refresh-number-btn" class="btn btn-outline-secondary" title="Ver siguiente número disponible">
-                <i class="ti ti-refresh"></i>
+              {{ header_form.number }}
+              <button type="button" id="edit-number-btn" class="btn btn-outline-secondary" title="Editar correlativo" aria-label="Editar correlativo">
+                <i class="ti ti-pencil"></i>
               </button>
-              {% endif %}
             </div>
+            {% if header_form.number.errors %}<div class="text-danger small mt-1">{{ header_form.number.errors.0 }}</div>{% endif %}
             <div id="series-number-conflict" class="text-warning small mt-1 d-none">
-              <i class="ti ti-alert-triangle me-1"></i>El número puede haber cambiado. Actualiza para verificar.
+              <i class="ti ti-alert-triangle me-1"></i>Verifique que la combinación serie–número no esté registrada.
             </div>
           </div>
 
@@ -465,13 +458,14 @@
 {% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
-<script src="{% static 'js/components/product-picker.js' %}"></script>
-<script src="{% static 'js/sales/quotation-form.js' %}"></script>
+<script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260811-1"></script>
 <script>
 (function () {
-  const cfg = document.getElementById('quot-form-config');
+  const cfg = document.getElementById('sales-form-config');
   const COND_SEARCH_URL  = cfg.dataset.paymentMethodSearchUrl;
   const COND_CREATE_URL  = cfg.dataset.paymentMethodCreateUrl;
   const METH_SEARCH_URL  = cfg.dataset.meansOfPaymentSearchUrl;

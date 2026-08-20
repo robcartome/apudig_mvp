@@ -141,10 +141,11 @@ def order_from_quot(request, pk):
         messages.error(request, "Debe seleccionar tipo de documento y serie.")
         return redirect("sales:quotation_detail", pk=pk)
 
-    from apps.sales.models import BusinessDocumentType, DocumentSeries
+    from apps.partners.models import DocumentType
+    from apps.sales.models import DocumentSeries
 
     try:
-        doc_type = BusinessDocumentType.objects.get(pk=document_type_id)
+        doc_type = DocumentType.objects.get(pk=document_type_id)
         series = DocumentSeries.objects.get(pk=series_id)
         order = create_order_from_quotation(
             quotation_id=quotation.pk,

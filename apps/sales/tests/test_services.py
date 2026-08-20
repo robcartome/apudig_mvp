@@ -1,12 +1,12 @@
-"""
-sales/tests/test_services.py — Tests del servicio de ventas.
+﻿"""
+sales/tests/test_services.py â€” Tests del servicio de ventas.
 """
 from decimal import Decimal
 
 from django.test import TestCase
 
 from apps.companies.models import Company, Store
-from apps.partners.models import Customer
+from apps.partners.models import Customer, DocumentType
 from apps.sales.models import DocumentSeries, SalesQuotation
 from apps.sales.services import create_quotation, get_or_create_series
 
@@ -24,7 +24,7 @@ class QuotationServiceTest(TestCase):
         self.series = get_or_create_series(
             company_id=str(self.company.id),
             store_id=str(self.store.id),
-            voucher_type="COT",
+            document_type=DocumentType.objects.get_or_create(code="COT", defaults={"name": "COT", "category": "INTERNAL"})[0],
             series_code="C001",
         )
 
@@ -46,3 +46,4 @@ class QuotationServiceTest(TestCase):
         q1 = create_quotation(str(self.store.id), self.customer, self.series, [], issue_date=d)
         q2 = create_quotation(str(self.store.id), self.customer, self.series, [], issue_date=d)
         self.assertEqual(q2.number, q1.number + 1)
+

@@ -9,8 +9,8 @@ from django.core.management.base import BaseCommand
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Brand, Category, PriceList, Unit
 from apps.partners.models import DocumentType
-from apps.sales.models import BusinessDocumentType, DocumentSeries
-from apps.users.models import Role, User, UserStore
+from apps.sales.models import DocumentSeries
+from apps.users.models import Permission, Role, RolePermission, User, UserStore
 
 
 UNITS = [
@@ -27,19 +27,13 @@ UNITS = [
 ]
 
 DOCUMENT_TYPES = [
-    ("01", "DNI", "DNI"),
-    ("06", "RUC", "RUC"),
-    ("04", "Carnet de Extranjería", "CE"),
-    ("07", "Pasaporte", "PAS"),
-    ("A", "Cédula Diplomática", "CED"),
-]
-
-BUSINESS_DOC_TYPES = [
+    {"code": "NV", "name": "Nota de Venta", "category": "SALES", "is_sunat": False, "sunat_code": "", "affects_stock": True},
     {"code": "01", "name": "Factura", "category": "SALES", "is_sunat": True, "sunat_code": "01", "affects_stock": False},
     {"code": "03", "name": "Boleta de Venta", "category": "SALES", "is_sunat": True, "sunat_code": "03", "affects_stock": False},
     {"code": "07", "name": "Nota de Crédito", "category": "BILLING", "is_sunat": True, "sunat_code": "07", "affects_stock": False},
     {"code": "08", "name": "Nota de Débito", "category": "BILLING", "is_sunat": True, "sunat_code": "08", "affects_stock": False},
     {"code": "09", "name": "Guía de Remisión Remitente", "category": "LOGISTICS", "is_sunat": True, "sunat_code": "09", "affects_stock": True},
+     {"code": "NV", "name": "Nota de Venta", "category": "INTERNAL", "is_sunat": False, "sunat_code": "", "affects_stock": False},
     {"code": "OV", "name": "Orden de Venta Interna", "category": "INTERNAL", "is_sunat": False, "sunat_code": "", "affects_stock": False},
     {"code": "COT", "name": "Cotización", "category": "INTERNAL", "is_sunat": False, "sunat_code": "", "affects_stock": False},
     {"code": "ENT", "name": "Entrada de Inventario", "category": "LOGISTICS", "is_sunat": False, "sunat_code": "", "affects_stock": True},
@@ -54,6 +48,12 @@ ROLES = [
     ("SELLER", "Vendedor"),
     ("CASHIER", "Cajero"),
     ("WAREHOUSE", "Almacenero"),
+]
+
+SALES_DOCUMENT_PERMISSIONS = [
+    ("read", "Leer documentos de venta"),
+    ("manage", "Crear y editar documentos de venta"),
+    ("authorize", "Emitir, anular y generar notas de crédito"),
 ]
 
 CATEGORIES = [
@@ -87,11 +87,11 @@ class Command(BaseCommand):
 
         self._seed_units()
         self._seed_doc_types()
-        self._seed_biz_doc_types()
         self._seed_categories()
         self._seed_brands()
         self._seed_price_lists()
         self._seed_roles()
+        self._seed_sales_document_permissions()
         company, store = self._seed_company(options["company"], options["ruc"])
         user = self._seed_superuser(options["email"], options["password"])
         self._seed_user_access(user, company, store)
@@ -113,19 +113,12 @@ class Command(BaseCommand):
 
     def _seed_doc_types(self):
         created = 0
-        for code, name, abbr in DOCUMENT_TYPES:
-            _, ok = DocumentType.objects.get_or_create(code=code, defaults={"name": name, "abbreviation": abbr})
+        for data in DOCUMENT_TYPES:
+            code = data["code"]
+            _, ok = DocumentType.objects.update_or_create(code=code, defaults=data)
             if ok:
                 created += 1
-        self.stdout.write(f"  Tipos documento ID:   {created} creados / {len(DOCUMENT_TYPES)} total")
-
-    def _seed_biz_doc_types(self):
-        created = 0
-        for d in BUSINESS_DOC_TYPES:
-            _, ok = BusinessDocumentType.objects.get_or_create(code=d["code"], defaults=d)
-            if ok:
-                created += 1
-        self.stdout.write(f"  Tipos doc. negocio:   {created} creados / {len(BUSINESS_DOC_TYPES)} total")
+        self.stdout.write(f"  Tipos comprobante:    {created} creados / {len(DOCUMENT_TYPES)} total")
 
     def _seed_categories(self):
         created = 0
@@ -163,6 +156,33 @@ class Command(BaseCommand):
             if ok:
                 created += 1
         self.stdout.write(f"  Roles:                {created} creados / {len(ROLES)} total")
+
+    def _seed_sales_document_permissions(self):
+        permissions = {}
+        for action, description in SALES_DOCUMENT_PERMISSIONS:
+            permission, _ = Permission.objects.update_or_create(
+                code=f"{action}.sales.documents",
+                defaults={
+                    "action_name": action,
+                    "module": "sales.documents",
+                    "description": description,
+                },
+            )
+            permissions[action] = permission
+
+        role_actions = {
+            "ADMIN": ("read", "manage", "authorize"),
+            "SUPERUSER": ("read", "manage", "authorize"),
+            "SELLER": ("read", "manage"),
+            "CASHIER": ("read", "authorize"),
+        }
+        for role_name, actions in role_actions.items():
+            role = Role.objects.get(name=role_name)
+            for action in actions:
+                RolePermission.objects.get_or_create(
+                    role=role, permission=permissions[action]
+                )
+        self.stdout.write("  Permisos ventas:       configurados")
 
     def _seed_company(self, name: str, ruc: str):
         company, ok = Company.objects.get_or_create(ruc=ruc, defaults={"name": name})
@@ -213,7 +233,7 @@ class Command(BaseCommand):
         created = 0
         for vtype, series in series_data:
             _, ok = DocumentSeries.objects.get_or_create(
-                company=company, voucher_type=vtype, series=series,
+                company=company, document_type=vtype, series=series,
                 defaults={"store": store, "current_number": 0}
             )
             if ok:

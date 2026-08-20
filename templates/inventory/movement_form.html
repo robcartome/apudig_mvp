@@ -46,28 +46,16 @@
           {% if movement_type == "ENTRY" %}
           <div class="col-12">
             <label class="form-label">Proveedor</label>
-            {{ form.supplier }}{# hidden #}
-            <select id="supplier-select" class="partner-select w-100"
-                    data-partner-url="{% url 'inventory:api_supplier_search' %}"
-                    data-hidden-id="{{ form.supplier.id_for_label }}"
-                    data-placeholder="Buscar por RUC o nombre…">
-              {% if form.instance.supplier_id %}
-              <option value="{{ form.instance.supplier_id }}" selected>{{ form.instance.supplier }}</option>
-              {% endif %}
-            </select>
+            {% url 'inventory:api_supplier_search' as supplier_search_url %}
+            {% url 'partners:api_supplier_create' as supplier_create_url %}
+            {% include "components/partner_select.html" with field=form.supplier partner_type="supplier" search_url=supplier_search_url create_url=supplier_create_url selected_id=form.instance.supplier_id selected_label=form.instance.supplier %}
           </div>
           {% elif movement_type == "EXIT" %}
           <div class="col-12">
             <label class="form-label">Cliente</label>
-            {{ form.customer }}{# hidden #}
-            <select id="customer-select" class="partner-select w-100"
-                    data-partner-url="{% url 'inventory:api_customer_search' %}"
-                    data-hidden-id="{{ form.customer.id_for_label }}"
-                    data-placeholder="Buscar por RUC o nombre…">
-              {% if form.instance.customer_id %}
-              <option value="{{ form.instance.customer_id }}" selected>{{ form.instance.customer }}</option>
-              {% endif %}
-            </select>
+            {% url 'inventory:api_customer_search' as customer_search_url %}
+            {% url 'partners:api_customer_create' as customer_create_url %}
+            {% include "components/partner_select.html" with field=form.customer partner_type="customer" search_url=customer_search_url create_url=customer_create_url selected_id=form.instance.customer_id selected_label=form.instance.customer %}
           </div>
           {% endif %}
 
@@ -335,9 +323,10 @@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
-<script src="{% static 'js/api.js' %}"></script>
-<script src="{% static 'js/components/product-picker.js' %}"></script>
-<script src="{% static 'js/inventory/movement-form.js' %}"></script>
+<script src="{% static 'js/api.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/inventory/movement-form.js' %}?v=20260811-1"></script>
 {# All JS logic lives in static/js/** — nothing inline needed here #}
 {% endblock extra_js %}
 

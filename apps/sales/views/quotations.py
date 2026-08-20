@@ -19,7 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
 from apps.sales.forms import QuotationHeaderForm, QuotationLineFormSet
-from apps.sales.models import SalesQuotation, QUOTATION_STATUS_CHOICES, DocumentSeries
+from apps.sales.models import SalesDocument, SalesQuotation, QUOTATION_STATUS_CHOICES, DocumentSeries
 from apps.sales.selectors import search_quotations, get_quotation_detail
 from apps.sales.services import (
     approve_quotation,
@@ -28,7 +28,8 @@ from apps.sales.services import (
     reject_quotation,
     update_quotation,
 )
-from apps.inventory.models import PriceList
+from apps.inventory.models import PriceList, Warehouse
+from apps.users.permissions import user_has_company_permission
 
 DEFAULT_IGV_RATE = 18
 
@@ -79,7 +80,7 @@ def _default_quotation_series(company_id, store_id):
         DocumentSeries.objects.filter(
             company_id=company_id,
             store_id=store_id,
-            voucher_type="COT",
+            document_type__code="COT",
             active=True,
         )
         .order_by("series")
@@ -150,6 +151,7 @@ def quotation_create(request):
                         store_id=str(cd["store"].pk),
                         customer=cd["customer"],
                         series=series,
+                        number=cd.get("number"),
                         lines=lines,
                         created_by=request.user,
                         issue_date=cd["issue_date"],
@@ -187,16 +189,33 @@ def quotation_detail(request, pk):
     if redirect_resp:
         return redirect_resp
 
-    _, store_id = _get_ids(request)
+    company_id, store_id = _get_ids(request)
     try:
         quotation = get_quotation_detail(pk)
     except SalesQuotation.DoesNotExist:
+        raise Http404
+    if str(quotation.store_id) != str(store_id):
         raise Http404
 
     lines_view = _build_lines_view(quotation)
     return render(request, "sales/quotation_detail.html", {
         "quotation": quotation,
         "lines_view": lines_view,
+        "converted_document": SalesDocument.objects.filter(
+            source_quotation=quotation
+        ).first(),
+        "sales_document_series": DocumentSeries.objects.filter(
+            company_id=company_id,
+            store_id=store_id,
+            document_type__code__in=("NV", "01", "03"),
+            active=True,
+        ).order_by("document_type", "series"),
+        "warehouses": Warehouse.objects.filter(
+            store_id=store_id, active=True
+        ).order_by("name"),
+        "can_manage_sales_documents": user_has_company_permission(
+            request.user, company_id, "manage.sales.documents"
+        ),
     })
 
 
@@ -261,6 +280,7 @@ def quotation_update(request, pk):
                         payment_method=cd.get("payment_method"),
                         means_of_payment=cd.get("means_of_payment"),
                         series=series,
+                        number=cd.get("number"),
                         exchange_rate=cd.get("exchange_rate", 1),
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
@@ -431,8 +451,24 @@ def api_series_next_number(request, pk):
     """Devuelve el siguiente número (sin incrementar) para la serie dada."""
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Unauthorized"}, status=401)
+    company_id, store_id = _get_ids(request)
     try:
-        series = DocumentSeries.objects.get(pk=pk)
+        series = DocumentSeries.objects.get(
+            pk=pk, company_id=company_id, store_id=store_id, active=True
+        )
+        raw_number = (request.GET.get("number") or "").strip()
+        if raw_number:
+            if not raw_number.isdigit() or int(raw_number) < 1:
+                return JsonResponse({"available": False, "message": "Correlativo inválido."})
+            query = SalesQuotation.objects.filter(series=series, number=int(raw_number))
+            exclude_id = request.GET.get("exclude")
+            if exclude_id:
+                query = query.exclude(pk=exclude_id)
+            available = not query.exists()
+            return JsonResponse({
+                "available": available,
+                "message": "" if available else f"Ya existe la cotización {series.series}-{int(raw_number):08d}.",
+            })
         return JsonResponse({
             "next_number": series.current_number + 1,
             "series_code": series.series,
@@ -440,3 +476,4 @@ def api_series_next_number(request, pk):
         })
     except DocumentSeries.DoesNotExist:
         return JsonResponse({"error": "Serie no encontrada"}, status=404)
+

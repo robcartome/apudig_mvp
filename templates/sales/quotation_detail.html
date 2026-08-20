@@ -42,6 +42,11 @@
         {% csrf_token %}<button type="submit" class="btn btn-sm btn-danger">Rechazar</button>
       </form>
       {% endif %}
+      {% if converted_document %}
+      <a href="{% url 'sales:document_detail' converted_document.pk %}" class="btn btn-sm btn-primary">
+        <i class="ti ti-file-invoice me-1"></i>Ver documento de venta
+      </a>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -109,6 +114,45 @@
     </div>
   </div>
 </div>
+
+{% if quotation.status == "APPROVED" and can_manage_sales_documents and not converted_document %}
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">Convertir en documento de venta</h3></div>
+  <form method="post" action="{% url 'sales:document_from_quotation' quotation.pk %}" class="card-body">
+    {% csrf_token %}
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label required">Tipo y serie</label>
+        <select name="series_id" class="form-select" required>
+          <option value="">Seleccionar…</option>
+          {% for series in sales_document_series %}
+          <option value="{{ series.pk }}">{{ series.document_type.name }} · {{ series.series }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Almacén</label>
+        <select name="warehouse_id" class="form-select">
+          <option value="">Seleccionar…</option>
+          {% for warehouse in warehouses %}
+          <option value="{{ warehouse.pk }}" {% if warehouse.is_default %}selected{% endif %}>{{ warehouse.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-check mb-2">
+          <input type="checkbox" name="register_inventory_movement" class="form-check-input" checked>
+          <span class="form-check-label">Registrar inventario</span>
+        </label>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Crear borrador</button>
+      </div>
+    </div>
+    <div class="form-hint mt-2">La cotización permanece intacta y solo puede originar un documento de venta.</div>
+  </form>
+</div>
+{% endif %}
 
 {# Líneas #}
 <div class="card mb-3">

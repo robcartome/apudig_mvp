@@ -6,9 +6,9 @@
 <div class="page-header d-print-none mb-3">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0">
-      <li class="breadcrumb-item"><a href="{% url 'sales:voucher_list' %}">Comprobantes</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'sales:document_list' %}">Documentos de venta</a></li>
       <li class="breadcrumb-item">
-        <a href="{% url 'sales:voucher_detail' voucher.pk %}">{{ voucher.series_code }}-{{ voucher.number }}</a>
+        <a href="{% url 'sales:document_detail' sales_document.pk %}">{{ sales_document.series_code }}-{{ sales_document.number }}</a>
       </li>
       <li class="breadcrumb-item active">Nota de Crédito</li>
     </ol>
@@ -26,7 +26,7 @@
 <div class="card">
   <div class="card-header">
     <h3 class="card-title">
-      Nota de crédito para: <strong>{{ voucher.series_code }}-{{ voucher.number }}</strong>
+      Nota de crédito para: <strong>{{ sales_document.series_code }}-{{ sales_document.number }}</strong>
     </h3>
   </div>
   <div class="card-body">
@@ -57,7 +57,7 @@
       </div>
 
       <div class="alert alert-info small mb-3">
-        La nota de crédito copiará todas las líneas del comprobante original y quedará en estado <strong>Borrador</strong>.
+        La nota de crédito copiará todas las líneas del documento original y quedará en estado <strong>Borrador</strong>.
         Deberá emitirla por separado.
       </div>
 
@@ -65,7 +65,7 @@
         <button type="submit" class="btn btn-primary">
           <i class="ti ti-file-minus me-1"></i>Crear nota de crédito
         </button>
-        <a href="{% url 'sales:voucher_detail' voucher.pk %}" class="btn btn-outline-secondary">
+        <a href="{% url 'sales:document_detail' sales_document.pk %}" class="btn btn-outline-secondary">
           <i class="ti ti-arrow-left me-1"></i>Volver
         </a>
       </div>

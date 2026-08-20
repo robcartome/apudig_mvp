@@ -1,5 +1,5 @@
-"""
-sales/tests/test_orders.py — Tests del módulo de órdenes de venta.
+﻿"""
+sales/tests/test_orders.py â€” Tests del mÃ³dulo de Ã³rdenes de venta.
 """
 from decimal import Decimal
 
@@ -9,9 +9,8 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import Category, Product, Unit
-from apps.partners.models import Customer
+from apps.partners.models import Customer, DocumentType
 from apps.sales.models import (
-    BusinessDocumentType,
     DocumentSeries,
     SaleOrder,
     SalesQuotation,
@@ -30,7 +29,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-# ── Fixture helpers ───────────────────────────────────────────────────────────
+# â”€â”€ Fixture helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _make_product(name="Producto OV", unit=None):
     if unit is None:
@@ -46,7 +45,7 @@ def _make_product(name="Producto OV", unit=None):
 def _make_line(product, qty="3", price="50.00"):
     return {
         "product": product,
-        "description": "Línea test",
+        "description": "LÃ­nea test",
         "quantity": Decimal(qty),
         "unit_price": Decimal(price),
         "discount_amount": Decimal("0"),
@@ -65,14 +64,16 @@ class SaleOrderServiceTest(TestCase):
             document_number="20111111111",
             legal_name="Cliente OV SAC",
         )
-        self.doc_type = BusinessDocumentType.objects.create(
+        self.doc_type = DocumentType.objects.create(
             code="OV01", name="Orden de Venta", category="SALES"
         )
+        self.ov_type = DocumentType.objects.create(code="OV", name="Orden de Venta Interna", category="INTERNAL")
+        self.cot_type = DocumentType.objects.create(code="COT", name="CotizaciÃ³n", category="INTERNAL")
         self.ov_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="OV", series="OV01",
+            company=self.company, store=self.store, document_type=self.ov_type, series="OV01",
         )
         self.cot_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="COT", series="C001",
+            company=self.company, store=self.store, document_type=self.cot_type, series="C001",
         )
         self.product = _make_product()
 
@@ -193,11 +194,12 @@ class SaleOrderViewsTest(TestCase):
             document_number="20222222222",
             legal_name="Cliente Views OV SAC",
         )
-        self.doc_type = BusinessDocumentType.objects.create(
+        self.doc_type = DocumentType.objects.create(
             code="OV02", name="Orden de Venta B", category="SALES"
         )
+        self.ov_type = DocumentType.objects.create(code="OV", name="Orden de Venta Interna", category="INTERNAL")
         self.ov_series = DocumentSeries.objects.create(
-            company=self.company, store=self.store, voucher_type="OV", series="OV02",
+            company=self.company, store=self.store, document_type=self.ov_type, series="OV02",
         )
         self.product = _make_product("Prod Views OV")
         self.user = User.objects.create_user(email="ov@demo.com", password="pass1234")
@@ -291,3 +293,4 @@ class SaleOrderViewsTest(TestCase):
         resp = self.client.post(reverse("sales:order_cancel", kwargs={"pk": order.pk}))
         order.refresh_from_db()
         self.assertEqual(order.status, "CANCELLED")
+
