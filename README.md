@@ -35,6 +35,12 @@ docker compose -f docker-compose_apudig.yml up --build
 
 El contenedor publica Django en el puerto `8000` y PostgreSQL en el puerto local `5434`.
 
+## Imágenes de productos en Cloudflare R2
+
+El formulario admite hasta tres imágenes por producto. Se validan, redimensionan y convierten a WebP antes de almacenarse en Cloudflare R2 como `main.webp`, `secondary.webp` y `tertiary.webp` bajo `products/{company_uuid}/{product_uuid}/`. PostgreSQL conserva únicamente esas keys; el campo compatible `image` de las APIs continúa representando la imagen principal y `images` devuelve la galería ordenada, omitiendo posiciones vacías.
+
+Configure `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` y `R2_PUBLIC_BASE_URL` según `.env.example`. El bucket debe estar asociado al dominio público configurado (en producción, `media.apudig.com`). Las credenciales son exclusivamente del backend y nunca deben exponerse al navegador.
+
 ## Estructura principal
 
 - `config/`: configuración y URLs generales de Django.
