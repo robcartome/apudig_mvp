@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django import forms
+from django.conf import settings
 
 from apps.partners.models import Carrier, Customer, DocumentType, Supplier
 
@@ -113,6 +114,31 @@ class WarehouseLocationForm(forms.ModelForm):
 
 
 class ProductForm(forms.ModelForm):
+    image_file = forms.ImageField(
+        required=False,
+        label="Imagen del producto",
+        widget=forms.ClearableFileInput(
+            attrs={"class": "form-control product-image-input", "accept": "image/jpeg,image/png,image/webp"}
+        ),
+    )
+    remove_image = forms.BooleanField(required=False, label="Quitar imagen")
+    secondary_image_file = forms.ImageField(
+        required=False,
+        label="Imagen secundaria",
+        widget=forms.ClearableFileInput(
+            attrs={"class": "form-control product-image-input", "accept": "image/jpeg,image/png,image/webp"}
+        ),
+    )
+    remove_secondary_image = forms.BooleanField(required=False, label="Quitar imagen secundaria")
+    tertiary_image_file = forms.ImageField(
+        required=False,
+        label="Imagen adicional",
+        widget=forms.ClearableFileInput(
+            attrs={"class": "form-control product-image-input", "accept": "image/jpeg,image/png,image/webp"}
+        ),
+    )
+    remove_tertiary_image = forms.BooleanField(required=False, label="Quitar imagen adicional")
+
     class Meta:
         model = Product
         fields = (
@@ -134,9 +160,34 @@ class ProductForm(forms.ModelForm):
             "active": forms.CheckboxInput(attrs=_check),
         }
 
+    def _clean_product_image(self, field_name):
+        image = self.cleaned_data.get(field_name)
+        if not image:
+            return image
+        allowed_types = {"image/jpeg", "image/png", "image/webp"}
+        if getattr(image, "content_type", "") not in allowed_types:
+            raise forms.ValidationError("Formato no permitido. Usa JPEG, PNG o WebP.")
+        if image.size > settings.PRODUCT_IMAGE_MAX_SIZE:
+            max_mb = settings.PRODUCT_IMAGE_MAX_SIZE // (1024 * 1024)
+            raise forms.ValidationError(f"La imagen no debe superar {max_mb} MB.")
+        return image
+
+    def clean_image_file(self):
+        return self._clean_product_image("image_file")
+
+    def clean_secondary_image_file(self):
+        return self._clean_product_image("secondary_image_file")
+
+    def clean_tertiary_image_file(self):
+        return self._clean_product_image("tertiary_image_file")
+
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._company = company
+        max_mb = settings.PRODUCT_IMAGE_MAX_SIZE / (1024 * 1024)
+        help_text = f"JPEG, PNG o WebP. Máximo {max_mb:g} MB."
+        for field_name in ("image_file", "secondary_image_file", "tertiary_image_file"):
+            self.fields[field_name].help_text = help_text
         if company is not None:
             self.fields["category"].queryset = Category.objects.filter(
                 company=company, active=True

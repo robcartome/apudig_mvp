@@ -4,6 +4,7 @@ import datetime
 import jwt
 from django.conf import settings
 from django.test import TestCase
+from django.test import override_settings
 
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import (
@@ -34,6 +35,7 @@ def _make_employee_token(company_id):
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
 
 
+@override_settings(R2_PUBLIC_BASE_URL="https://media.apudig.com")
 class CatalogApiTest(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Catalog Co", ruc="20111111111")
@@ -91,6 +93,36 @@ class CatalogApiTest(TestCase):
         self.assertEqual(item["price_sale"], "160.00")
         self.assertEqual(item["stock"], 8.5)
         self.assertNotIn("price_purchase", item)  # hidden for public
+        self.assertEqual(item["image"], "")
+
+    def test_v1_public_catalog_returns_product_image_url(self):
+        self.product.image_key = f"products/{self.company.pk}/{self.product.pk}/main.webp"
+        self.product.secondary_image_key = f"products/{self.company.pk}/{self.product.pk}/secondary.webp"
+        self.product.tertiary_image_key = f"products/{self.company.pk}/{self.product.pk}/tertiary.webp"
+        self.product.save(update_fields=["image_key", "secondary_image_key", "tertiary_image_key"])
+        response = self.client.get("/api/v1/catalog/products/", {"limit": 10})
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["results"][0]
+        self.assertEqual(item["image"], f"https://media.apudig.com/{self.product.image_key}")
+        self.assertEqual(item["images"], [
+            f"https://media.apudig.com/{self.product.image_key}",
+            f"https://media.apudig.com/{self.product.secondary_image_key}",
+            f"https://media.apudig.com/{self.product.tertiary_image_key}",
+        ])
+
+    def test_v1_private_catalog_returns_image_and_purchase_price(self):
+        self.product.image_key = f"products/{self.company.pk}/{self.product.pk}/main.webp"
+        self.product.save(update_fields=["image_key"])
+        response = self.client.get(
+            "/api/v1/catalog/private/products/",
+            {"limit": 10},
+            HTTP_AUTHORIZATION=f"Bearer {self.employee_token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["results"][0]
+        self.assertEqual(item["image"], f"https://media.apudig.com/{self.product.image_key}")
+        self.assertEqual(item["images"], [f"https://media.apudig.com/{self.product.image_key}"])
+        self.assertEqual(item["price_purchase"], "120.00")
 
     def test_catalog_products_employee_sees_price_purchase(self):
         # ── Employee access: price_purchase IS returned ───────────────────
