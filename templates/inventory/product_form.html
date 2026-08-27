@@ -19,8 +19,11 @@
   </nav>
 </div>
 
-<form method="post" novalidate>
+<form method="post" enctype="multipart/form-data" novalidate>
 {% csrf_token %}
+{% if form.non_field_errors %}
+<div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+{% endif %}
 <div class="row">
 
   <!-- Columna principal -->
@@ -141,6 +144,52 @@
 
   <!-- Columna lateral -->
   <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Imágenes del producto</h3></div>
+      <div class="card-body">
+        <p class="text-muted small">Puedes cargar hasta 3 imágenes. La principal se muestra en el catálogo.</p>
+
+        <div class="mb-4">
+          <div class="mb-2{% if not object.image %} d-none{% endif %}" id="image-preview-wrap">
+            <img id="image-preview" src="{% if object.image %}{{ object.image }}{% endif %}"
+                 class="img-fluid rounded border" alt="Imagen principal"
+                 style="width: 100%; max-height: 220px; object-fit: contain;">
+          </div>
+          <label class="form-label" for="{{ form.image_file.id_for_label }}">1. Principal</label>
+          {{ form.image_file }}
+          <div class="form-hint">{{ form.image_file.help_text }}</div>
+          {% if form.image_file.errors %}<div class="text-danger small mt-1">{{ form.image_file.errors.0 }}</div>{% endif %}
+          {% if object.image %}<label class="form-check mt-2">{{ form.remove_image }}<span class="form-check-label">Quitar principal</span></label>{% endif %}
+        </div>
+
+        <div class="mb-4 border-top pt-3">
+          <div class="mb-2{% if not object.secondary_image %} d-none{% endif %}" id="secondary-image-preview-wrap">
+            <img id="secondary-image-preview" src="{% if object.secondary_image %}{{ object.secondary_image }}{% endif %}"
+                 class="img-fluid rounded border" alt="Imagen secundaria"
+                 style="width: 100%; max-height: 220px; object-fit: contain;">
+          </div>
+          <label class="form-label" for="{{ form.secondary_image_file.id_for_label }}">2. Secundaria</label>
+          {{ form.secondary_image_file }}
+          <div class="form-hint">{{ form.secondary_image_file.help_text }}</div>
+          {% if form.secondary_image_file.errors %}<div class="text-danger small mt-1">{{ form.secondary_image_file.errors.0 }}</div>{% endif %}
+          {% if object.secondary_image %}<label class="form-check mt-2">{{ form.remove_secondary_image }}<span class="form-check-label">Quitar secundaria</span></label>{% endif %}
+        </div>
+
+        <div class="border-top pt-3">
+          <div class="mb-2{% if not object.tertiary_image %} d-none{% endif %}" id="tertiary-image-preview-wrap">
+            <img id="tertiary-image-preview" src="{% if object.tertiary_image %}{{ object.tertiary_image }}{% endif %}"
+                 class="img-fluid rounded border" alt="Imagen adicional"
+                 style="width: 100%; max-height: 220px; object-fit: contain;">
+          </div>
+          <label class="form-label" for="{{ form.tertiary_image_file.id_for_label }}">3. Adicional</label>
+          {{ form.tertiary_image_file }}
+          <div class="form-hint">{{ form.tertiary_image_file.help_text }}</div>
+          {% if form.tertiary_image_file.errors %}<div class="text-danger small mt-1">{{ form.tertiary_image_file.errors.0 }}</div>{% endif %}
+          {% if object.tertiary_image %}<label class="form-check mt-2">{{ form.remove_tertiary_image }}<span class="form-check-label">Quitar adicional</span></label>{% endif %}
+        </div>
+      </div>
+    </div>
+
     <div class="card mb-3">
       <div class="card-header"><h3 class="card-title">Clasificación</h3></div>
       <div class="card-body">

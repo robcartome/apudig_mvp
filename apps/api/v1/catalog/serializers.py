@@ -3,7 +3,18 @@ from rest_framework import serializers
 from apps.inventory.models import Product
 
 
-class CatalogProductListSerializer(serializers.ModelSerializer):
+class ProductImageSerializerMixin(serializers.Serializer):
+    image = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
+
+    def get_image(self, obj):
+        return obj.image
+
+    def get_images(self, obj):
+        return obj.image_urls
+
+
+class CatalogProductListSerializer(ProductImageSerializerMixin, serializers.ModelSerializer):
     unit = serializers.CharField(source="unit.code", read_only=True)
     brand = serializers.CharField(source="brand.name", read_only=True)
     category = serializers.CharField(source="category.name", read_only=True)
@@ -11,7 +22,10 @@ class CatalogProductListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ("id", "name", "sku", "unit", "brand", "category", "price_sale", "price_purchase", "stock", "image")
+        fields = (
+            "id", "name", "sku", "unit", "brand", "category",
+            "price_sale", "price_purchase", "stock", "image", "images",
+        )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -32,7 +46,7 @@ class CatalogProductStockByWarehouseSerializer(serializers.Serializer):
     quantity = serializers.FloatField()
 
 
-class CatalogProductDetailSerializer(serializers.ModelSerializer):
+class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.ModelSerializer):
     unit = serializers.CharField(source="unit.code", read_only=True)
     brand = serializers.CharField(source="brand.name", read_only=True)
     category = serializers.CharField(source="category.name", read_only=True)
@@ -49,6 +63,7 @@ class CatalogProductDetailSerializer(serializers.ModelSerializer):
             "unit",
             "description",
             "image",
+            "images",
             "brand",
             "category",
             "price_sale",

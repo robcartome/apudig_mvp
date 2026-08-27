@@ -125,6 +125,16 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
 JWT_ACCESS_TTL = _dt.timedelta(hours=int(os.getenv("JWT_ACCESS_TTL_HOURS", "8")))
 JWT_REFRESH_TTL = _dt.timedelta(days=int(os.getenv("JWT_REFRESH_TTL_DAYS", "30")))
 
+# Cloudflare R2 product images
+R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
+R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "")
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "https://media.apudig.com")
+PRODUCT_IMAGE_MAX_SIZE = int(os.getenv("PRODUCT_IMAGE_MAX_SIZE", str(5 * 1024 * 1024)))
+PRODUCT_IMAGE_MAX_DIMENSION = int(os.getenv("PRODUCT_IMAGE_MAX_DIMENSION", "1200"))
+PRODUCT_IMAGE_WEBP_QUALITY = int(os.getenv("PRODUCT_IMAGE_WEBP_QUALITY", "82"))
+
 
 # ── Django REST Framework ────────────────────────────────────────────────────
 REST_FRAMEWORK = {

@@ -95,7 +95,9 @@ class Product(TimeStampedModel):
     barcode = models.CharField(max_length=100, blank=True)
     description = models.CharField(max_length=1000, blank=True)
     model = models.CharField(max_length=200, blank=True)
-    image = models.CharField(max_length=500, blank=True)
+    image_key = models.CharField(max_length=500, blank=True)
+    secondary_image_key = models.CharField(max_length=500, blank=True)
+    tertiary_image_key = models.CharField(max_length=500, blank=True)
     price_purchase = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price_sale = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
@@ -114,6 +116,38 @@ class Product(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"[{self.sku}] {self.name}"
+
+    @property
+    def image(self) -> str:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return build_public_url(self.image_key)
+
+    @property
+    def secondary_image(self) -> str:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return build_public_url(self.secondary_image_key)
+
+    @property
+    def tertiary_image(self) -> str:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return build_public_url(self.tertiary_image_key)
+
+    @property
+    def image_urls(self) -> list[str]:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return [
+            url
+            for url in (
+                build_public_url(self.image_key),
+                build_public_url(self.secondary_image_key),
+                build_public_url(self.tertiary_image_key),
+            )
+            if url
+        ]
 
 
 class ProductUnit(models.Model):

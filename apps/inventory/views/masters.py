@@ -27,6 +27,11 @@ from ..importers import (
     build_import_template_workbook,
     import_inventory_excel,
 )
+from ..product_image_storage import (
+    ProductImageStorageError,
+    delete_product_image,
+    upload_product_image,
+)
 from ..selectors import (
     get_brands,
     get_categories,
@@ -39,6 +44,37 @@ from ..selectors import (
     search_units,
     search_warehouses,
 )
+
+
+PRODUCT_IMAGE_SLOTS = (
+    ("image_file", "remove_image", "image_key", "main"),
+    ("secondary_image_file", "remove_secondary_image", "secondary_image_key", "secondary"),
+    ("tertiary_image_file", "remove_tertiary_image", "tertiary_image_key", "tertiary"),
+)
+
+
+def _apply_product_image_changes(product, cleaned_data):
+    """Upload, replace or remove the three fixed product-image slots."""
+    cleanup_keys = []
+    try:
+        for file_field, remove_field, key_attribute, slot in PRODUCT_IMAGE_SLOTS:
+            image_file = cleaned_data.get(file_field)
+            current_key = getattr(product, key_attribute)
+            if image_file:
+                new_key = upload_product_image(product, image_file, slot=slot)
+                setattr(product, key_attribute, new_key)
+                if not current_key:
+                    cleanup_keys.append(new_key)
+            elif cleaned_data.get(remove_field) and current_key:
+                delete_product_image(current_key)
+                setattr(product, key_attribute, "")
+    except ProductImageStorageError:
+        for key in cleanup_keys:
+            try:
+                delete_product_image(key)
+            except ProductImageStorageError:
+                pass
+        raise
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -462,30 +498,46 @@ def product_create(request):
     if err:
         return err
     price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
-    form = ProductForm(request.POST or None, company=company)
+    form = ProductForm(request.POST or None, request.FILES or None, company=company)
     unit_formset = ProductUnitFormSet(
         request.POST or None, prefix="units", queryset=ProductUnit.objects.none()
     )
     if request.method == "POST" and form.is_valid() and unit_formset.is_valid():
-        product = form.save()
-        unit_formset.instance = product
-        unit_formset.save()
-        ProductUnit.objects.update_or_create(
-            product=product, unit=product.unit,
-            defaults={"conversion_factor": 1, "active": True},
-        )
-        for price_list in price_lists:
-            raw = request.POST.get(f"price_list_{price_list.pk}", "").strip()
-            if raw == "":
-                continue
-            try:
-                from decimal import Decimal, InvalidOperation
-                amount = Decimal(raw)
-            except InvalidOperation:
-                continue
-            ProductPrice.objects.create(product=product, price_list=price_list, amount=amount, currency="PEN")
-        messages.success(request, "Producto creado correctamente.")
-        return redirect("inventory:product_list")
+        product = form.save(commit=False)
+        uploaded_key = ""
+        try:
+            _apply_product_image_changes(product, form.cleaned_data)
+            uploaded_key = product.image_key
+            with transaction.atomic():
+                product.save()
+                unit_formset.instance = product
+                unit_formset.save()
+                ProductUnit.objects.update_or_create(
+                    product=product, unit=product.unit,
+                    defaults={"conversion_factor": 1, "active": True},
+                )
+                for price_list in price_lists:
+                    raw = request.POST.get(f"price_list_{price_list.pk}", "").strip()
+                    if raw == "":
+                        continue
+                    try:
+                        from decimal import Decimal, InvalidOperation
+                        amount = Decimal(raw)
+                    except InvalidOperation:
+                        continue
+                    ProductPrice.objects.create(product=product, price_list=price_list, amount=amount, currency="PEN")
+        except ProductImageStorageError as exc:
+            form.add_error("image_file", str(exc))
+        except Exception:
+            if uploaded_key:
+                try:
+                    delete_product_image(uploaded_key)
+                except ProductImageStorageError:
+                    pass
+            raise
+        else:
+            messages.success(request, "Producto creado correctamente.")
+            return redirect("inventory:product_list")
 
     price_list_data = [{"price_list": price_list, "amount": None} for price_list in price_lists]
     return render(request, "inventory/product_form.html", {
@@ -505,7 +557,7 @@ def product_update(request, pk):
     price_lists = PriceList.objects.filter(company=company, active=True).order_by("-is_default", "-name")
     existing_prices = {str(pp.price_list_id): pp for pp in obj.prices.all()}
 
-    form = ProductForm(request.POST or None, instance=obj, company=company)
+    form = ProductForm(request.POST or None, request.FILES or None, instance=obj, company=company)
     unit_formset = ProductUnitFormSet(
         request.POST or None,
         instance=obj,
@@ -513,30 +565,39 @@ def product_update(request, pk):
         queryset=obj.unit_conversions.exclude(unit=obj.unit),
     )
     if request.method == "POST" and form.is_valid() and unit_formset.is_valid():
-        form.save()
-        unit_formset.save()
-        ProductUnit.objects.update_or_create(
-            product=obj, unit=obj.unit,
-            defaults={"conversion_factor": 1, "active": True},
-        )
-        for price_list in price_lists:
-            field_name = f"price_list_{price_list.pk}"
-            raw = request.POST.get(field_name, "").strip()
-            if raw == "":
-                continue
-            try:
-                from decimal import Decimal, InvalidOperation
-                amount = Decimal(raw)
-            except InvalidOperation:
-                continue
-            pp = existing_prices.get(str(price_list.pk))
-            if pp:
-                pp.amount = amount
-                pp.save(update_fields=["amount"])
-            else:
-                ProductPrice.objects.create(product=obj, price_list=price_list, amount=amount, currency="PEN")
-        messages.success(request, "Producto actualizado.")
-        return redirect("inventory:product_list")
+        product = form.save(commit=False)
+        try:
+            _apply_product_image_changes(product, form.cleaned_data)
+
+            with transaction.atomic():
+                product.save()
+                unit_formset.instance = product
+                unit_formset.save()
+                ProductUnit.objects.update_or_create(
+                    product=product, unit=product.unit,
+                    defaults={"conversion_factor": 1, "active": True},
+                )
+                for price_list in price_lists:
+                    field_name = f"price_list_{price_list.pk}"
+                    raw = request.POST.get(field_name, "").strip()
+                    if raw == "":
+                        continue
+                    try:
+                        from decimal import Decimal, InvalidOperation
+                        amount = Decimal(raw)
+                    except InvalidOperation:
+                        continue
+                    pp = existing_prices.get(str(price_list.pk))
+                    if pp:
+                        pp.amount = amount
+                        pp.save(update_fields=["amount"])
+                    else:
+                        ProductPrice.objects.create(product=product, price_list=price_list, amount=amount, currency="PEN")
+        except ProductImageStorageError as exc:
+            form.add_error("image_file", str(exc))
+        else:
+            messages.success(request, "Producto actualizado.")
+            return redirect("inventory:product_list")
 
     price_list_data = []
 
