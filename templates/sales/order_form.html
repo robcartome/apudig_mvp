@@ -119,7 +119,7 @@
             {% for lf in line_formset %}
             <tr class="line-row">
               <td>
-                {{ lf.product }}
+                {{ lf.product }}{{ lf.unit }}
                 {% if lf.product.errors %}<div class="text-danger small">{{ lf.product.errors.0 }}</div>{% endif %}
               </td>
               <td>{{ lf.description }}</td>

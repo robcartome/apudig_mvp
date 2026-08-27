@@ -42,7 +42,7 @@ def get_quotation_detail(pk):
     return (
         SalesQuotation.objects
         .select_related("customer", "series", "store", "created_by", "payment_method", "means_of_payment")
-        .prefetch_related("lines__product__unit")
+        .prefetch_related("lines__product__unit", "lines__unit")
         .get(pk=pk)
     )
 
@@ -81,7 +81,7 @@ def get_order_detail(pk):
     return (
         SaleOrder.objects
         .select_related("customer", "document_type", "series", "store", "created_by", "quotation")
-        .prefetch_related("lines__product__unit")
+        .prefetch_related("lines__product__unit", "lines__unit")
         .get(pk=pk)
     )
 
@@ -136,7 +136,7 @@ def get_document_detail(pk, store_id=None):
             "payment_method", "means_of_payment", "seller", "price_list",
             "warehouse", "inventory_movement",
         )
-        .prefetch_related("lines__product__unit")
+        .prefetch_related("lines__product__unit", "lines__unit")
     )
     if store_id is not None:
         queryset = queryset.filter(store_id=store_id)

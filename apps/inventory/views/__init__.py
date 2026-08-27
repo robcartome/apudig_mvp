@@ -8,6 +8,7 @@ from .api import (
     product_quick_create,
     product_search,
     product_stock,
+    product_stock_by_warehouse,
     supplier_search,
 )
 from .masters import (
@@ -123,6 +124,7 @@ __all__ = [
     "product_quick_create",
     "product_search",
     "product_stock",
+    "product_stock_by_warehouse",
     "product_update",
     "stock_comparative_report",
     "movement_traceability_report",

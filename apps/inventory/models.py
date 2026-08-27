@@ -150,6 +150,30 @@ class Product(TimeStampedModel):
         ]
 
 
+class ProductUnit(models.Model):
+    """Unidad/presentación habilitada para un producto y su equivalencia en stock."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="unit_conversions")
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="product_conversions")
+    conversion_factor = models.DecimalField(max_digits=18, decimal_places=6, default=1)
+    sale_price = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True)
+    purchase_price = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "product_units"
+        ordering = ["unit__code"]
+        constraints = [
+            models.UniqueConstraint(fields=("product", "unit"), name="uniq_product_unit"),
+            models.CheckConstraint(
+                condition=models.Q(conversion_factor__gt=0), name="product_unit_factor_gt_zero"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.product} / {self.unit.code} × {self.conversion_factor}"
+
+
 class ProductPrice(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="prices")
@@ -397,6 +421,10 @@ class MovementDetail(models.Model):
     movement = models.ForeignKey(Movement, on_delete=models.CASCADE, related_name="details")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="movement_details")
     quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="movement_details")
+    unit_code = models.CharField(max_length=10, default="NIU")
+    conversion_factor = models.DecimalField(max_digits=18, decimal_places=6, default=1)
+    stock_quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
     unit_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     physical_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     location = models.ForeignKey(

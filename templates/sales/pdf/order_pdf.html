@@ -118,7 +118,7 @@
         {{ line.product.name }}
         {% if line.description %}<br><small>{{ line.description }}</small>{% endif %}
       </td>
-      <td>{{ line.product.unit.code|default:"" }}</td>
+      <td>{% include "components/unit_equivalence.html" with item=line %}</td>
       <td class="text-right">{{ line.quantity|floatformat:2 }}</td>
       <td class="text-right">{{ line.unit_price|floatformat:2 }}</td>
       <td class="text-right">{{ line.discount_amount|floatformat:2 }}</td>

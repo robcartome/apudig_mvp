@@ -20,6 +20,7 @@
      data-customer-url="{% url 'inventory:api_customer_search' %}"
      data-search-url="{% url 'inventory:api_product_search' %}"
      data-create-url="{% url 'inventory:api_product_create' %}"
+     data-stock-by-warehouse-url="{% url 'inventory:api_product_stock_by_warehouse' %}"
      data-price-list-url="{% url 'inventory:api_price_list_prices' pk='00000000-0000-0000-0000-000000000000' %}"
      data-series-number-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
      data-number-availability-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
@@ -253,6 +254,8 @@
               data-init-name="{{ lf.initial.product_name|default:'' }}"
               data-init-unit-id="{{ lf.initial.product_unit_id|default:'' }}"
               data-init-unit="{{ lf.initial.product_unit|default:'' }}"
+              data-base-unit-id="{{ lf.initial.base_unit_id|default:'' }}"
+              data-base-unit-code="{{ lf.initial.base_unit_code|default:'' }}"
               data-init-price-igv="{{ lf.initial.price_with_igv|default:'' }}">
 
             <td class="text-center text-muted line-num">{{ forloop.counter }}</td>
@@ -271,14 +274,23 @@
 
             {# Unidad (display only) #}
             <td>
-              <select class="form-select form-select-sm product-unit-select" disabled>
+              {{ lf.unit }}
+              <select class="form-select form-select-sm product-unit-select">
+                {% for conversion in lf.initial.product_units %}
+                <option value="{{ conversion.unit_id }}" data-code="{{ conversion.unit.code }}" data-factor="{{ conversion.conversion_factor }}" data-price="{{ conversion.sale_price|default_if_none:'' }}" {% if conversion.unit_id|stringformat:'s' == lf.initial.product_unit_id|stringformat:'s' %}selected{% endif %}>{{ conversion.unit.code }} - {{ conversion.unit.name }}</option>
+                {% empty %}
                 <option value="{{ lf.initial.product_unit_id|default:'' }}">{{ lf.initial.product_unit|default:'—' }}</option>
+                {% endfor %}
               </select>
+              <div class="unit-equivalence text-muted mt-1" style="font-size:.7rem"></div>
             </td>
 
             {# Cantidad #}
             <td>
-              {{ lf.quantity }}
+              <div class="input-group input-group-sm">
+                {{ lf.quantity }}
+                <button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver stock por almacén" aria-label="Ver stock por almacén"><i class="ti ti-info-circle"></i></button>
+              </div>
               {% if lf.quantity.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.quantity.errors.0 }}</div>{% endif %}
             </td>
 
@@ -402,6 +414,8 @@
   </div>
 </form>
 
+{% include "components/stock_by_warehouse_modal.html" %}
+
 {# Modal memo de fila #}
 <div class="modal fade" id="memoModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -462,7 +476,8 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260811-1"></script>
+<script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260818-1"></script>
 <script>
 (function () {
   const cfg = document.getElementById('sales-form-config');

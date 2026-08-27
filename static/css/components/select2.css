@@ -1,0 +1,25 @@
+/* Estados de resultados Select2 neutrales y legibles con cualquier branding. */
+.select2-container--bootstrap-5 .select2-results__option--selected,
+.select2-container--bootstrap-5 .select2-results__option--highlighted.select2-results__option--selectable {
+  background-color: #eef1f4 !important;
+  color: #182433 !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__option--selected .text-muted,
+.select2-container--bootstrap-5 .select2-results__option--highlighted.select2-results__option--selectable .text-muted {
+  color: #52606d !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__option--selected .text-success,
+.select2-container--bootstrap-5 .select2-results__option--highlighted.select2-results__option--selectable .text-success {
+  color: #18794e !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__option--selected .text-danger,
+.select2-container--bootstrap-5 .select2-results__option--highlighted.select2-results__option--selectable .text-danger {
+  color: #c92a2a !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__option--highlighted.select2-results__option--selectable:not(.select2-results__option--selected) {
+  background-color: #e4e9ee !important;
+}

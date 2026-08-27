@@ -43,8 +43,54 @@
 
     const value = unitId || '';
     const label = unitLabel || '—';
-    unitSelect.innerHTML = `<option value="${value}">${label}</option>`;
-    unitSelect.value = value;
+    const existing = Array.from(unitSelect.options).find(option => option.value === String(value));
+    if (existing) {
+      unitSelect.value = existing.value;
+    } else {
+      unitSelect.innerHTML = `<option value="${value}">${label}</option>`;
+      unitSelect.value = value;
+    }
+    const hidden = row.querySelector('input[name*="-unit"]');
+    if (hidden) hidden.value = value;
+  }
+
+  function setProductUnits(row, product) {
+    const select = row.querySelector('.product-unit-select');
+    const units = product.units || [];
+    row.dataset.baseUnitId = product.unit_id || '';
+    row.dataset.baseUnitCode = product.unit || '';
+    const selected = units.find(unit => unit.id === product.unit_id) || units[0];
+    select.innerHTML = units.map(unit => {
+      const price = movementType === 'ENTRY' ? unit.purchase_price : unit.sale_price;
+      return `<option value="${unit.id}" data-code="${unit.code}" data-factor="${unit.factor}" data-price="${price ?? ''}">${unit.code} - ${unit.name}</option>`;
+    }).join('');
+    if (selected) select.value = selected.id;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function updateUnitEquivalence(row) {
+    const hint = row.querySelector('.unit-equivalence');
+    const option = row.querySelector('.product-unit-select')?.selectedOptions[0];
+    if (!hint || !option || option.value === row.dataset.baseUnitId) {
+      if (hint) hint.textContent = '';
+      return;
+    }
+    const factor = Number(option.dataset.factor || 1);
+    const formatQuantity = value => Number(value.toFixed(6)).toString();
+    const unitCode = option.dataset.code || option.textContent.split(' - ')[0].trim();
+    const quantity = Number(row.querySelector('input[name*="-quantity"]')?.value || 0);
+    const total = quantity >= 0 ? ` · Total: ${formatQuantity(quantity * factor)} ${row.dataset.baseUnitCode || ''}` : '';
+    hint.textContent = `1 ${unitCode} = ${formatQuantity(factor)} ${row.dataset.baseUnitCode || ''}${total}`;
+  }
+
+  function priceForSelectedUnit(row, basePrice) {
+    const option = row.querySelector('.product-unit-select')?.selectedOptions[0];
+    const configuredPrice = option?.dataset.price
+      ?? (movementType === 'ENTRY' ? option?.dataset.purchasePrice : option?.dataset.salePrice);
+    if (configuredPrice !== undefined && configuredPrice !== '') {
+      return Number(configuredPrice);
+    }
+    return Number(basePrice || 0) * Number(option?.dataset.factor || 1);
   }
 
   function setStockEl(row, value) {
@@ -52,15 +98,19 @@
     if (!stockInput) return;
 
     if (value === null || value === undefined) {
+      delete row.dataset.baseStock;
       stockInput.value = '—';
       stockInput.classList.remove('text-success', 'text-danger');
       stockInput.classList.add('text-muted');
       return;
     }
 
-    stockInput.value = String(value);
+    row.dataset.baseStock = value;
+    const factor = Number(row.querySelector('.product-unit-select')?.selectedOptions[0]?.dataset.factor || 1);
+    const displayValue = Number(value) / factor;
+    stockInput.value = String(displayValue);
     stockInput.classList.remove('text-success', 'text-danger', 'text-muted');
-    stockInput.classList.add(value > 0 ? 'text-success' : value < 0 ? 'text-danger' : 'text-muted');
+    stockInput.classList.add(displayValue > 0 ? 'text-success' : displayValue < 0 ? 'text-danger' : 'text-muted');
   }
 
   async function refreshStock(row) {
@@ -124,14 +174,21 @@
         <select class="product-select w-100"></select>
       </td>
       <td>
-        <select class="form-select form-select-sm product-unit-select" disabled
+        <input type="hidden" name="lines-${index}-unit" id="id_lines-${index}-unit" value="">
+        <select class="form-select form-select-sm product-unit-select"
                 title="La unidad se define por producto. Cuando existan equivalencias se habilitará.">
           <option value="">—</option>
         </select>
+        <div class="unit-equivalence text-muted mt-1" style="font-size:.7rem"></div>
       </td>
       <td>
-        <input type="number" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
-               class="form-control form-control-sm" step="0.001" min="${minimumQuantity}" value="">
+        <div class="input-group input-group-sm">
+          <input type="number" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
+                 class="form-control form-control-sm" step="0.001" min="${minimumQuantity}" value="">
+          <button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver stock por almacén" aria-label="Ver stock por almacén">
+            <i class="ti ti-info-circle"></i>
+          </button>
+        </div>
       </td>
       <td>
         <input type="text" class="form-control form-control-sm product-stock text-end text-muted"
@@ -158,20 +215,48 @@
     const row = event.target.closest('.line-row');
     const product = event.detail;
 
-    setUnitSelect(row, product.unit_id, product.unit);
+    const basePrice = movementType === 'EXIT' ? product.price_sale : product.price_purchase;
+    row.dataset.basePrice = basePrice || 0;
+    setProductUnits(row, product);
     setStockEl(row, product.stock !== undefined ? product.stock : null);
 
     const priceInput = row.querySelector('input[name*="-unit_price"]');
-    if (priceInput && parseFloat(product.price_purchase) > 0 &&
+    if (priceInput && parseFloat(basePrice) > 0 &&
         (!priceInput.value || priceInput.value === '0' || priceInput.value === '0.000')) {
-      priceInput.value = parseFloat(product.price_purchase).toFixed(3);
+      priceInput.value = priceForSelectedUnit(row, basePrice).toFixed(3);
     }
   });
 
   linesBody.addEventListener('product-picker:cleared', event => {
     const row = event.target.closest('.line-row');
     setUnitSelect(row, '', '—');
+    delete row.dataset.baseUnitId;
+    delete row.dataset.baseUnitCode;
+    updateUnitEquivalence(row);
     setStockEl(row, null);
+  });
+
+  linesBody.addEventListener('change', event => {
+    if (!event.target.matches('.product-unit-select')) return;
+    const row = event.target.closest('.line-row');
+    const hidden = row?.querySelector('input[name*="-unit"]');
+    if (hidden) hidden.value = event.target.value;
+    updateUnitEquivalence(row);
+    if (row.dataset.baseStock !== undefined) setStockEl(row, Number(row.dataset.baseStock));
+    const priceInput = row?.querySelector('input[name*="-unit_price"]');
+    if (priceInput) {
+      const option = event.target.selectedOptions[0];
+      const configuredPrice = option?.dataset.price
+        ?? (movementType === 'ENTRY' ? option?.dataset.purchasePrice : option?.dataset.salePrice);
+      if ((configuredPrice === undefined || configuredPrice === '') && row.dataset.basePrice === undefined) return;
+      priceInput.value = priceForSelectedUnit(row, row.dataset.basePrice || 0).toFixed(3);
+    }
+  });
+
+  linesBody.addEventListener('input', event => {
+    if (event.target.matches('input[name*="-quantity"]')) {
+      updateUnitEquivalence(event.target.closest('.line-row'));
+    }
   });
 
   if (warehouseInput) {
@@ -221,6 +306,7 @@
       const unitLabel = row.dataset.initUnit || row.querySelector('.product-unit-select option')?.textContent || '—';
       const unitId = row.dataset.initUnitId || row.querySelector('.product-unit-select option')?.value || '';
       setUnitSelect(row, unitId, unitLabel);
+      updateUnitEquivalence(row);
       ProductPicker.init(row);
       refreshStock(row);
     });

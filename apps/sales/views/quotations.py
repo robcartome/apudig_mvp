@@ -295,8 +295,12 @@ def quotation_update(request, pk):
             {
                 "product": str(line.product_id),
                 "product_name": line.product.name,
-                "product_unit": line.product.unit.code if line.product.unit else "",
-                "product_unit_id": str(line.product.unit_id) if line.product.unit_id else "",
+                "unit": str(line.unit_id or line.product.unit_id),
+                "product_unit": line.unit_code,
+                "product_unit_id": str(line.unit_id or line.product.unit_id),
+                "base_unit_id": str(line.product.unit_id),
+                "base_unit_code": line.product.unit.code,
+                "product_units": line.product.unit_conversions.filter(active=True).select_related("unit"),
                 "description": line.description,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
@@ -365,8 +369,12 @@ def quotation_copy(request, pk):
         {
             "product": str(line.product_id),
             "product_name": line.product.name,
-            "product_unit": line.product.unit.code if line.product.unit else "",
-            "product_unit_id": str(line.product.unit_id) if line.product.unit_id else "",
+            "unit": str(line.unit_id or line.product.unit_id),
+            "product_unit": line.unit_code,
+            "product_unit_id": str(line.unit_id or line.product.unit_id),
+            "base_unit_id": str(line.product.unit_id),
+            "base_unit_code": line.product.unit.code,
+            "product_units": line.product.unit_conversions.filter(active=True).select_related("unit"),
             "description": line.description,
             "quantity": line.quantity,
             "unit_price": line.unit_price,
@@ -476,4 +484,3 @@ def api_series_next_number(request, pk):
         })
     except DocumentSeries.DoesNotExist:
         return JsonResponse({"error": "Serie no encontrada"}, status=404)
-
