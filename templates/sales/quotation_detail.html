@@ -180,7 +180,7 @@
           <td class="text-muted">{{ forloop.counter }}</td>
           <td>
             <div class="fw-semibold">{{ line.product.name }}</div>
-            <div class="text-muted small">{{ line.product.unit.code|default:"" }}</div>
+            <div class="small">{% include "components/unit_equivalence.html" with item=line %}</div>
           </td>
           <td class="text-muted small">{{ line.description|default:"—" }}</td>
           <td class="text-end">{{ line.quantity|floatformat:2 }}</td>

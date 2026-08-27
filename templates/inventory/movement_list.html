@@ -312,6 +312,7 @@
                 <th class="text-center" style="width:38px">#</th>
                 <th>SKU</th>
                 <th>Producto</th>
+                <th>Unidad</th>
                 {% if obj.type == "ADJUSTMENT" %}
                 <th class="text-end">Qty Sistema</th>
                 <th class="text-end">Qty Física</th>
@@ -331,6 +332,7 @@
                 <td class="text-center text-muted">{{ forloop.counter }}</td>
                 <td class="text-muted">{{ d.product.sku|default:"—" }}</td>
                 <td class="fw-semibold">{{ d.product.name }}</td>
+                <td class="small">{% include "components/unit_equivalence.html" with item=d %}</td>
                 {% if obj.type == "ADJUSTMENT" %}
                 <td class="text-end">{{ d.system_quantity|smart_number }}</td>
                 <td class="text-end">{{ d.physical_quantity|smart_number }}</td>
@@ -343,7 +345,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="{% if obj.type == 'ADJUSTMENT' %}6{% else %}6{% endif %}" class="text-center text-muted py-3">No hay productos para este movimiento.</td>
+                <td colspan="7" class="text-center text-muted py-3">No hay productos para este movimiento.</td>
               </tr>
               {% endfor %}
             </tbody>

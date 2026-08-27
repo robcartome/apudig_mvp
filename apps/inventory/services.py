@@ -19,10 +19,38 @@ from .models import (
     MovementStatus,
     MovementType,
     PriceList,
+    Product,
+    ProductUnit,
     ProductPrice,
     StockByWarehouse,
     Warehouse,
 )
+
+
+def _normalize_uom_lines(lines: list[dict]) -> list[dict]:
+    normalized = []
+    for raw in lines:
+        line = dict(raw)
+        product = Product.objects.select_related("unit").get(pk=line["product_id"])
+        unit_id = line.get("unit_id") or product.unit_id
+        conversion = ProductUnit.objects.select_related("unit").filter(
+            product=product, unit_id=unit_id, active=True
+        ).first()
+        if conversion is None:
+            if str(unit_id) != str(product.unit_id):
+                raise ValueError(f"La unidad seleccionada no está habilitada para {product.name}.")
+            conversion = ProductUnit.objects.create(
+                product=product, unit=product.unit, conversion_factor=1,
+            )
+        factor = Decimal(str(conversion.conversion_factor))
+        line.update({
+            "unit_id": conversion.unit_id,
+            "unit_code": conversion.unit.code,
+            "conversion_factor": factor,
+            "stock_quantity": Decimal(str(line["quantity"])) * factor,
+        })
+        normalized.append(line)
+    return normalized
 
 
 @transaction.atomic
@@ -100,8 +128,10 @@ def register_transfer(
         created_by=created_by,
         **kwargs,
     )
-    _create_details_and_update_stock(movement, lines, delta=-1, warehouse_id=warehouse_origin_id)
-    _update_stock_bulk(lines, warehouse_id=warehouse_dest_id, delta=+1)
+    normalized_lines = _create_details_and_update_stock(
+        movement, lines, delta=-1, warehouse_id=warehouse_origin_id
+    )
+    _update_stock_bulk(normalized_lines, warehouse_id=warehouse_dest_id, delta=+1)
     _log_movement_audit(movement, MovementAuditLog.ActionType.CREATE, created_by, after_data=_movement_snapshot(movement))
     _close_related_confirmed_movements(movement, changed_by=created_by)
     return movement
@@ -216,23 +246,28 @@ def delete_movement(movement: Movement, *, deleted_by=None) -> None:
 
 def _create_details_and_update_stock(
     movement: Movement, lines: list[dict], delta: int, warehouse_id: str | None = None
-) -> None:
+) -> list[dict]:
+    lines = _normalize_uom_lines(lines)
     wh_id = warehouse_id or movement.warehouse_id
     for line in lines:
         MovementDetail.objects.create(
             movement=movement,
             product_id=line["product_id"],
             quantity=line["quantity"],
+            unit_id=line["unit_id"], unit_code=line["unit_code"],
+            conversion_factor=line["conversion_factor"], stock_quantity=line["stock_quantity"],
             unit_price=line.get("unit_price", Decimal("0")),
             location_id=line.get("location_id") or None,
         )
     _update_stock_bulk(lines, warehouse_id=wh_id, delta=delta)
+    return lines
 
 
 def _create_adjustment_details_and_update_stock(movement: Movement, lines: list[dict]) -> None:
     if not movement.warehouse_id:
         return
 
+    lines = _normalize_uom_lines(lines)
     for line in lines:
         stock, _ = StockByWarehouse.objects.select_for_update().get_or_create(
             product_id=line["product_id"],
@@ -240,13 +275,15 @@ def _create_adjustment_details_and_update_stock(movement: Movement, lines: list[
             defaults={"quantity": Decimal("0")},
         )
 
-        physical_qty = Decimal(str(line.get("physical_quantity", line.get("quantity", 0))))
+        physical_qty = line["stock_quantity"]
         difference = physical_qty - Decimal(str(stock.quantity))
 
         MovementDetail.objects.create(
             movement=movement,
             product_id=line["product_id"],
             quantity=difference,
+            unit_id=line["unit_id"], unit_code=line["unit_code"],
+            conversion_factor=line["conversion_factor"], stock_quantity=difference,
             unit_price=line.get("unit_price", Decimal("0")),
             physical_quantity=physical_qty,
             location_id=line.get("location_id") or None,
@@ -261,6 +298,8 @@ def _movement_lines(movement: Movement) -> list[dict]:
         {
             "product_id": d.product_id,
             "quantity": d.quantity,
+            "unit_id": d.unit_id,
+            "stock_quantity": d.stock_quantity,
             "unit_price": d.unit_price,
         }
         for d in movement.details.all()
@@ -311,11 +350,14 @@ def _apply_movement_stock(movement: Movement, lines: list[dict]) -> None:
         _create_adjustment_details_and_update_stock(movement, lines)
         return
 
+    lines = _normalize_uom_lines(lines)
     for line in lines:
         MovementDetail.objects.create(
             movement=movement,
             product_id=line["product_id"],
             quantity=line["quantity"],
+            unit_id=line["unit_id"], unit_code=line["unit_code"],
+            conversion_factor=line["conversion_factor"], stock_quantity=line["stock_quantity"],
             unit_price=line.get("unit_price", Decimal("0")),
             location_id=line.get("location_id") or None,
         )
@@ -527,7 +569,7 @@ def _update_stock_bulk(lines: list[dict], warehouse_id: str, delta: int) -> None
             warehouse_id=warehouse_id,
             defaults={"quantity": Decimal("0")},
         )
-        stock.quantity += Decimal(str(line["quantity"])) * delta
+        stock.quantity += Decimal(str(line.get("stock_quantity", line["quantity"]))) * delta
         stock.save(update_fields=["quantity"])
 
 

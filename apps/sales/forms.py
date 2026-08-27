@@ -5,6 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from django import forms
+from django.utils import timezone
 
 from apps.core.managers import filter_by_company
 from apps.companies.models import Store
@@ -31,6 +32,16 @@ _select = {"class": "form-select"}
 _check = {"class": "form-check-input"}
 _date = {"class": "form-control", "type": "date"}
 _textarea = {"class": "form-control", "rows": 3}
+
+
+def _set_default_issue_date(form, *, include_time=False):
+    """Set a local initial issue date only when creating an unbound form."""
+    if form.is_bound or form.instance.pk or form.initial.get("issue_date"):
+        return
+    if include_time:
+        form.initial["issue_date"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    else:
+        form.initial["issue_date"] = timezone.localdate().isoformat()
 
 
 class DocumentSeriesForm(forms.ModelForm):
@@ -185,6 +196,7 @@ class QuotationHeaderForm(forms.ModelForm):
             self.fields[fname].input_formats = [
                 '%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d',
             ]
+        _set_default_issue_date(self, include_time=True)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -236,16 +248,17 @@ class QuotationLineForm(forms.Form):
         required=False,
         widget=forms.HiddenInput(),
     )
+    unit = forms.UUIDField(required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(
-        min_value=Decimal("0.0001"),
+        min_value=Decimal("0.01"),
         max_digits=14,
-        decimal_places=4,
-        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.0001", "min": "0.0001"}),
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.01", "min": "0.01"}),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
-        decimal_places=6,
+        decimal_places=3,
         widget=forms.HiddenInput(),
     )
     discount_amount = forms.DecimalField(
@@ -316,6 +329,7 @@ class SaleOrderHeaderForm(forms.ModelForm):
         self.fields["currency"].widget.attrs.update(_select)
         self.fields["notes"].widget.attrs.update(_textarea)
         self.fields["issue_date"].widget.attrs.update({"class": "form-control", "type": "date"})
+        _set_default_issue_date(self)
         self.fields["due_date"].widget.attrs.update({"class": "form-control", "type": "date"})
         self.fields["payment_term_days"].widget.attrs.update(_text)
         self.fields["internal_reference"].widget.attrs.update(_text)
@@ -356,17 +370,18 @@ class SaleOrderLineForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs=_text),
     )
+    unit = forms.UUIDField(required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(
-        min_value=Decimal("0.0001"),
+        min_value=Decimal("0.01"),
         max_digits=14,
-        decimal_places=4,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.0001", "min": "0.0001"}),
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0.01"}),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
-        decimal_places=6,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0"}),
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
     )
     discount_amount = forms.DecimalField(
         min_value=Decimal("0"),
@@ -492,6 +507,7 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             "%Y-%m-%dT%H:%M:%S",
             "%Y-%m-%d",
         ]
+        _set_default_issue_date(self, include_time=True)
         self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
         self.fields["exchange_rate"].required = False
         self.fields["internal_reference"].widget.attrs.update(_text)
@@ -582,16 +598,17 @@ class SalesDocumentLineForm(forms.Form):
         required=False,
         widget=forms.HiddenInput(),
     )
+    unit = forms.UUIDField(required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(
-        min_value=Decimal("0.0001"),
+        min_value=Decimal("0.01"),
         max_digits=14,
-        decimal_places=4,
-        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.0001", "min": "0.0001"}),
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.01", "min": "0.01"}),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
-        decimal_places=6,
+        decimal_places=3,
         widget=forms.HiddenInput(),
     )
     discount_amount = forms.DecimalField(

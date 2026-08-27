@@ -4,13 +4,24 @@ inventory/views/api.py — JSON API endpoints for inventory UI interactions.
 import json
 import uuid as uuid_lib
 
+from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.partners.models import Customer, Supplier
 
-from ..models import Brand, Category, Product, ProductPrice, StockByWarehouse, Unit, WarehouseLocation
+from ..models import (
+    Brand,
+    Category,
+    Product,
+    ProductPrice,
+    ProductUnit,
+    StockByWarehouse,
+    Unit,
+    Warehouse,
+    WarehouseLocation,
+)
 
 
 def _get_company_id(request):
@@ -36,7 +47,7 @@ def product_search(request):
     company_id   = _get_company_id(request)
     store_id     = _get_store_id(request)
 
-    qs = Product.objects.filter(active=True).select_related("unit")
+    qs = Product.objects.filter(active=True).select_related("unit").prefetch_related("unit_conversions__unit")
     if company_id:
         qs = qs.filter(company_id=company_id)
     if q:
@@ -75,6 +86,14 @@ def product_search(request):
                 "sku":            p.sku or "",
                 "unit":           p.unit.code if p.unit else "",
                 "unit_id":        str(p.unit_id) if p.unit_id else "",
+                "units": [
+                    {"id": str(c.unit_id), "code": c.unit.code, "name": c.unit.name,
+                     "factor": float(c.conversion_factor),
+                     "sale_price": float(c.sale_price) if c.sale_price is not None else None,
+                     "purchase_price": float(c.purchase_price) if c.purchase_price is not None else None}
+                    for c in p.unit_conversions.all() if c.active
+                ] or [{"id": str(p.unit_id), "code": p.unit.code, "name": p.unit.name,
+                       "factor": 1, "sale_price": None, "purchase_price": None}],
                 "price_purchase": float(p.price_purchase or 0),
                 "price_sale":     float(p.price_sale or 0),
                 "stock":          stock_map.get(str(p.pk), 0),
@@ -104,6 +123,54 @@ def product_stock(request):
         return JsonResponse({"stock": float(s.quantity)})
     except StockByWarehouse.DoesNotExist:
         return JsonResponse({"stock": 0})
+
+
+@require_GET
+def product_stock_by_warehouse(request):
+    """Stock base de un producto en todos los almacenes de la empresa activa."""
+    if _require_auth(request):
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+
+    product_id = request.GET.get("product", "").strip()
+    company_id = _get_company_id(request)
+    if not product_id or not company_id:
+        return JsonResponse({"error": "Producto y empresa activa son requeridos."}, status=400)
+
+    product = Product.objects.filter(
+        pk=product_id, company_id=company_id, active=True
+    ).select_related("unit").first()
+    if product is None:
+        return JsonResponse({"error": "Producto no encontrado."}, status=404)
+
+    warehouses = list(
+        Warehouse.objects.filter(store__company_id=company_id, active=True)
+        .select_related("store")
+        .order_by("store__name", "name")
+    )
+    stock_map = {
+        str(stock.warehouse_id): stock.quantity
+        for stock in StockByWarehouse.objects.filter(
+            product=product, warehouse_id__in=[warehouse.pk for warehouse in warehouses]
+        )
+    }
+    return JsonResponse({
+        "product": {
+            "id": str(product.pk),
+            "name": product.name,
+            "sku": product.sku or "",
+            "unit_code": product.unit.code,
+            "unit_name": product.unit.name,
+        },
+        "warehouses": [
+            {
+                "id": str(warehouse.pk),
+                "store": warehouse.store.name,
+                "warehouse": warehouse.name,
+                "stock": str(stock_map.get(str(warehouse.pk), 0)),
+            }
+            for warehouse in warehouses
+        ],
+    })
 
 
 # ── Supplier search ───────────────────────────────────────────────────────────
@@ -202,13 +269,20 @@ def product_quick_create(request):
     company_id = _get_company_id(request)
 
     try:
-        product = Product.objects.create(
-            name=name,
-            sku=sku,
-            unit=unit,
-            active=True,
-            company_id=company_id or None,
-        )
+        with transaction.atomic():
+            product = Product.objects.create(
+                name=name,
+                sku=sku,
+                unit=unit,
+                active=True,
+                company_id=company_id or None,
+            )
+            ProductUnit.objects.create(
+                product=product,
+                unit=unit,
+                conversion_factor=1,
+                active=True,
+            )
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
@@ -219,8 +293,16 @@ def product_quick_create(request):
             "sku":            product.sku,
             "unit":           product.unit.code if product.unit else "",
             "unit_id":        str(product.unit_id) if product.unit_id else "",
+            "units": [{
+                "id": str(product.unit_id),
+                "code": product.unit.code,
+                "name": product.unit.name,
+                "factor": 1,
+                "sale_price": None,
+                "purchase_price": None,
+            }],
             "price_purchase": float(product.price_purchase or 0),
-                "price_sale":     float(product.price_sale or 0),
+            "price_sale":     float(product.price_sale or 0),
         },
         status=201,
     )

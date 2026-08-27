@@ -64,6 +64,51 @@
     </div>
 
     <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">Unidades y presentaciones</h3>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info py-1 px-2 mb-2 small">
+          <strong>Unidad de medida principal:</strong> es obligatoria y es la unidad en la que se controla el stock. Las siguientes unidades son opcionales y se calculan con respecto a esta unidad principal.
+        </div>
+        {{ unit_formset.management_form }}
+        {% if unit_formset.non_form_errors %}<div class="alert alert-danger">{{ unit_formset.non_form_errors }}</div>{% endif %}
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter">
+            <thead><tr><th>Unidad / presentación</th><th>Factor</th><th>Precio venta opcional</th><th>Precio compra opcional</th><th>Estado</th><th>Eliminar</th></tr></thead>
+            <tbody>
+              <tr class="table-primary">
+                <td>
+                  {{ form.unit }}
+                  {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors.0 }}</div>{% endif %}
+                </td>
+                <td><input class="form-control form-control-sm" value="1" disabled readonly></td>
+                <td colspan="2" class="text-muted small">Usa los precios generales y las listas de precios</td>
+                <td>
+                  <span class="badge bg-success-lt mb-1" style="font-size:.5rem">Obligatoria</span>
+                </td>
+                <td class="text-muted text-center">—</td>
+              </tr>
+              {% for uf in unit_formset %}
+              <tr>
+                <td>{{ uf.id }}{{ uf.unit }}{{ uf.unit.errors }}</td>
+                <td>{{ uf.conversion_factor }}{{ uf.conversion_factor.errors }}</td>
+                <td>{{ uf.sale_price }}</td><td>{{ uf.purchase_price }}</td>
+                <td class="text-center">{{ uf.active }}</td>
+                <td class="text-center">{% if uf.DELETE %}{{ uf.DELETE }}{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="text-muted small mb-0">
+          Si una presentación no tiene precio propio, su precio se calcula multiplicando el precio general o de la lista seleccionada por el factor.
+          Registre un precio opcional solo cuando la caja, rollo u otra presentación tenga un precio comercial diferente.
+        </p>
+      </div>
+    </div>
+
+    <div class="card mb-3">
       <div class="card-header"><h3 class="card-title">Precios</h3></div>
       <div class="card-body">
         <div class="row">
@@ -148,11 +193,6 @@
     <div class="card mb-3">
       <div class="card-header"><h3 class="card-title">Clasificación</h3></div>
       <div class="card-body">
-        <div class="mb-3">
-          <label class="form-label required">Unidad</label>
-          {{ form.unit }}
-          {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors.0 }}</div>{% endif %}
-        </div>
         <div class="mb-3">
           <label class="form-label">Categoría</label>
           {{ form.category }}

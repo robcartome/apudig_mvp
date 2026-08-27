@@ -63,6 +63,26 @@ class MovementViewsTest(TestCase):
         resp = self.client.get(reverse("inventory:movement_list"))
         self.assertEqual(resp.status_code, 200)
 
+    def test_stock_by_warehouse_api_includes_all_company_warehouses(self):
+        other_store = Store.objects.create(company=self.company, name="Secundaria")
+        other_warehouse = Warehouse.objects.create(store=other_store, name="Almacén B")
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("12.500")
+        )
+
+        response = self.client.get(
+            reverse("inventory:api_product_stock_by_warehouse"),
+            {"product": str(self.product.pk)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["product"]["unit_code"], "UND")
+        self.assertEqual(len(data["warehouses"]), 2)
+        stock_by_name = {item["warehouse"]: item["stock"] for item in data["warehouses"]}
+        self.assertEqual(stock_by_name[self.warehouse.name], "12.500")
+        self.assertEqual(stock_by_name[other_warehouse.name], "0")
+
     # ── Entry ─────────────────────────────────────────────────────────────────
 
     def test_entry_create_get(self):

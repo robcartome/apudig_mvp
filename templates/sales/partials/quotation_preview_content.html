@@ -17,6 +17,7 @@
       <tr>
         <th>#</th>
         <th>Producto</th>
+        <th>Unidad</th>
         <th class="text-end">Cant.</th>
         <th class="text-end">Valor Unit. (sin IGV)</th>
         <th class="text-end">P. Unit. (con IGV)</th>
@@ -34,6 +35,7 @@
           <div class="fw-semibold">{{ line.product.name }}</div>
           {% if line.memo %}<div class="text-muted small">{{ line.memo }}</div>{% endif %}
         </td>
+        <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
         <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
         <td class="text-end">{{ item.unit_price_ex|floatformat:2 }}</td>
         <td class="text-end">{{ item.unit_price_inc|floatformat:2 }}</td>
@@ -46,7 +48,7 @@
     </tbody>
     <tfoot class="table-light fw-semibold">
       <tr>
-        <td colspan="7" class="text-end">TOTAL:</td>
+        <td colspan="8" class="text-end">TOTAL:</td>
         <td class="text-end">{{ quotation.currency }} {{ quotation.total|floatformat:2 }}</td>
       </tr>
     </tfoot>

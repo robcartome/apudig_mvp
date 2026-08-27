@@ -21,7 +21,7 @@ from .views import (
     pricelist_bulk_import_pl, pricelist_bulk_template_pl,
     price_report,
     product_create, product_delete, product_list, product_update,
-    product_quick_create, product_search, product_stock,
+    product_quick_create, product_search, product_stock, product_stock_by_warehouse,
     stock_comparative_report,
     stock_report,
     stock_report_detail,
@@ -47,6 +47,7 @@ urlpatterns = [
     # API (AJAX)
     path("api/products/",        product_search,       name="api_product_search"),
     path("api/products/stock/",  product_stock,        name="api_product_stock"),
+    path("api/products/stock-by-warehouse/", product_stock_by_warehouse, name="api_product_stock_by_warehouse"),
     path("api/products/create/", product_quick_create, name="api_product_create"),
     path("api/price-list/<uuid:pk>/prices/", price_list_prices, name="api_price_list_prices"),
     path("api/suppliers/",       supplier_search,      name="api_supplier_search"),

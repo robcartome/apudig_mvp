@@ -7,9 +7,9 @@ from django.test import TestCase
 
 from apps.companies.models import Company, Store
 from apps.inventory.models import (
-    Category, Product, StockByWarehouse, Unit, Warehouse
+    Category, MovementDetail, Product, ProductUnit, StockByWarehouse, Unit, Warehouse
 )
-from apps.inventory.services import register_entry, register_exit
+from apps.inventory.services import register_entry, register_exit, register_transfer
 
 
 class StockServiceTest(TestCase):
@@ -27,6 +27,16 @@ class StockServiceTest(TestCase):
             price_purchase=Decimal("10"), price_sale=Decimal("15"),
         )
         self.now = timezone.now()
+
+    def _box_conversion(self, factor="20"):
+        box = Unit.objects.create(code="BX", name="Caja")
+        ProductUnit.objects.create(
+            product=self.product, unit=self.product.unit, conversion_factor=1,
+        )
+        ProductUnit.objects.create(
+            product=self.product, unit=box, conversion_factor=Decimal(factor),
+        )
+        return box
 
     def test_entry_increases_stock(self):
         register_entry(
@@ -49,3 +59,40 @@ class StockServiceTest(TestCase):
         )
         stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
         self.assertEqual(stock.quantity, Decimal("7"))
+
+    def test_alternate_unit_updates_stock_in_base_unit_and_keeps_snapshot(self):
+        box = self._box_conversion()
+        movement = register_entry(
+            store_id=self.store_id, warehouse_id=self.warehouse_id, date=self.now,
+            lines=[{"product_id": self.product.id, "unit_id": box.id,
+                    "quantity": Decimal("2"), "unit_price": Decimal("180")}],
+        )
+
+        stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
+        detail = MovementDetail.objects.get(movement=movement)
+        self.assertEqual(stock.quantity, Decimal("40"))
+        self.assertEqual(detail.quantity, Decimal("2"))
+        self.assertEqual(detail.unit_code, "BX")
+        self.assertEqual(detail.conversion_factor, Decimal("20"))
+        self.assertEqual(detail.stock_quantity, Decimal("40"))
+
+    def test_transfer_uses_converted_quantity_in_both_warehouses(self):
+        box = self._box_conversion()
+        destination = Warehouse.objects.create(store_id=self.store_id, name="Almacén 2")
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("100")
+        )
+
+        register_transfer(
+            store_id=self.store_id,
+            warehouse_origin_id=self.warehouse_id,
+            warehouse_dest_id=str(destination.id),
+            date=self.now,
+            lines=[{"product_id": self.product.id, "unit_id": box.id,
+                    "quantity": Decimal("2"), "unit_price": Decimal("180")}],
+        )
+
+        origin_stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
+        destination_stock = StockByWarehouse.objects.get(product=self.product, warehouse=destination)
+        self.assertEqual(origin_stock.quantity, Decimal("60"))
+        self.assertEqual(destination_stock.quantity, Decimal("40"))

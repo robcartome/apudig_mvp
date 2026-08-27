@@ -143,7 +143,7 @@
               {% else %}
               <td class="text-end fw-semibold">{{ d.quantity|floatformat:3 }}</td>
               {% endif %}
-              <td class="text-muted small">{{ d.product.unit }}</td>
+              <td class="small">{% include "components/unit_equivalence.html" with item=d %}</td>
               <td class="text-muted small">{{ d.location.name|default:"—" }}</td>
               {% if movement.type != "ADJUSTMENT" %}
               <td class="text-end text-muted small">{{ d.unit_price|floatformat:2 }}</td>

@@ -186,7 +186,9 @@
                 data-init-product="{{ f.initial.product|default:'' }}"
                 data-init-name="{{ f.initial.product_name|default:'' }}"
                 data-init-unit-id="{{ f.initial.product_unit_id|default:'' }}"
-                data-init-unit="{{ f.initial.product_unit|default:'' }}">
+                data-init-unit="{{ f.initial.product_unit|default:'' }}"
+                data-base-unit-id="{{ f.initial.base_unit_id|default:'' }}"
+                data-base-unit-code="{{ f.initial.base_unit_code|default:'' }}">
 
               <td class="text-center text-muted line-num">{{ forloop.counter }}</td>
               <td style="min-width:600px">
@@ -201,15 +203,24 @@
                 {% endif %}
               </td>
               <td>
-                <select class="form-select form-select-sm product-unit-select" disabled
+                {{ f.unit }}
+                <select class="form-select form-select-sm product-unit-select"
                         title="La unidad se define por producto. Cuando existan equivalencias se habilitará.">
+                  {% for conversion in f.initial.product_units %}
+                  <option value="{{ conversion.unit_id }}" data-code="{{ conversion.unit.code }}" data-factor="{{ conversion.conversion_factor }}" data-sale-price="{{ conversion.sale_price|default_if_none:'' }}" data-purchase-price="{{ conversion.purchase_price|default_if_none:'' }}" {% if conversion.unit_id|stringformat:'s' == f.initial.product_unit_id|stringformat:'s' %}selected{% endif %}>{{ conversion.unit.code }} - {{ conversion.unit.name }}</option>
+                  {% empty %}
                   <option value="{{ f.initial.product_unit_id|default:'' }}">
                     {{ f.initial.product_unit|default:'—' }}
                   </option>
+                  {% endfor %}
                 </select>
+                <div class="unit-equivalence text-muted mt-1" style="font-size:.7rem"></div>
               </td>
               <td>
-                {{ f.quantity }}
+                <div class="input-group input-group-sm">
+                  {{ f.quantity }}
+                  <button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver stock por almacén" aria-label="Ver stock por almacén"><i class="ti ti-info-circle"></i></button>
+                </div>
                 {% if f.quantity.errors %}
                 <div class="text-danger" style="font-size:.75rem">{{ f.quantity.errors.0 }}</div>
                 {% endif %}
@@ -270,9 +281,12 @@
 </div>{# /row #}
 </form>
 
+{% include "components/stock_by_warehouse_modal.html" %}
+
 <div id="inv-form-config" hidden
      data-search-url="{% url 'inventory:api_product_search' %}"
      data-stock-url="{% url 'inventory:api_product_stock' %}"
+     data-stock-by-warehouse-url="{% url 'inventory:api_product_stock_by_warehouse' %}"
      data-create-url="{% url 'inventory:api_product_create' %}"
      data-location-url="{% url 'inventory:api_location_search' %}"
   data-show-unit-price="{% if movement_type == 'ADJUSTMENT' %}0{% else %}1{% endif %}"
@@ -326,7 +340,8 @@
 <script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/inventory/movement-form.js' %}?v=20260811-1"></script>
+<script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
+<script src="{% static 'js/inventory/movement-form.js' %}?v=20260818-1"></script>
 {# All JS logic lives in static/js/** — nothing inline needed here #}
 {% endblock extra_js %}
 
