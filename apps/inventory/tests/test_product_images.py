@@ -8,7 +8,7 @@ from PIL import Image
 
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.forms import ProductForm
-from apps.inventory.models import Product, Unit
+from apps.inventory.models import Product, ProductUnit, Unit
 from apps.inventory.product_image_storage import build_product_image_key, build_public_url
 from apps.inventory.product_image_storage import upload_product_image
 from apps.users.models import User
@@ -139,6 +139,9 @@ class ProductImageTest(TestCase):
         self.assertRedirects(response, reverse("inventory:product_list"))
         product = Product.objects.get(sku="IMG-01")
         self.assertEqual(product.image_key, expected_key)
+        conversion = ProductUnit.objects.get(product=product, unit=self.unit)
+        self.assertTrue(conversion.is_default_sale)
+        self.assertTrue(conversion.is_default_purchase)
         upload_mock.assert_called_once()
         self.assertEqual(upload_mock.call_args.args[0].company_id, self.company.pk)
 

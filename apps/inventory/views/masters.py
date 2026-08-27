@@ -512,9 +512,18 @@ def product_create(request):
                 product.save()
                 unit_formset.instance = product
                 unit_formset.save()
+                ProductUnit.objects.filter(product=product).exclude(unit=product.unit).update(
+                    is_default_sale=False,
+                    is_default_purchase=False,
+                )
                 ProductUnit.objects.update_or_create(
                     product=product, unit=product.unit,
-                    defaults={"conversion_factor": 1, "active": True},
+                    defaults={
+                        "conversion_factor": 1,
+                        "is_default_sale": True,
+                        "is_default_purchase": True,
+                        "active": True,
+                    },
                 )
                 for price_list in price_lists:
                     raw = request.POST.get(f"price_list_{price_list.pk}", "").strip()
@@ -573,9 +582,18 @@ def product_update(request, pk):
                 product.save()
                 unit_formset.instance = product
                 unit_formset.save()
+                ProductUnit.objects.filter(product=product).exclude(unit=product.unit).update(
+                    is_default_sale=False,
+                    is_default_purchase=False,
+                )
                 ProductUnit.objects.update_or_create(
                     product=product, unit=product.unit,
-                    defaults={"conversion_factor": 1, "active": True},
+                    defaults={
+                        "conversion_factor": 1,
+                        "is_default_sale": True,
+                        "is_default_purchase": True,
+                        "active": True,
+                    },
                 )
                 for price_list in price_lists:
                     field_name = f"price_list_{price_list.pk}"

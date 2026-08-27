@@ -142,7 +142,11 @@ def _normalize_line_uom(line: dict) -> dict:
         conversion = conversions.filter(unit_id=product.unit_id).first()
         if conversion is None:
             conversion = ProductUnit.objects.create(
-                product=product, unit=product.unit, conversion_factor=1,
+                product=product,
+                unit=product.unit,
+                conversion_factor=1,
+                is_default_sale=True,
+                is_default_purchase=True,
             )
     factor = Decimal(str(conversion.conversion_factor))
     normalized.update({

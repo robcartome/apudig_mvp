@@ -40,7 +40,11 @@ def _normalize_uom_lines(lines: list[dict]) -> list[dict]:
             if str(unit_id) != str(product.unit_id):
                 raise ValueError(f"La unidad seleccionada no está habilitada para {product.name}.")
             conversion = ProductUnit.objects.create(
-                product=product, unit=product.unit, conversion_factor=1,
+                product=product,
+                unit=product.unit,
+                conversion_factor=1,
+                is_default_sale=True,
+                is_default_purchase=True,
             )
         factor = Decimal(str(conversion.conversion_factor))
         line.update({

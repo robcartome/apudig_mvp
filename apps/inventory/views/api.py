@@ -281,6 +281,8 @@ def product_quick_create(request):
                 product=product,
                 unit=unit,
                 conversion_factor=1,
+                is_default_sale=True,
+                is_default_purchase=True,
                 active=True,
             )
     except Exception as exc:

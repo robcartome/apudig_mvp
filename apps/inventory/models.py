@@ -158,6 +158,8 @@ class ProductUnit(models.Model):
     conversion_factor = models.DecimalField(max_digits=18, decimal_places=6, default=1)
     sale_price = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True)
     purchase_price = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True)
+    is_default_sale = models.BooleanField(default=False)
+    is_default_purchase = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
 
     class Meta:
@@ -167,6 +169,16 @@ class ProductUnit(models.Model):
             models.UniqueConstraint(fields=("product", "unit"), name="uniq_product_unit"),
             models.CheckConstraint(
                 condition=models.Q(conversion_factor__gt=0), name="product_unit_factor_gt_zero"
+            ),
+            models.UniqueConstraint(
+                condition=models.Q(is_default_sale=True),
+                fields=("product",),
+                name="uniq_product_default_sale_unit",
+            ),
+            models.UniqueConstraint(
+                condition=models.Q(is_default_purchase=True),
+                fields=("product",),
+                name="uniq_product_default_purchase_unit",
             ),
         ]
 
