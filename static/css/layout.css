@@ -3,3 +3,73 @@
   width: 95%;
   max-width: 1800px;
 }
+
+.app-alert {
+  animation: app-alert-enter 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  border-width: 1px 1px 1px 4px;
+  border-radius: 0.25rem;
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  transform-origin: top center;
+  will-change: opacity, transform;
+}
+
+.app-alert.fade {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.app-alert.fade:not(.show) {
+  opacity: 0;
+  transform: translateY(-0.5rem) scale(0.99);
+}
+
+.app-alert-icon {
+  flex: 0 0 auto;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.app-alert-content {
+  min-width: 0;
+}
+
+.app-alert-content a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.app-alert-close {
+  position: static;
+  width: 0.75rem;
+  height: 0.75rem;
+  background-size: 0.65rem;
+  opacity: 0.55;
+  padding: 0.25rem;
+  margin: 0;
+}
+
+.app-alert-close:hover,
+.app-alert-close:focus {
+  opacity: 0.85;
+}
+
+@keyframes app-alert-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.65rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-alert {
+    animation: none;
+    transition: none;
+  }
+}

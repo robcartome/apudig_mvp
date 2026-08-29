@@ -136,16 +136,7 @@
     </header>
 
     <!-- Flash messages -->
-    {% if messages %}
-    <div class="container-xxl pt-3">
-      {% for message in messages %}
-      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible" role="alert">
-        {{ message }}
-        <a class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></a>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
+    {% include "components/alerts.html" %}
 
     <!-- Body -->
     <div class="page-body mt-1">
@@ -174,6 +165,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
 <script src="{% static 'js/components/sidebar.js' %}"></script>
+<script src="{% static 'js/components/alerts.js' %}"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

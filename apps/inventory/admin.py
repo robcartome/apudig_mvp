@@ -8,6 +8,7 @@ from .models import (
     PriceList,
     Product,
     ProductPrice,
+    ProductSupplier,
     StockByWarehouse,
     Unit,
     Warehouse,
@@ -53,6 +54,14 @@ class ProductAdmin(admin.ModelAdmin):
 class ProductPriceAdmin(admin.ModelAdmin):
     list_display = ("product", "price_list", "amount", "currency", "active")
     list_filter = ("price_list", "active")
+
+
+@admin.register(ProductSupplier)
+class ProductSupplierAdmin(admin.ModelAdmin):
+    list_display = ("product", "supplier", "supplier_code", "purchase_price", "is_preferred", "active")
+    list_filter = ("company", "supplier", "is_preferred", "active")
+    search_fields = ("product__sku", "product__name", "supplier__name", "supplier_code", "supplier_product_name")
+    list_select_related = ("product", "supplier", "company")
 
 
 @admin.register(Warehouse)

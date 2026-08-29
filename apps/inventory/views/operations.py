@@ -2,9 +2,10 @@
 inventory/views/operations.py — Vistas de movimientos de stock y consulta de stock.
 """
 from django.contrib import messages
-from django.db.models import Q
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.utils import timezone
 
 from ..forms import MovementDetailEditFormSet, MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
@@ -15,6 +16,7 @@ from ..selectors import (
     get_stock_by_warehouse,
     get_warehouses_for_store,
     search_movements,
+    search_products,
 )
 from ..services import confirm_movement, register_adjustment, register_entry, register_exit, register_transfer
 from ..services import delete_movement, update_movement
@@ -46,6 +48,18 @@ def _paginate(request, qs, per_page: int = 25):
     return Paginator(qs, per_page).get_page(request.GET.get("page", 1))
 
 
+def _movement_reference(movement, *, link=True):
+    """Safe, human-readable movement identity for flash messages."""
+    identifier = "-".join(part for part in (movement.series, movement.number) if part) or str(movement.pk)
+    label = f"{movement.get_type_display()} {identifier}"
+    if not link:
+        return format_html("<strong>{}</strong>", label)
+    return format_html(
+        '<a href="{}"><strong>{}</strong></a>',
+        reverse("inventory:movement_detail", args=[movement.pk]),
+        label,
+    )
+
 def _parse_lines(formset):
     """Extrae líneas válidas del formset de detalles."""
     lines = []
@@ -73,11 +87,12 @@ def stock_report(request):
     if selected_warehouse:
         stocks = stocks.filter(warehouse_id=selected_warehouse)
     if search_query:
-        stocks = stocks.filter(
-            Q(product__name__icontains=search_query) |
-            Q(product__sku__icontains=search_query) |
-            Q(product__barcode__icontains=search_query)
-        )
+        matching_product_ids = search_products(
+            search_query,
+            company_id=_get_company_id(request),
+            active_only=False,
+        ).values("pk")
+        stocks = stocks.filter(product_id__in=matching_product_ids)
 
     return render(request, "inventory/stock_report.html", {
         "stocks": stocks,
@@ -241,7 +256,7 @@ def movement_edit(request, pk):
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Movimiento actualizado correctamente.")
+                messages.success(request, format_html("Movimiento actualizado: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -270,7 +285,7 @@ def movement_delete(request, pk):
         except ValueError as exc:
             messages.error(request, str(exc))
             return redirect("inventory:movement_list")
-        messages.success(request, "Movimiento eliminado correctamente.")
+        messages.success(request, format_html("Movimiento eliminado: {}.", _movement_reference(movement, link=False)))
         return redirect("inventory:movement_list")
 
     return render(request, "inventory/confirm_delete.html", {
@@ -294,7 +309,7 @@ def movement_confirm(request, pk):
     except ValueError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Movimiento confirmado correctamente.")
+        messages.success(request, format_html("Movimiento confirmado: {}.", _movement_reference(movement)))
 
     return redirect("inventory:movement_list")
 
@@ -330,7 +345,7 @@ def entry_create(request):
             if not warehouse:
                 form.add_error("warehouse", "Debe seleccionar un almacén.")
             else:
-                register_entry(
+                movement = register_entry(
                     store_id=store_id,
                     warehouse_id=str(warehouse.pk),
                     date=cd["date"],
@@ -344,7 +359,7 @@ def entry_create(request):
                     supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
                     document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                 )
-                messages.success(request, "Entrada registrada correctamente.")
+                messages.success(request, format_html("Entrada registrada: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -388,7 +403,7 @@ def exit_create(request):
             if not warehouse:
                 form.add_error("warehouse", "Debe seleccionar un almacén.")
             else:
-                register_exit(
+                movement = register_exit(
                     store_id=store_id,
                     warehouse_id=str(warehouse.pk),
                     date=cd["date"],
@@ -402,7 +417,7 @@ def exit_create(request):
                     customer_id=cd["customer"].pk if cd.get("customer") else None,
                     document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                 )
-                messages.success(request, "Salida registrada correctamente.")
+                messages.success(request, format_html("Salida registrada: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -449,7 +464,7 @@ def transfer_create(request):
             if not warehouse_dest:
                 form.add_error("warehouse_dest", "Debe seleccionar almacén de destino.")
             if warehouse_origin and warehouse_dest:
-                register_transfer(
+                movement = register_transfer(
                     store_id=store_id,
                     warehouse_origin_id=str(warehouse_origin.pk),
                     warehouse_dest_id=str(warehouse_dest.pk),
@@ -460,7 +475,7 @@ def transfer_create(request):
                     reference_doc=cd.get("reference_doc", ""),
                     description=cd.get("description", ""),
                 )
-                messages.success(request, "Transferencia registrada correctamente.")
+                messages.success(request, format_html("Transferencia registrada: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -510,7 +525,7 @@ def adjustment_create(request):
             if not warehouse:
                 form.add_error("warehouse", "Debe seleccionar un almacén.")
             else:
-                register_adjustment(
+                movement = register_adjustment(
                     store_id=store_id,
                     warehouse_id=str(warehouse.pk),
                     date=cd["date"],
@@ -526,7 +541,7 @@ def adjustment_create(request):
                     document_type_id=None,
                     carrier_id=None,
                 )
-                messages.success(request, "Ajuste registrado correctamente.")
+                messages.success(request, format_html("Ajuste registrado: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -642,7 +657,7 @@ def movement_copy(request, pk):
                     if not warehouse:
                         form.add_error("warehouse", "Debe seleccionar un almacén.")
                     else:
-                        register_entry(
+                        movement = register_entry(
                             store_id=store_id,
                             warehouse_id=str(warehouse.pk),
                             date=cd["date"],
@@ -656,14 +671,14 @@ def movement_copy(request, pk):
                             supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
                             document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                         )
-                        messages.success(request, "Entrada copiada y registrada correctamente.")
+                        messages.success(request, format_html("Entrada copiada y registrada: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
                 elif source.type == MovementType.EXIT:
                     warehouse = cd.get("warehouse")
                     if not warehouse:
                         form.add_error("warehouse", "Debe seleccionar un almacén.")
                     else:
-                        register_exit(
+                        movement = register_exit(
                             store_id=store_id,
                             warehouse_id=str(warehouse.pk),
                             date=cd["date"],
@@ -677,7 +692,7 @@ def movement_copy(request, pk):
                             customer_id=cd["customer"].pk if cd.get("customer") else None,
                             document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                         )
-                        messages.success(request, "Salida copiada y registrada correctamente.")
+                        messages.success(request, format_html("Salida copiada y registrada: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
                 elif source.type == MovementType.TRANSFER:
                     warehouse_origin = cd.get("warehouse_origin")
@@ -687,7 +702,7 @@ def movement_copy(request, pk):
                     if not warehouse_dest:
                         form.add_error("warehouse_dest", "Debe seleccionar almacén de destino.")
                     if warehouse_origin and warehouse_dest:
-                        register_transfer(
+                        movement = register_transfer(
                             store_id=store_id,
                             warehouse_origin_id=str(warehouse_origin.pk),
                             warehouse_dest_id=str(warehouse_dest.pk),
@@ -698,14 +713,14 @@ def movement_copy(request, pk):
                             reference_doc=cd.get("reference_doc", ""),
                             description=cd.get("description", ""),
                         )
-                        messages.success(request, "Transferencia copiada y registrada correctamente.")
+                        messages.success(request, format_html("Transferencia copiada y registrada: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
                 elif source.type == MovementType.ADJUSTMENT:
                     warehouse = cd.get("warehouse")
                     if not warehouse:
                         form.add_error("warehouse", "Debe seleccionar un almacén.")
                     else:
-                        register_adjustment(
+                        movement = register_adjustment(
                             store_id=store_id,
                             warehouse_id=str(warehouse.pk),
                             date=cd["date"],
@@ -721,7 +736,7 @@ def movement_copy(request, pk):
                             document_type_id=None,
                             carrier_id=None,
                         )
-                        messages.success(request, "Ajuste copiado y registrado correctamente.")
+                        messages.success(request, format_html("Ajuste copiado y registrado: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
             except ValueError as exc:
                 messages.error(request, str(exc))

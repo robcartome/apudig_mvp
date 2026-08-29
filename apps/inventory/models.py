@@ -150,6 +150,76 @@ class Product(TimeStampedModel):
         ]
 
 
+class ProductSupplier(TimeStampedModel):
+    """Commercial identification of a product in a supplier's catalog."""
+
+    objects = CompanyScopedManager()
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.CASCADE, related_name="product_suppliers"
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="supplier_relations"
+    )
+    supplier = models.ForeignKey(
+        "partners.Supplier", on_delete=models.CASCADE, related_name="product_relations"
+    )
+    supplier_code = models.CharField(max_length=100, blank=True)
+    supplier_product_name = models.CharField(max_length=500, blank=True)
+    supplier_description = models.TextField(blank=True)
+    purchase_price = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True)
+    is_preferred = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "product_suppliers"
+        ordering = ["-is_preferred", "supplier__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("product", "supplier"), name="uniq_product_supplier"
+            ),
+            models.UniqueConstraint(
+                fields=("company", "supplier", "supplier_code"),
+                condition=~Q(supplier_code=""),
+                name="uniq_supplier_product_code_nonempty",
+            ),
+            models.UniqueConstraint(
+                fields=("product",),
+                condition=Q(is_preferred=True),
+                name="uniq_preferred_supplier_per_product",
+            ),
+            models.CheckConstraint(
+                condition=Q(active=True) | Q(is_preferred=False),
+                name="product_supplier_preferred_requires_active",
+            ),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        if self.product_id and self.company_id != self.product.company_id:
+            errors["product"] = "El producto debe pertenecer a la empresa de la relación."
+        if self.supplier_id and self.company_id != self.supplier.company_id:
+            errors["supplier"] = "El proveedor debe pertenecer a la empresa del producto."
+        if self.is_preferred and not self.active:
+            errors["is_preferred"] = "Un proveedor preferido debe estar activo."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.product_id:
+            self.company_id = self.product.company_id
+        self.supplier_code = (self.supplier_code or "").strip()
+        self.supplier_product_name = (self.supplier_product_name or "").strip()
+        self.clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        code = f" [{self.supplier_code}]" if self.supplier_code else ""
+        return f"{self.product} / {self.supplier}{code}"
+
+
 class ProductUnit(models.Model):
     """Unidad/presentación habilitada para un producto y su equivalencia en stock."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

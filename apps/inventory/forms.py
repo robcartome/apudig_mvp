@@ -2,11 +2,12 @@ from decimal import Decimal
 
 from django import forms
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.partners.models import Carrier, Customer, DocumentType, Supplier
 
-from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductUnit, Unit, Warehouse, WarehouseLocation
+from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductSupplier, ProductUnit, Unit, Warehouse, WarehouseLocation
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -242,6 +243,108 @@ class BaseProductUnitFormSet(forms.BaseInlineFormSet):
 ProductUnitFormSet = forms.inlineformset_factory(
     Product, ProductUnit, form=ProductUnitForm, formset=BaseProductUnitFormSet,
     extra=2, can_delete=True,
+)
+
+
+class ProductSupplierForm(forms.ModelForm):
+    class Meta:
+        model = ProductSupplier
+        fields = (
+            "supplier", "supplier_code", "supplier_product_name",
+            "supplier_description", "purchase_price", "is_preferred", "active",
+        )
+        widgets = {
+            "supplier": forms.Select(attrs={"class": "form-select form-select-sm"}),
+            "supplier_code": forms.TextInput(attrs={"class": "form-control form-control-sm"}),
+            "supplier_product_name": forms.TextInput(attrs={"class": "form-control form-control-sm"}),
+            "supplier_description": forms.Textarea(attrs={"class": "form-control form-control-sm", "rows": 2}),
+            "purchase_price": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.000001", "min": "0"}),
+            "is_preferred": forms.CheckboxInput(attrs=_check),
+            "active": forms.CheckboxInput(attrs=_check),
+        }
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._company = company
+        if company is None:
+            self.fields["supplier"].queryset = Supplier.objects.none()
+        else:
+            self.fields["supplier"].queryset = Supplier.objects.filter(
+                Q(active=True) | Q(pk=self.instance.supplier_id), company=company
+            ).order_by("name")
+
+    def _post_clean(self):
+        if self._company is not None:
+            self.instance.company = self._company
+        super()._post_clean()
+
+    def clean_supplier_code(self):
+        supplier_code = (self.cleaned_data.get("supplier_code") or "").strip()
+        supplier = self.cleaned_data.get("supplier")
+        if self._company and supplier and supplier_code:
+            duplicates = ProductSupplier.objects.filter(
+                company=self._company,
+                supplier=supplier,
+                supplier_code=supplier_code,
+            )
+            if self.instance.pk:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                raise forms.ValidationError(
+                    "Este proveedor ya utiliza este código en otro producto."
+                )
+        return supplier_code
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._company is not None:
+            instance.company = self._company
+        if commit:
+            instance.save()
+        return instance
+
+
+class BaseProductSupplierFormSet(forms.BaseInlineFormSet):
+    def __init__(self, *args, company=None, **kwargs):
+        self.company = company
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["company"] = self.company
+        return kwargs
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        suppliers = set()
+        codes = set()
+        preferred = 0
+        for form in self.forms:
+            data = getattr(form, "cleaned_data", None) or {}
+            if not data or data.get("DELETE"):
+                continue
+            supplier = data.get("supplier")
+            code = (data.get("supplier_code") or "").strip()
+            if supplier and supplier.pk in suppliers:
+                raise forms.ValidationError("No se puede repetir un proveedor para el mismo producto.")
+            if supplier:
+                suppliers.add(supplier.pk)
+            if supplier and code:
+                key = (supplier.pk, code)
+                if key in codes:
+                    raise forms.ValidationError("El código de proveedor no puede repetirse.")
+                codes.add(key)
+            if data.get("is_preferred"):
+                preferred += 1
+        if preferred > 1:
+            raise forms.ValidationError("Solo un proveedor puede marcarse como preferido.")
+
+
+ProductSupplierFormSet = forms.inlineformset_factory(
+    Product, ProductSupplier, form=ProductSupplierForm,
+    formset=BaseProductSupplierFormSet, extra=2, can_delete=True,
 )
 
 _date = {"class": "form-control", "type": "datetime-local"}

@@ -21,6 +21,9 @@
 
 <form method="post" enctype="multipart/form-data" novalidate>
 {% csrf_token %}
+{% if form.errors or unit_formset.errors or supplier_formset.errors %}
+  {% include "components/form_errors_alert.html" %}
+{% endif %}
 {% if form.non_field_errors %}
 <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
 {% endif %}
@@ -60,6 +63,52 @@
           {{ form.model }}
         </div>
 
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">Proveedores</h3></div>
+      <div class="card-body">
+        <p class="text-muted small">
+          Registra cómo identifica cada proveedor este producto. El SKU de ApuDig no cambia.
+        </p>
+        {{ supplier_formset.management_form }}
+        {% if supplier_formset.non_form_errors %}
+        <div class="alert alert-danger">{{ supplier_formset.non_form_errors }}</div>
+        {% endif %}
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter">
+            <thead>
+              <tr>
+                <th style="min-width:180px">Proveedor</th>
+                <th style="min-width:130px">Código proveedor</th>
+                <th style="min-width:190px">Nombre proveedor</th>
+                <th style="min-width:180px">Descripción</th>
+                <th style="min-width:120px">Precio compra</th>
+                <th class="text-center">Preferido</th>
+                <th class="text-center">Activo</th>
+                <th class="text-center">Eliminar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sf in supplier_formset %}
+              <tr>
+                <td>{{ sf.id }}{{ sf.supplier }}{{ sf.supplier.errors }}</td>
+                <td>
+                  {{ sf.supplier_code }}
+                  {% if sf.supplier_code.errors %}<div class="text-danger small mt-1">{{ sf.supplier_code.errors.0 }}</div>{% endif %}
+                </td>
+                <td>{{ sf.supplier_product_name }}{{ sf.supplier_product_name.errors }}</td>
+                <td>{{ sf.supplier_description }}{{ sf.supplier_description.errors }}</td>
+                <td>{{ sf.purchase_price }}{{ sf.purchase_price.errors }}</td>
+                <td class="text-center">{{ sf.is_preferred }}{{ sf.is_preferred.errors }}</td>
+                <td class="text-center">{{ sf.active }}{{ sf.active.errors }}</td>
+                <td class="text-center">{% if sf.DELETE %}{{ sf.DELETE }}{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
