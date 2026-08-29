@@ -5,7 +5,7 @@ import json
 import uuid as uuid_lib
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Exists, OuterRef, Prefetch, Q, Sum
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -16,6 +16,7 @@ from ..models import (
     Category,
     Product,
     ProductPrice,
+    ProductSupplier,
     ProductUnit,
     StockByWarehouse,
     Unit,
@@ -44,16 +45,38 @@ def product_search(request):
 
     q            = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse", "").strip()
+    supplier_id  = request.GET.get("supplier", "").strip()
     company_id   = _get_company_id(request)
     store_id     = _get_store_id(request)
 
-    qs = Product.objects.filter(active=True).select_related("unit").prefetch_related("unit_conversions__unit")
+    supplier_relations = ProductSupplier.objects.filter(active=True).select_related("supplier")
+    if company_id:
+        supplier_relations = supplier_relations.filter(company_id=company_id)
+    if supplier_id:
+        supplier_relations = supplier_relations.filter(supplier_id=supplier_id)
+    qs = Product.objects.filter(active=True).select_related("unit").prefetch_related(
+        "unit_conversions__unit",
+        Prefetch("supplier_relations", queryset=supplier_relations, to_attr="matched_supplier_relations"),
+    )
     if company_id:
         qs = qs.filter(company_id=company_id)
     if q:
-        qs = qs.filter(
-            Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q)
+        product_fields = (
+            Q(name__icontains=q) | Q(sku__icontains=q)
+            | Q(barcode__icontains=q) | Q(model__icontains=q)
         )
+        supplier_matches = ProductSupplier.objects.filter(
+            product_id=OuterRef("pk"), active=True,
+        ).filter(
+            Q(supplier_code__icontains=q)
+            | Q(supplier_product_name__icontains=q)
+        )
+        if supplier_id:
+            supplier_matches = supplier_matches.filter(supplier_id=supplier_id)
+        qs = qs.annotate(
+            matches_supplier_catalog=Exists(supplier_matches)
+        ).filter(product_fields | Q(matches_supplier_catalog=True))
+        qs = qs.distinct()
         products = list(qs.order_by("name")[:50])
     else:
         products = list(qs.order_by("-created_at")[:50])
@@ -95,6 +118,9 @@ def product_search(request):
                 ] or [{"id": str(p.unit_id), "code": p.unit.code, "name": p.unit.name,
                        "factor": 1, "sale_price": None, "purchase_price": None}],
                 "price_purchase": float(p.price_purchase or 0),
+                "supplier_code": p.matched_supplier_relations[0].supplier_code if p.matched_supplier_relations else "",
+                "supplier_product_name": p.matched_supplier_relations[0].supplier_product_name if p.matched_supplier_relations else "",
+                "supplier_purchase_price": float(p.matched_supplier_relations[0].purchase_price) if p.matched_supplier_relations and p.matched_supplier_relations[0].purchase_price is not None else None,
                 "price_sale":     float(p.price_sale or 0),
                 "stock":          stock_map.get(str(p.pk), 0),
                 "total_stock":    total_stock_map.get(str(p.pk), 0),

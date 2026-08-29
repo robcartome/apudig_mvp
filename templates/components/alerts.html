@@ -1,0 +1,18 @@
+{% if messages %}
+<div class="container-xxl pt-2 app-alerts" aria-live="polite" aria-atomic="true">
+  {% for message in messages %}
+  <div class="alert app-alert alert-{% if 'error' in message.tags or 'danger' in message.tags %}danger{% elif 'warning' in message.tags %}warning{% elif 'success' in message.tags %}success{% else %}info{% endif %} fade show py-2 px-3 mb-2"
+       role="{% if 'error' in message.tags or 'danger' in message.tags %}alert{% else %}status{% endif %}"
+       {% if 'auto-dismiss' in message.tags %}data-auto-dismiss="5000"{% endif %}>
+    <div class="d-flex align-items-center gap-2 w-100">
+      <i class="ti {% if 'error' in message.tags or 'danger' in message.tags %}ti-circle-x-filled{% elif 'warning' in message.tags %}ti-alert-triangle-filled{% elif 'success' in message.tags %}ti-circle-check-filled{% else %}ti-info-circle-filled{% endif %} app-alert-icon" aria-hidden="true"></i>
+      <div class="app-alert-content flex-grow-1">
+        <strong>{% if 'error' in message.tags or 'danger' in message.tags %}Error:{% elif 'warning' in message.tags %}Atención:{% elif 'success' in message.tags %}Correcto:{% else %}Información:{% endif %}</strong>
+        <span>{{ message }}</span>
+      </div>
+      <button type="button" class="btn-close app-alert-close flex-shrink-0" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

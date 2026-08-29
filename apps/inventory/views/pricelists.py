@@ -212,7 +212,11 @@ def pricelist_set_default(request, pk):
 
     pl = get_object_or_404(PriceList, pk=pk)
     set_default_price_list(pl)
-    messages.success(request, f"Lista «{pl.name}» marcada como predeterminada.")
+    messages.success(
+        request,
+        f"Lista «{pl.name}» marcada como predeterminada.",
+        extra_tags="auto-dismiss",
+    )
     return redirect("inventory:pricelist_list")
 
 

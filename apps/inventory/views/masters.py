@@ -12,16 +12,18 @@ import io
 from uuid import uuid4
 
 from django.contrib import messages
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.views.generic import ListView
 
 from apps.core.mixins import ActiveCompanyRequiredMixin, CompanyScopedMixin
 from apps.companies.models import Company, Store
 
-from ..forms import BulkImportForm, BrandForm, CategoryForm, ProductForm, ProductUnitFormSet, UnitForm, WarehouseForm, WarehouseLocationForm
-from ..models import Brand, Category, Product, ProductUnit, Unit, Warehouse, WarehouseLocation, PriceList, ProductPrice
+from ..forms import BulkImportForm, BrandForm, CategoryForm, ProductForm, ProductSupplierFormSet, ProductUnitFormSet, UnitForm, WarehouseForm, WarehouseLocationForm
+from ..models import Brand, Category, Product, ProductSupplier, ProductUnit, Unit, Warehouse, WarehouseLocation, PriceList, ProductPrice
 from ..importers import (
     ENTITY_LABELS,
     build_import_template_workbook,
@@ -84,6 +86,40 @@ def _paginate(request, qs, per_page: int = 25):
     paginator = Paginator(qs, per_page)
     page = request.GET.get("page", 1)
     return paginator.get_page(page)
+
+
+def _handle_product_supplier_integrity_error(request, formset, exc):
+    """Translate known database constraints into actionable UI errors."""
+    cause = getattr(exc, "__cause__", None)
+    constraint = getattr(getattr(cause, "diag", None), "constraint_name", "")
+    field_name = None
+    message = "No se pudieron guardar los proveedores. Revisa los datos e inténtalo nuevamente."
+
+    if constraint == "uniq_supplier_product_code_nonempty":
+        field_name = "supplier_code"
+        message = "Este proveedor ya utiliza este código en otro producto."
+    elif constraint == "uniq_product_supplier":
+        field_name = "supplier"
+        message = "Este proveedor ya está relacionado con el producto."
+    elif constraint == "uniq_preferred_supplier_per_product":
+        field_name = "is_preferred"
+        message = "Solo un proveedor puede marcarse como preferido."
+    elif constraint == "product_supplier_preferred_requires_active":
+        field_name = "is_preferred"
+        message = "Un proveedor preferido debe estar activo."
+
+    target_form = next(
+        (
+            item for item in formset.forms
+            if getattr(item, "cleaned_data", None)
+            and not item.cleaned_data.get("DELETE")
+            and (field_name is None or item.cleaned_data.get(field_name))
+        ),
+        None,
+    )
+    if target_form is not None and field_name:
+        target_form.add_error(field_name, message)
+    messages.error(request, message)
 
 
 def _require_company(request):
@@ -502,7 +538,12 @@ def product_create(request):
     unit_formset = ProductUnitFormSet(
         request.POST or None, prefix="units", queryset=ProductUnit.objects.none()
     )
-    if request.method == "POST" and form.is_valid() and unit_formset.is_valid():
+    supplier_formset = ProductSupplierFormSet(
+        request.POST if "suppliers-TOTAL_FORMS" in request.POST else None, prefix="suppliers",
+        queryset=ProductSupplier.objects.none(), company=company,
+    )
+    supplier_formset_valid = not supplier_formset.is_bound or supplier_formset.is_valid()
+    if request.method == "POST" and form.is_valid() and unit_formset.is_valid() and supplier_formset_valid:
         product = form.save(commit=False)
         uploaded_key = ""
         try:
@@ -512,6 +553,9 @@ def product_create(request):
                 product.save()
                 unit_formset.instance = product
                 unit_formset.save()
+                if supplier_formset.is_bound:
+                    supplier_formset.instance = product
+                    supplier_formset.save()
                 ProductUnit.objects.filter(product=product).exclude(unit=product.unit).update(
                     is_default_sale=False,
                     is_default_purchase=False,
@@ -537,6 +581,13 @@ def product_create(request):
                     ProductPrice.objects.create(product=product, price_list=price_list, amount=amount, currency="PEN")
         except ProductImageStorageError as exc:
             form.add_error("image_file", str(exc))
+        except IntegrityError as exc:
+            if uploaded_key:
+                try:
+                    delete_product_image(uploaded_key)
+                except ProductImageStorageError:
+                    pass
+            _handle_product_supplier_integrity_error(request, supplier_formset, exc)
         except Exception:
             if uploaded_key:
                 try:
@@ -545,13 +596,22 @@ def product_create(request):
                     pass
             raise
         else:
-            messages.success(request, "Producto creado correctamente.")
+            messages.success(
+                request,
+                format_html(
+                    'Producto creado: {} — <a href="{}"><strong>{}</strong></a>.',
+                    product.sku,
+                    reverse("inventory:product_update", args=[product.pk]),
+                    product.name,
+                ),
+            )
             return redirect("inventory:product_list")
 
     price_list_data = [{"price_list": price_list, "amount": None} for price_list in price_lists]
     return render(request, "inventory/product_form.html", {
         "form": form, "title": "Nuevo producto", "cancel_url": "inventory:product_list",
         "price_list_data": price_list_data, "unit_formset": unit_formset,
+        "supplier_formset": supplier_formset,
     })
 
 
@@ -573,7 +633,13 @@ def product_update(request, pk):
         prefix="units",
         queryset=obj.unit_conversions.exclude(unit=obj.unit),
     )
-    if request.method == "POST" and form.is_valid() and unit_formset.is_valid():
+    supplier_formset = ProductSupplierFormSet(
+        request.POST if "suppliers-TOTAL_FORMS" in request.POST else None,
+        instance=obj, prefix="suppliers",
+        queryset=obj.supplier_relations.select_related("supplier"), company=company,
+    )
+    supplier_formset_valid = not supplier_formset.is_bound or supplier_formset.is_valid()
+    if request.method == "POST" and form.is_valid() and unit_formset.is_valid() and supplier_formset_valid:
         product = form.save(commit=False)
         try:
             _apply_product_image_changes(product, form.cleaned_data)
@@ -582,6 +648,9 @@ def product_update(request, pk):
                 product.save()
                 unit_formset.instance = product
                 unit_formset.save()
+                if supplier_formset.is_bound:
+                    supplier_formset.instance = product
+                    supplier_formset.save()
                 ProductUnit.objects.filter(product=product).exclude(unit=product.unit).update(
                     is_default_sale=False,
                     is_default_purchase=False,
@@ -613,8 +682,18 @@ def product_update(request, pk):
                         ProductPrice.objects.create(product=product, price_list=price_list, amount=amount, currency="PEN")
         except ProductImageStorageError as exc:
             form.add_error("image_file", str(exc))
+        except IntegrityError as exc:
+            _handle_product_supplier_integrity_error(request, supplier_formset, exc)
         else:
-            messages.success(request, "Producto actualizado.")
+            messages.success(
+                request,
+                format_html(
+                    'Producto actualizado: {} — <a href="{}"><strong>{}</strong></a>.',
+                    product.sku,
+                    reverse("inventory:product_update", args=[product.pk]),
+                    product.name,
+                ),
+            )
             return redirect("inventory:product_list")
 
     price_list_data = []
@@ -630,7 +709,7 @@ def product_update(request, pk):
     return render(request, "inventory/product_form.html", {
         "form": form, "title": "Editar producto", "object": obj,
         "cancel_url": "inventory:product_list", "price_list_data": price_list_data,
-        "unit_formset": unit_formset,
+        "unit_formset": unit_formset, "supplier_formset": supplier_formset,
     })
 
 
@@ -642,9 +721,18 @@ def product_delete(request, pk):
         return err
     obj = get_object_or_404(Product, pk=pk, company=company)
     if request.method == "POST":
+        product_sku = obj.sku
+        product_name = obj.name
         try:
             obj.delete()
-            messages.success(request, "Producto eliminado.")
+            messages.success(
+                request,
+                format_html(
+                    "Producto eliminado: {} — <strong>{}</strong>.",
+                    product_sku,
+                    product_name,
+                ),
+            )
         except Exception:
             messages.error(request, "No se puede eliminar: tiene stock o movimientos asociados.")
         return redirect("inventory:product_list")

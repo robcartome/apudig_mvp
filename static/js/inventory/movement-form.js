@@ -24,11 +24,13 @@
   );
 
   const getWarehouse = () => warehouseInput?.value || '';
+  const getSupplier = () => document.getElementById('id_supplier')?.value || '';
 
   ProductPicker.configure({
     searchUrl: configEl.dataset.searchUrl,
     createUrl: configEl.dataset.createUrl,
     getWarehouse,
+    getSupplier,
     modalId: 'quickCreateModal',
     errorId: 'qc-error',
     nameId: 'qc-name',
@@ -215,7 +217,9 @@
     const row = event.target.closest('.line-row');
     const product = event.detail;
 
-    const basePrice = movementType === 'EXIT' ? product.price_sale : product.price_purchase;
+    const basePrice = movementType === 'EXIT'
+      ? product.price_sale
+      : (product.supplier_purchase_price ?? product.price_purchase);
     row.dataset.basePrice = basePrice || 0;
     setProductUnits(row, product);
     setStockEl(row, product.stock !== undefined ? product.stock : null);

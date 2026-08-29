@@ -287,6 +287,16 @@ class SaleOrderViewsTest(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, "CONFIRMED")
 
+    def test_confirm_alert_includes_order_link(self):
+        self._login()
+        order = self._create_order()
+        response = self.client.post(
+            reverse("sales:order_confirm", kwargs={"pk": order.pk}), follow=True
+        )
+
+        self.assertContains(response, "Orden confirmada:")
+        self.assertContains(response, reverse("sales:order_detail", kwargs={"pk": order.pk}))
+
     def test_cancel_view(self):
         self._login()
         order = self._create_order()

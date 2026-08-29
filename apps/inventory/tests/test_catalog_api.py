@@ -13,10 +13,12 @@ from apps.inventory.models import (
     PriceList,
     Product,
     ProductPrice,
+    ProductSupplier,
     StockByWarehouse,
     Unit,
     Warehouse,
 )
+from apps.partners.models import Supplier
 from apps.users.models import User
 
 
@@ -65,6 +67,15 @@ class CatalogApiTest(TestCase):
             currency="PEN",
             active=True,
         )
+        self.supplier = Supplier.objects.create(
+            company=self.company, name="Proveedor catálogo", document_number="20111111112"
+        )
+        ProductSupplier.objects.create(
+            product=self.product,
+            supplier=self.supplier,
+            supplier_code="P001",
+            supplier_product_name="Taladro proveedor",
+        )
 
         # Employee user linked to company
         self.user = User.objects.create_user(email="emp@test.com", password="pass")
@@ -109,6 +120,33 @@ class CatalogApiTest(TestCase):
             f"https://media.apudig.com/{self.product.secondary_image_key}",
             f"https://media.apudig.com/{self.product.tertiary_image_key}",
         ])
+
+    def test_v1_catalog_searches_by_supplier_code_and_returns_codes(self):
+        response = self.client.get(
+            "/api/v1/catalog/products/", {"search": "P001", "limit": 10}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["results"][0]["id"], str(self.product.pk))
+        self.assertEqual(data["results"][0]["supplier_codes"], ["P001"])
+
+    def test_v1_catalog_does_not_search_or_return_inactive_supplier_codes(self):
+        relation = self.product.supplier_relations.get()
+        relation.active = False
+        relation.save(update_fields=["active", "updated_at"])
+        response = self.client.get(
+            "/api/v1/catalog/products/", {"search": "P001", "limit": 10}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 0)
+
+    def test_v1_catalog_detail_returns_active_supplier_codes(self):
+        response = self.client.get(
+            f"/api/v1/catalog/products/{self.product.pk}/detail/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["supplier_codes"], ["P001"])
 
     def test_v1_private_catalog_returns_image_and_purchase_price(self):
         self.product.image_key = f"products/{self.company.pk}/{self.product.pk}/main.webp"

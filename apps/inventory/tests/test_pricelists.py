@@ -138,6 +138,16 @@ class PriceListViewsTest(TestCase):
         self.pl.refresh_from_db()
         self.assertFalse(self.pl.active)
 
+    def test_set_default_renders_one_auto_dismiss_alert(self):
+        self._login()
+        response = self.client.post(
+            reverse("inventory:pricelist_set_default", kwargs={"pk": self.pl.pk}),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.count(b"app-alert alert-success"), 1)
+        self.assertContains(response, 'data-auto-dismiss="5000"')
+
     def test_del_price_post(self):
         self._login()
         set_product_price(pricelist_id=self.pl.pk, product_id=self.product.pk, amount=Decimal("15.00"))

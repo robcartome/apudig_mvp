@@ -15,6 +15,8 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.utils import timezone
 
 from apps.sales.forms import SaleOrderHeaderForm, SaleOrderLineFormSet
@@ -50,6 +52,14 @@ def _lines_from_formset(formset) -> list[dict]:
             continue
         lines.append(form.cleaned_data)
     return lines
+
+
+def _order_reference(order):
+    return format_html(
+        '<a href="{}"><strong>{}</strong></a>',
+        reverse("sales:order_detail", args=[order.pk]),
+        f"{order.series_code}-{order.number}",
+    )
 
 
 # ── Vistas ────────────────────────────────────────────────────────────────────
@@ -107,7 +117,7 @@ def order_create(request):
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                     )
-                    messages.success(request, f"Orden {order.series_code}-{order.number} creada.")
+                    messages.success(request, format_html("Orden creada: {}.", _order_reference(order)))
                     return redirect("sales:order_detail", pk=order.pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
@@ -153,7 +163,7 @@ def order_from_quot(request, pk):
             series=series,
             created_by=request.user,
         )
-        messages.success(request, f"Orden {order.series_code}-{order.number} creada desde cotización.")
+        messages.success(request, format_html("Orden creada desde cotización: {}.", _order_reference(order)))
         return redirect("sales:order_detail", pk=order.pk)
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -208,7 +218,7 @@ def order_update(request, pk):
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                     )
-                    messages.success(request, "Orden actualizada.")
+                    messages.success(request, format_html("Orden actualizada: {}.", _order_reference(order)))
                     return redirect("sales:order_detail", pk=pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
@@ -243,9 +253,13 @@ def _order_transition(request, pk, service_fn, success_msg):
         return redirect_resp
     if request.method != "POST":
         return redirect("sales:order_detail", pk=pk)
+    order = get_object_or_404(SaleOrder, pk=pk, store_id=_get_ids(request)[1])
     try:
         service_fn(pk)
-        messages.success(request, success_msg)
+        messages.success(
+            request,
+            format_html("{}: {}.", success_msg.rstrip("."), _order_reference(order)),
+        )
     except (SaleOrder.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
     return redirect("sales:order_detail", pk=pk)
@@ -320,7 +334,7 @@ def order_copy(request, pk):
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                     )
-                    messages.success(request, f"Orden {order.series_code}-{order.number} copiada.")
+                    messages.success(request, format_html("Orden copiada: {}.", _order_reference(order)))
                     return redirect("sales:order_detail", pk=order.pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))

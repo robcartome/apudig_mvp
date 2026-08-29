@@ -206,6 +206,17 @@ class MovementViewsTest(TestCase):
         stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
         self.assertEqual(stock.quantity, Decimal("3"))
 
+    def test_movement_update_alert_includes_detail_link(self):
+        self._post_movement(reverse("inventory:entry_create"))
+        movement = Movement.objects.get(type="ENTRY")
+
+        response = self.client.post(
+            reverse("inventory:movement_confirm", args=[movement.pk]), follow=True
+        )
+
+        self.assertContains(response, "Movimiento confirmado:")
+        self.assertContains(response, reverse("inventory:movement_detail", args=[movement.pk]))
+
     def test_movement_delete_reverts_stock(self):
         self._post_movement(reverse("inventory:entry_create"))
         movement = Movement.objects.get(type="ENTRY")
