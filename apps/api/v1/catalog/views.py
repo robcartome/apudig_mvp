@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import DecimalField, OuterRef, Q, Subquery, Sum
+from django.db.models import DecimalField, OuterRef, Prefetch, Subquery, Sum
 from django.db.models.functions import Coalesce
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, permissions
@@ -11,7 +11,21 @@ from apps.api.v1.catalog.serializers import (
     CatalogProductDetailSerializer,
     CatalogProductListSerializer,
 )
-from apps.inventory.models import Product, StockByWarehouse
+from apps.inventory import selectors as inventory_selectors
+from apps.inventory.models import ProductSupplier, StockByWarehouse
+
+
+def _active_supplier_codes_prefetch():
+    return Prefetch(
+        "supplier_relations",
+        queryset=(
+            ProductSupplier.objects.filter(active=True)
+            .exclude(supplier_code="")
+            .only("product_id", "supplier_code")
+            .order_by("supplier_code")
+        ),
+        to_attr="active_supplier_code_relations",
+    )
 
 
 class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
@@ -22,16 +36,13 @@ class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
 
     def get_queryset(self):
         company_id = self.get_company_id()
-        qs = Product.objects.filter(active=True).select_related("unit", "brand", "category")
-        if company_id:
-            qs = qs.filter(company_id=company_id)
-
         search = (self.request.query_params.get("search") or "").strip()
         brand = (self.request.query_params.get("brand") or "").strip()
         category = (self.request.query_params.get("category") or "").strip()
 
-        if search:
-            qs = qs.filter(Q(name__icontains=search) | Q(sku__icontains=search))
+        qs = inventory_selectors.search_products(
+            search, company_id=company_id, active_only=True
+        ).prefetch_related(_active_supplier_codes_prefetch())
         if brand:
             qs = qs.filter(brand_id=brand)
         if category:
@@ -57,9 +68,12 @@ class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
     @extend_schema(
         tags=["Catalog"],
         summary="Public product catalog",
-        description="Public catalog response compatible with the current frontend structure. price_purchase is omitted unless the request is authenticated.",
+        description="Public catalog searchable by internal or active supplier product codes. price_purchase is omitted unless the request is authenticated.",
         parameters=[
-            OpenApiParameter(name="search", required=False, type=str),
+            OpenApiParameter(
+                name="search", required=False, type=str,
+                description="Search by name, SKU, barcode, model, supplier code or supplier product name.",
+            ),
             OpenApiParameter(name="brand", required=False, type=str),
             OpenApiParameter(name="category", required=False, type=str),
             OpenApiParameter(name="limit", required=False, type=int),
@@ -77,12 +91,13 @@ class CatalogProductDetailAPIView(BaseCompanyAPIView, generics.RetrieveAPIView):
 
     def get_queryset(self):
         company_id = self.get_company_id()
-        qs = Product.objects.filter(active=True).select_related("unit", "brand", "category").prefetch_related(
+        qs = inventory_selectors.get_products(
+            company_id=company_id, active_only=True
+        ).prefetch_related(
             "prices__price_list",
             "stocks__warehouse",
+            _active_supplier_codes_prefetch(),
         )
-        if company_id:
-            qs = qs.filter(company_id=company_id)
         return qs
 
     def get_serializer_context(self):
@@ -93,7 +108,7 @@ class CatalogProductDetailAPIView(BaseCompanyAPIView, generics.RetrieveAPIView):
     @extend_schema(
         tags=["Catalog"],
         summary="Public product detail",
-        description="Product detail compatible with the current frontend structure. price_purchase is omitted unless the request is authenticated.",
+        description="Product detail including active supplier codes. price_purchase is omitted unless the request is authenticated.",
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)

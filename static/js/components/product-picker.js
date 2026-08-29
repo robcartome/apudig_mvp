@@ -19,6 +19,7 @@ window.ProductPicker = (function ($) {
     searchUrl: '',
     createUrl: '',
     getWarehouse: () => '',
+    getSupplier: () => '',
     modalId: 'quickCreateModal',
     errorId: 'qc-error',
     nameId: 'qc-name',
@@ -51,6 +52,10 @@ window.ProductPicker = (function ($) {
 
   function getWarehouse() {
     return typeof settings.getWarehouse === 'function' ? settings.getWarehouse() : '';
+  }
+
+  function getSupplier() {
+    return typeof settings.getSupplier === 'function' ? settings.getSupplier() : '';
   }
 
   function emitSelected(row, product) {
@@ -150,6 +155,9 @@ window.ProductPicker = (function ($) {
       ? (totalStock > 0 ? 'text-success' : totalStock < 0 ? 'text-danger' : 'text-muted')
       : 'text-muted';
 
+    const supplierDetail = product.supplier_code || product.supplier_product_name
+      ? `<div class="text-primary" style="font-size:.72rem">Proveedor: ${esc(product.supplier_code || 'SIN-COD')} ${esc(product.supplier_product_name || '')}</div>`
+      : '';
     return $(`
       <div class="d-flex justify-content-between align-items-start gap-3 py-1" title='${esc(product.name || product.text)}'>
         <div style="min-width:0">
@@ -163,9 +171,10 @@ window.ProductPicker = (function ($) {
             Stock sucursal: <strong class="${stockClass}">${totalStock}</strong>
             ${esc(product.unit || '')}
           </div>
+          ${supplierDetail}
         </div>
         <div class="text-end text-muted flex-shrink-0" style="font-size:.72rem">
-          P.Compra<br><strong>S/ ${parseFloat(product.price_purchase || 0).toFixed(2)}</strong>
+          P.Compra<br><strong>S/ ${parseFloat(product.supplier_purchase_price ?? product.price_purchase ?? 0).toFixed(2)}</strong>
         </div>
       </div>`);
   }
@@ -204,7 +213,7 @@ window.ProductPicker = (function ($) {
           const term = (params.data.q || '').trim();
           const controller = new AbortController();
           ApiService.get(
-            `${settings.searchUrl}?q=${encodeURIComponent(term)}&warehouse=${encodeURIComponent(getWarehouse())}`,
+            `${settings.searchUrl}?q=${encodeURIComponent(term)}&warehouse=${encodeURIComponent(getWarehouse())}&supplier=${encodeURIComponent(getSupplier())}`,
             { signal: controller.signal }
           ).then(success).catch(error => {
             if (error.name !== 'AbortError') failure(error);

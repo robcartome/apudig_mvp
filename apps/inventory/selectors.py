@@ -3,10 +3,10 @@ inventory/selectors.py — Consultas de lectura de inventario.
 """
 from decimal import Decimal
 
-from django.db.models import Q, Sum
+from django.db.models import Exists, OuterRef, Q, Sum
 from django.utils import timezone
 
-from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, StockByWarehouse, StoreProductConfig, Unit, Warehouse
+from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductSupplier, StockByWarehouse, StoreProductConfig, Unit, Warehouse
 
 
 # ── Maestros ──────────────────────────────────────────────────────────────────
@@ -77,13 +77,27 @@ def get_products(company_id=None, active_only: bool = False):
     return qs.order_by("name")
 
 
-def search_products(query: str, company_id=None, active_only: bool = False):
+def search_products(query: str, company_id=None, active_only: bool = False, supplier_id=None):
     qs = get_products(company_id=company_id, active_only=active_only)
     if query:
-        qs = qs.filter(
-            Q(name__icontains=query) | Q(sku__icontains=query) | Q(barcode__icontains=query)
+        product_fields = (
+            Q(name__icontains=query)
+            | Q(sku__icontains=query)
+            | Q(barcode__icontains=query)
+            | Q(model__icontains=query)
         )
-    return qs
+        supplier_matches = ProductSupplier.objects.filter(
+            product_id=OuterRef("pk"), active=True,
+        ).filter(
+            Q(supplier_code__icontains=query)
+            | Q(supplier_product_name__icontains=query)
+        )
+        if supplier_id:
+            supplier_matches = supplier_matches.filter(supplier_id=supplier_id)
+        qs = qs.annotate(
+            matches_supplier_catalog=Exists(supplier_matches)
+        ).filter(product_fields | Q(matches_supplier_catalog=True))
+    return qs.distinct()
 
 
 # ── Listas de precio ─────────────────────────────────────────────────────────

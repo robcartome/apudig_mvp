@@ -16,6 +16,8 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.views.decorators.http import require_GET
 
 from apps.sales.forms import QuotationHeaderForm, QuotationLineFormSet
@@ -57,6 +59,14 @@ def _lines_from_formset(formset) -> list[dict]:
             continue
         lines.append(form.cleaned_data)
     return lines
+
+
+def _quotation_reference(quotation):
+    return format_html(
+        '<a href="{}"><strong>{}</strong></a>',
+        reverse("sales:quotation_detail", args=[quotation.pk]),
+        f"{quotation.series_code}-{quotation.number:08d}",
+    )
 
 
 def _build_lines_view(quotation) -> list[dict]:
@@ -163,7 +173,7 @@ def quotation_create(request):
                         payment_method=cd.get("payment_method"),
                         means_of_payment=cd.get("means_of_payment"),
                     )
-                    messages.success(request, f"Cotización {q.series_code}-{q.number:08d} creada.")
+                    messages.success(request, format_html("Cotización creada: {}.", _quotation_reference(q)))
                     return redirect("sales:quotation_detail", pk=q.pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
@@ -285,7 +295,7 @@ def quotation_update(request, pk):
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                     )
-                    messages.success(request, "Cotización actualizada.")
+                    messages.success(request, format_html("Cotización actualizada: {}.", _quotation_reference(quotation)))
                     return redirect("sales:quotation_detail", pk=pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
@@ -335,9 +345,13 @@ def _status_transition(request, pk, service_fn, success_msg):
     if request.method != "POST":
         return redirect("sales:quotation_detail", pk=pk)
 
+    quotation = get_object_or_404(SalesQuotation, pk=pk, store_id=_get_ids(request)[1])
     try:
         service_fn(pk)
-        messages.success(request, success_msg)
+        messages.success(
+            request,
+            format_html("{}: {}.", success_msg.rstrip("."), _quotation_reference(quotation)),
+        )
     except (ValueError, SalesQuotation.DoesNotExist) as exc:
         messages.error(request, str(exc))
     return redirect("sales:quotation_detail", pk=pk)
@@ -423,7 +437,7 @@ def quotation_copy(request, pk):
                         payment_method=cd.get("payment_method"),
                         means_of_payment=cd.get("means_of_payment"),
                     )
-                    messages.success(request, f"Cotización {q.series_code}-{q.number:08d} copiada.")
+                    messages.success(request, format_html("Cotización copiada: {}.", _quotation_reference(q)))
                     return redirect("sales:quotation_detail", pk=q.pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))

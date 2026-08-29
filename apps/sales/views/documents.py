@@ -16,6 +16,8 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.html import format_html
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
@@ -131,6 +133,18 @@ def _document_service_fields(cleaned_data):
     }
 
 
+def _document_reference(document, *, link=True):
+    """Safe document identifier for interactive flash messages."""
+    identifier = f"{document.series_code}-{document.number}"
+    if not link:
+        return format_html("<strong>{}</strong>", identifier)
+    return format_html(
+        '<a href="{}"><strong>{}</strong></a>',
+        reverse("sales:document_detail", args=[document.pk]),
+        identifier,
+    )
+
+
 # ── Vistas ────────────────────────────────────────────────────────────────────
 
 def document_list(request):
@@ -195,7 +209,7 @@ def document_create(request):
                         created_by=request.user,
                         **_document_service_fields(cd),
                     )
-                    messages.success(request, "Documento de venta creado como borrador.")
+                    messages.success(request, format_html("Documento creado como borrador: {}.", _document_reference(sales_document)))
                     return redirect("sales:document_list")
                 except ValueError as exc:
                     messages.error(request, str(exc))
@@ -255,7 +269,7 @@ def document_edit(request, pk):
                         document_type=cd["document_type"],
                         **_document_service_fields(cd),
                     )
-                    messages.success(request, "Documento actualizado.")
+                    messages.success(request, format_html("Documento actualizado: {}.", _document_reference(document)))
                     return redirect("sales:document_detail", pk=pk)
                 except ValueError as exc:
                     messages.error(request, str(exc))
@@ -354,7 +368,7 @@ def document_from_order(request, pk):
             currency=order.currency,
             notes=order.notes,
         )
-        messages.success(request, "Documento de venta creado como borrador.")
+        messages.success(request, format_html("Documento creado como borrador: {}.", _document_reference(sales_document)))
         return redirect("sales:document_detail", pk=sales_document.pk)
     except (DocumentSeries.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
@@ -398,7 +412,7 @@ def document_from_quotation(request, pk):
             register_inventory_movement=register_inventory,
             warehouse=warehouse,
         )
-        messages.success(request, "Cotización convertida en documento de venta.")
+        messages.success(request, format_html("Cotización convertida en documento de venta: {}.", _document_reference(document)))
         return redirect("sales:document_detail", pk=document.pk)
     except ValueError as exc:
         messages.error(request, str(exc))
@@ -454,7 +468,7 @@ def document_copy(request, pk):
     get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
     try:
         copied = copy_sales_document(pk, copied_by=request.user)
-        messages.success(request, "Documento copiado como borrador.")
+        messages.success(request, format_html("Documento copiado como borrador: {}.", _document_reference(copied)))
         return redirect("sales:document_edit", pk=copied.pk)
     except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
@@ -467,10 +481,10 @@ def document_delete(request, pk):
     if redirect_resp:
         return redirect_resp
     _, store_id = _get_ids(request)
-    get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
     try:
         delete_sales_document_draft(pk, deleted_by=request.user)
-        messages.success(request, "Documento borrador eliminado.")
+        messages.success(request, format_html("Documento borrador eliminado: {}.", _document_reference(document, link=False)))
     except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
     return redirect("sales:document_list")
@@ -486,7 +500,7 @@ def document_issue(request, pk):
     get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
     try:
         v = issue_sales_document(pk, issued_by=request.user)
-        messages.success(request, f"Documento {v.series_code}-{v.number} emitido.")
+        messages.success(request, format_html("Documento emitido: {}.", _document_reference(v)))
     except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
     return redirect("sales:document_detail", pk=pk)
@@ -499,11 +513,11 @@ def document_void(request, pk):
     if request.method != "POST":
         return redirect("sales:document_detail", pk=pk)
     _, store_id = _get_ids(request)
-    get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
     reason = request.POST.get("reason", "")
     try:
         void_sales_document(pk, reason=reason, voided_by=request.user)
-        messages.success(request, "Documento de venta anulado.")
+        messages.success(request, format_html("Documento de venta anulado: {}.", _document_reference(document)))
     except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
     return redirect("sales:document_detail", pk=pk)
@@ -516,10 +530,10 @@ def document_cancel(request, pk):
     if request.method != "POST":
         return redirect("sales:document_detail", pk=pk)
     _, store_id = _get_ids(request)
-    get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
     try:
         cancel_sales_document(pk, cancelled_by=request.user)
-        messages.success(request, "Documento de venta cancelado.")
+        messages.success(request, format_html("Documento de venta cancelado: {}.", _document_reference(document)))
     except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
     return redirect("sales:document_detail", pk=pk)
@@ -546,7 +560,7 @@ def document_credit(request, pk):
                     series=cd["series"],
                     created_by=request.user,
                 )
-                messages.success(request, "Nota de crédito creada.")
+                messages.success(request, format_html("Nota de crédito creada: {}.", _document_reference(note)))
                 return redirect("sales:document_detail", pk=note.pk)
             except ValueError as exc:
                 messages.error(request, str(exc))

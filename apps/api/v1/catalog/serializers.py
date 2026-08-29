@@ -6,12 +6,17 @@ from apps.inventory.models import Product
 class ProductImageSerializerMixin(serializers.Serializer):
     image = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
+    supplier_codes = serializers.SerializerMethodField()
 
     def get_image(self, obj):
         return obj.image
 
     def get_images(self, obj):
         return obj.image_urls
+
+    def get_supplier_codes(self, obj):
+        relations = getattr(obj, "active_supplier_code_relations", ())
+        return list(dict.fromkeys(relation.supplier_code for relation in relations))
 
 
 class CatalogProductListSerializer(ProductImageSerializerMixin, serializers.ModelSerializer):
@@ -24,7 +29,7 @@ class CatalogProductListSerializer(ProductImageSerializerMixin, serializers.Mode
         model = Product
         fields = (
             "id", "name", "sku", "unit", "brand", "category",
-            "price_sale", "price_purchase", "stock", "image", "images",
+            "price_sale", "price_purchase", "stock", "image", "images", "supplier_codes",
         )
 
     def to_representation(self, instance):
@@ -64,6 +69,7 @@ class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.Mo
             "description",
             "image",
             "images",
+            "supplier_codes",
             "brand",
             "category",
             "price_sale",

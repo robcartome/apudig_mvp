@@ -24,14 +24,6 @@
   </div>
 </div>
 
-{% if messages %}
-{% for msg in messages %}
-<div class="alert alert-{{ msg.tags }} alert-dismissible mb-3" role="alert">
-  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endfor %}
-{% endif %}
-
 <div class="row g-3">
   {# ── Upload card ── #}
   <div class="col-12 col-lg-7">
