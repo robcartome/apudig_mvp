@@ -3,7 +3,38 @@
     <i class="ti ti-circle-x-filled app-alert-icon" aria-hidden="true"></i>
     <div class="app-alert-content flex-grow-1">
       <strong>Revisa la información:</strong>
-      <span>Corrige los campos señalados antes de volver a guardar.</span>
+      <span>Corrige los siguientes errores antes de volver a guardar.</span>
+
+      {% if form or formset %}
+      <ul class="mb-0 mt-1 ps-3">
+        {% if form %}
+          {% for error in form.non_field_errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+          {% for field in form %}
+            {% for error in field.errors %}
+            <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
+
+        {% if formset %}
+          {% for error in formset.non_form_errors %}
+          <li><strong>Detalle:</strong> {{ error }}</li>
+          {% endfor %}
+          {% for line_form in formset %}
+            {% for error in line_form.non_field_errors %}
+            <li><strong>Ítem {{ forloop.parentloop.counter }}:</strong> {{ error }}</li>
+            {% endfor %}
+            {% for field in line_form %}
+              {% for error in field.errors %}
+              <li><strong>Ítem {{ forloop.parentloop.parentloop.counter }}, {{ field.label }}:</strong> {{ error }}</li>
+              {% endfor %}
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
+      </ul>
+      {% endif %}
     </div>
     <button type="button" class="btn-close app-alert-close flex-shrink-0" data-bs-dismiss="alert" aria-label="Cerrar"></button>
   </div>

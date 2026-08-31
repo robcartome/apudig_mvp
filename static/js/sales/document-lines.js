@@ -104,6 +104,15 @@
   }
 
   function fmt(n) { return isFinite(n) ? n.toFixed(2) : '0.00'; }
+  function normalizeQuantityInput(input) {
+    let value = input.value.replace(',', '.').replace(/[^\d.]/g, '');
+    const separator = value.indexOf('.');
+    if (separator !== -1) {
+      value = value.slice(0, separator + 1)
+        + value.slice(separator + 1).replace(/\./g, '').slice(0, 2);
+    }
+    input.value = value;
+  }
   function priceForSelectedUnit(row, basePrice) {
     const option = row.querySelector('.product-unit-select')?.selectedOptions[0];
     if (option && option.dataset.price !== undefined && option.dataset.price !== '') {
@@ -235,8 +244,9 @@
 
       <td>
         <div class="input-group input-group-sm">
-          <input type="number" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
-                 class="form-control form-control-sm" step="0.0001" min="0.0001" value="1">
+          <input type="text" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
+                 class="form-control form-control-sm text-end quantity-input"
+                 inputmode="decimal" autocomplete="off" maxlength="15" value="1">
           <button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver stock por almacén" aria-label="Ver stock por almacén">
             <i class="ti ti-info-circle"></i>
           </button>
@@ -339,7 +349,10 @@
     if (event.target.matches('input.price-unit-input, input[name*="-quantity"]')) {
       const row = event.target.closest('.line-row');
       if (row) {
-        if (event.target.matches('input[name*="-quantity"]')) updateUnitEquivalence(row);
+        if (event.target.matches('input[name*="-quantity"]')) {
+          normalizeQuantityInput(event.target);
+          updateUnitEquivalence(row);
+        }
         calcRow(row);
         updateSummary();
       }

@@ -475,6 +475,15 @@ class MovementTransferForm(forms.ModelForm):
 _sm = "form-control form-control-sm"
 
 
+def _quantity_widget():
+    return forms.TextInput(attrs={
+        "class": f"{_sm} text-end quantity-input",
+        "inputmode": "decimal",
+        "autocomplete": "off",
+        "maxlength": "15",
+    })
+
+
 class MovementDetailForm(forms.Form):
     product = forms.ModelChoiceField(
         queryset=Product.objects.filter(active=True).select_related("unit").order_by("name"),
@@ -484,7 +493,7 @@ class MovementDetailForm(forms.Form):
     unit = forms.UUIDField(required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(
         max_digits=10, decimal_places=3, min_value=Decimal("0.001"),
-        widget=forms.NumberInput(attrs={"class": _sm, "step": "0.001", "min": "0.001"}),
+        widget=_quantity_widget(),
         label="Cantidad",
     )
     unit_price = forms.DecimalField(
@@ -506,9 +515,7 @@ class MovementDetailForm(forms.Form):
                 max_digits=10,
                 decimal_places=3,
                 min_value=Decimal("0"),
-                widget=forms.NumberInput(
-                    attrs={"class": _sm, "step": "0.001", "min": "0"}
-                ),
+                widget=_quantity_widget(),
                 label="Cantidad",
             )
         if company_id:

@@ -37,6 +37,10 @@
   </nav>
 </div>
 
+{% if header_form.errors or line_formset.errors or line_formset.non_form_errors %}
+  {% include "components/form_errors_alert.html" with form=header_form formset=line_formset %}
+{% endif %}
+
 <form method="post" novalidate id="sales-form">
   {% csrf_token %}
 
@@ -414,5 +418,5 @@
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260818-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260830-1"></script>
 {% endblock %}
