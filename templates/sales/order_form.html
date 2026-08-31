@@ -171,6 +171,17 @@ document.getElementById('add-line').addEventListener('click', function () {
 
 document.querySelectorAll('.remove-line').forEach(btn => btn.addEventListener('click', removeLine));
 
+document.getElementById('lines-body').addEventListener('input', function (event) {
+  if (!event.target.matches('input[name*="-quantity"]')) return;
+  let value = event.target.value.replace(',', '.').replace(/[^\d.]/g, '');
+  const separator = value.indexOf('.');
+  if (separator !== -1) {
+    value = value.slice(0, separator + 1)
+      + value.slice(separator + 1).replace(/\./g, '').slice(0, 2);
+  }
+  event.target.value = value;
+});
+
 function removeLine(e) {
   const row = e.currentTarget.closest('tr');
   const deleteInput = row.querySelector('input[type=checkbox][name$="-DELETE"]');

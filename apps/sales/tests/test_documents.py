@@ -639,6 +639,37 @@ class SalesDocumentViewsTest(TestCase):
         self.assertContains(resp, 'id="edit-number-btn"')
         self.assertContains(resp, 'data-series-options-url=')
         self.assertContains(resp, 'id="memoModal"')
+        quantity_widget = resp.context["line_formset"].form.base_fields["quantity"].widget
+        self.assertEqual(quantity_widget.input_type, "text")
+        self.assertEqual(quantity_widget.attrs["inputmode"], "decimal")
+        today = timezone.localdate().isoformat()
+        self.assertTrue(
+            resp.context["header_form"].initial["issue_date"].startswith(today)
+        )
+
+    def test_create_shows_line_formset_errors(self):
+        self._login()
+        data = {
+            "store": str(self.store.pk),
+            "customer": str(self.customer.pk),
+            "document_type": str(self.fac_series.document_type_id),
+            "series": str(self.fac_series.pk),
+            "issue_date": timezone.localdate().isoformat(),
+            "currency": "PEN",
+            "lines-TOTAL_FORMS": "1",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "1",
+            "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-product": str(self.product.pk),
+            "lines-0-quantity": "0",
+            "lines-0-unit_price": "100",
+            "lines-0-tax_type": "10",
+            "lines-0-igv_rate": "18",
+        }
+        response = self.client.post(reverse("sales:document_create"), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Revisa la información:")
+        self.assertContains(response, "Cantidad:")
 
     def test_series_options_are_filtered_by_document_type(self):
         self._login()
@@ -717,7 +748,8 @@ class SalesDocumentViewsTest(TestCase):
             "lines-0-product": str(self.product.pk),
             "lines-0-description": "desc",
             "lines-0-quantity": "2",
-            "lines-0-unit_price": "100.00",
+            # 10.00 con IGV se convierte en 8.474576 internamente.
+            "lines-0-unit_price": "8.474576",
             "lines-0-discount_amount": "0",
             "lines-0-tax_type": "10",
             "lines-0-igv_rate": "18",

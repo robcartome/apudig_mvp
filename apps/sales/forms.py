@@ -34,9 +34,20 @@ _date = {"class": "form-control", "type": "date"}
 _textarea = {"class": "form-control", "rows": 3}
 
 
+def _quantity_widget():
+    """Quantity input without browser increment/decrement controls."""
+    return forms.TextInput(attrs={
+        **_text,
+        "class": "form-control form-control-sm text-end quantity-input",
+        "inputmode": "decimal",
+        "autocomplete": "off",
+        "maxlength": "15",
+    })
+
+
 def _set_default_issue_date(form, *, include_time=False):
     """Set a local initial issue date only when creating an unbound form."""
-    if form.is_bound or form.instance.pk or form.initial.get("issue_date"):
+    if form.is_bound or not form.instance._state.adding or form.initial.get("issue_date"):
         return
     if include_time:
         form.initial["issue_date"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
@@ -197,6 +208,8 @@ class QuotationHeaderForm(forms.ModelForm):
                 '%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d',
             ]
         _set_default_issue_date(self, include_time=True)
+        if not self.is_bound and self.instance._state.adding and not self.initial.get("valid_until"):
+            self.initial["valid_until"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
 
     def clean(self):
         cleaned_data = super().clean()
@@ -253,12 +266,12 @@ class QuotationLineForm(forms.Form):
         min_value=Decimal("0.01"),
         max_digits=14,
         decimal_places=2,
-        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.01", "min": "0.01"}),
+        widget=_quantity_widget(),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
-        decimal_places=3,
+        decimal_places=6,
         widget=forms.HiddenInput(),
     )
     discount_amount = forms.DecimalField(
@@ -375,7 +388,7 @@ class SaleOrderLineForm(forms.Form):
         min_value=Decimal("0.01"),
         max_digits=14,
         decimal_places=2,
-        widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0.01"}),
+        widget=_quantity_widget(),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
@@ -603,12 +616,12 @@ class SalesDocumentLineForm(forms.Form):
         min_value=Decimal("0.01"),
         max_digits=14,
         decimal_places=2,
-        widget=forms.NumberInput(attrs={**_text, "class": "form-control form-control-sm", "step": "0.01", "min": "0.01"}),
+        widget=_quantity_widget(),
     )
     unit_price = forms.DecimalField(
         min_value=Decimal("0"),
         max_digits=14,
-        decimal_places=3,
+        decimal_places=6,
         widget=forms.HiddenInput(),
     )
     discount_amount = forms.DecimalField(

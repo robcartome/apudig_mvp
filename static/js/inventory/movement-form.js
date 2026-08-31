@@ -18,7 +18,6 @@
   const locationUrl = configEl.dataset.locationUrl;
   const movementType = configEl.dataset.movementType;
   const showUnitPrice = configEl.dataset.showUnitPrice === '1';
-  const minimumQuantity = movementType === 'ADJUSTMENT' ? '0' : '0.001';
   const warehouseInput = document.getElementById(
     movementType === 'TRANSFER' ? 'id_warehouse_origin' : 'id_warehouse'
   );
@@ -185,8 +184,9 @@
       </td>
       <td>
         <div class="input-group input-group-sm">
-          <input type="number" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
-                 class="form-control form-control-sm" step="0.001" min="${minimumQuantity}" value="">
+          <input type="text" name="lines-${index}-quantity" id="id_lines-${index}-quantity"
+                 class="form-control form-control-sm text-end quantity-input"
+                 inputmode="decimal" autocomplete="off" maxlength="15" value="">
           <button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver stock por almacén" aria-label="Ver stock por almacén">
             <i class="ti ti-info-circle"></i>
           </button>
@@ -259,6 +259,13 @@
 
   linesBody.addEventListener('input', event => {
     if (event.target.matches('input[name*="-quantity"]')) {
+      let value = event.target.value.replace(',', '.').replace(/[^\d.]/g, '');
+      const separator = value.indexOf('.');
+      if (separator !== -1) {
+        value = value.slice(0, separator + 1)
+          + value.slice(separator + 1).replace(/\./g, '').slice(0, 3);
+      }
+      event.target.value = value;
       updateUnitEquivalence(event.target.closest('.line-row'));
     }
   });

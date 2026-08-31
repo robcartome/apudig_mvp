@@ -238,8 +238,41 @@ class QuotationViewsTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'name="number"')
         self.assertContains(resp, 'id="edit-number-btn"')
+        quantity_widget = resp.context["line_formset"].form.base_fields["quantity"].widget
+        self.assertEqual(quantity_widget.input_type, "text")
+        self.assertEqual(quantity_widget.attrs["inputmode"], "decimal")
+        today = timezone.localdate().isoformat()
+        self.assertTrue(
+            resp.context["header_form"].initial["issue_date"].startswith(today)
+        )
+        self.assertTrue(
+            resp.context["header_form"].initial["valid_until"].startswith(today)
+        )
 
-    def _post_create(self, number=None):
+    def test_create_shows_line_formset_errors(self):
+        data = {
+            "store": str(self.store.id),
+            "series": str(self.series.id),
+            "customer": str(self.customer.id),
+            "issue_date": timezone.localdate().isoformat(),
+            "valid_until": "",
+            "currency": "PEN",
+            "lines-TOTAL_FORMS": "1",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "1",
+            "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-product": str(self.product.id),
+            "lines-0-quantity": "0",
+            "lines-0-unit_price": "100",
+            "lines-0-tax_type": "10",
+            "lines-0-igv_rate": "18",
+        }
+        response = self.client.post(reverse("sales:quotation_create"), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Revisa la información:")
+        self.assertContains(response, "Cantidad:")
+
+    def _post_create(self, number=None, unit_price="100"):
         today = timezone.now().date().isoformat()
         data = {
             "store": str(self.store.id),
@@ -259,7 +292,7 @@ class QuotationViewsTest(TestCase):
             "lines-0-product": str(self.product.id),
             "lines-0-description": "",
             "lines-0-quantity": "2",
-            "lines-0-unit_price": "100",
+            "lines-0-unit_price": unit_price,
             "lines-0-discount_amount": "0",
             "lines-0-tax_type": "10",
             "lines-0-igv_rate": "18",
@@ -274,6 +307,11 @@ class QuotationViewsTest(TestCase):
         self.assertEqual(SalesQuotation.objects.count(), 1)
         q = SalesQuotation.objects.first()
         self.assertRedirects(resp, reverse("sales:quotation_detail", args=[q.pk]))
+
+    def test_create_accepts_calculated_price_with_six_decimals(self):
+        response = self._post_create(unit_price="8.474576")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(SalesQuotation.objects.count(), 1)
 
     def test_duplicate_number_shows_form_error(self):
         self._post_create(number=7)
