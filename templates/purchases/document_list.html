@@ -1,0 +1,203 @@
+{% extends "base.html" %}{% load l10n %}
+{% block title %}Documentos de compra - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Documentos de compra</h2>{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <span class="text-muted">Comprobantes recibidos de proveedores</span>
+  <div class="d-flex gap-2 flex-wrap"><a href="{% url 'purchases:analytics' %}"
+      class="btn btn-outline-secondary btn-sm"><i class="ti ti-chart-bar me-1"></i>Analítica</a><a
+      href="{% url 'purchases:accounts_payable_list' %}" class="btn btn-outline-secondary btn-sm"><i
+        class="ti ti-cash me-1"></i>Cuentas por pagar</a><a href="{% url 'purchases:order_list' %}"
+      class="btn btn-outline-secondary btn-sm"><i class="ti ti-clipboard-list me-1"></i>Órdenes de compra</a><a
+      href="{% url 'purchases:price_history' %}" class="btn btn-outline-secondary btn-sm"><i
+        class="ti ti-chart-line me-1"></i>Histórico de precios</a>{% if can_manage_purchase_documents %}<a
+      href="{% url 'purchases:expense_create' %}" class="btn btn-outline-primary btn-sm"><i class="ti ti-receipt me-1"></i>Nuevo gasto</a><a
+      href="{% url 'purchases:document_create' %}" class="btn btn-primary btn-sm"><i class="ti ti-plus me-1"></i>Nuevo
+      comprobante</a>{% endif %}</div>
+</div>
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2">
+      <div class="col-md-5"><input name="q" value="{{ q }}" class="form-control form-control-sm"
+          placeholder="Proveedor, RUC, serie o numero"></div>
+      <div class="col-md-3"><select name="status" class="form-select form-select-sm">
+          <option value="">Todos los estados</option>
+          {% for code,label in status_choices %}
+            <option value="{{ code }}" {% if status == code %}selected{% endif %}>
+              {{ label }}
+            </option>
+          {% endfor %}
+        </select></div>
+      <div class="col-auto"><button class="btn btn-outline-secondary btn-sm">Filtrar</button> <a
+          href="{% url 'purchases:document_list' %}" class="btn btn-ghost-secondary btn-sm">Limpiar</a></div>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter table-hover card-table mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Fecha de creación</th>
+          <th>Fecha de emisión</th>
+          <th>Fecha de vencimiento</th>
+          <th>Serie</th>
+          <th>Número</th>
+          <th>Proveedor</th>
+          <th class="text-end">Total</th>
+          <th>Condicion</th>
+          <th>Estado de pago</th>
+          <th>Fecha de pago</th>
+          <th class="text-end">Saldo por pagar</th>
+          <th>Estado</th>
+          <th class="text-center">Operaciones</th>
+        </tr>
+      </thead>
+      <tbody class="small">{% for doc in page_obj %}<tr>
+          <td class="text-muted">{{ doc.created_at|date:"d/m/Y H:i" }}</td>
+          <td class="text-muted">{{ doc.issue_date|date:"d/m/Y" }}</td>
+          <td class="text-muted">{{ doc.due_date|date:"d/m/Y"|default:"—" }}</td>
+          <td>{{ doc.series|default:"—" }}</td>
+          <td>{{ doc.number|default:"Sin número" }}</td>
+          <td>{{ doc.supplier_name }}<div class="small text-muted">{{ doc.supplier_document_number }}</div>
+          </td>
+          <td class="text-end">{{ doc.currency }} {{ doc.total|floatformat:2 }}</td>
+          <td>{{ doc.payment_method|default:"—" }}</td>
+          <td>{% include "components/status_badge.html" with status=doc.payment_status label=doc.get_payment_status_display %}</td>
+          <td>{{ doc.last_payment_date|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td class="text-end fw-semibold">{{ doc.currency }} {{ doc.payment_balance|floatformat:2 }}</td>
+          <td>{% include "components/status_badge.html" with status=doc.document_status label=doc.get_document_status_display %}</td>
+          <td class="text-center">
+            <div class="d-inline-flex gap-1 align-items-center">
+              <a href="{% url 'purchases:document_detail' doc.pk %}"
+                data-preview-url="{% url 'purchases:document_preview' doc.pk %}"
+                class="btn btn-sm btn-outline-secondary js-document-preview" title="Ver detalles" aria-label="Ver detalles">
+                <i class="ti ti-eye"></i>
+              </a>
+              {% if doc.document_status == 'DRAFT' and can_manage_purchase_documents %}
+              <a href="{% if doc.is_expense %}{% url 'purchases:expense_edit' doc.pk %}{% else %}{% url 'purchases:document_edit' doc.pk %}{% endif %}" class="btn btn-sm btn-outline-primary"
+                title="Editar documento" aria-label="Editar documento">
+                <i class="ti ti-edit"></i>
+              </a>
+              {% endif %}
+              {% if doc.document_status == 'DRAFT' and can_authorize_purchase_documents %}
+              <form method="post" action="{% url 'purchases:document_register' doc.pk %}" class="d-inline"
+                onsubmit="return confirm('¿Registrar este documento de compra?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Registrar documento"
+                  aria-label="Registrar documento"><i class="ti ti-circle-check"></i></button>
+              </form>
+              {% endif %}
+              {% if doc.document_status == 'REGISTERED' and doc.payment_status != 'PAID' and can_manage_purchase_documents %}
+              <button type="button" class="btn btn-sm btn-outline-primary js-quick-payment"
+                data-payment-url="{% url 'purchases:payment_create' doc.pk %}"
+                data-detail-url="{% url 'purchases:payment_create' doc.pk %}"
+                data-document="{{ doc.series }}-{{ doc.number }}"
+                data-supplier="{{ doc.supplier_name }}"
+                data-currency="{{ doc.currency }}"
+                data-balance="{{ doc.payment_balance|unlocalize }}"
+                title="Registrar pago" aria-label="Registrar pago"><i class="ti ti-cash"></i></button>
+              {% endif %}
+              {% if doc.document_status == 'REGISTERED' and can_authorize_purchase_documents %}
+              <form method="post" action="{% url 'purchases:document_cancel' doc.pk %}" class="d-inline"
+                onsubmit="return confirm('¿Cancelar este documento? Si generó inventario, se registrará la reversión correspondiente.')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-warning" title="Cancelar documento"
+                  aria-label="Cancelar documento"><i class="ti ti-ban"></i></button>
+              </form>
+              {% endif %}
+              {% if doc.document_status == 'DRAFT' and can_manage_purchase_documents %}
+              <form method="post" action="{% url 'purchases:document_delete' doc.pk %}" class="d-inline"
+                onsubmit="return confirm('¿Eliminar definitivamente este documento borrador?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar borrador"
+                  aria-label="Eliminar borrador"><i class="ti ti-trash"></i></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>{% empty %}<tr>
+          <td colspan="13" class="text-center text-muted py-4">No se encontraron documentos de compra.</td>
+        </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="text-muted small">
+      {% if page_obj.paginator.count %}Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }}{% else %}Mostrando 0 resultados{% endif %}
+    </div>
+    <div class="btn-group">
+      {% if page_obj.has_previous %}<a class="btn btn-outline-secondary btn-sm" href="?q={{ q|urlencode }}&status={{ status|urlencode }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% else %}<button class="btn btn-outline-secondary btn-sm" disabled>Anterior</button>{% endif %}
+      {% if page_obj.has_next %}<a class="btn btn-primary btn-sm" href="?q={{ q|urlencode }}&status={{ status|urlencode }}&page={{ page_obj.next_page_number }}">Siguiente</a>{% else %}<button class="btn btn-primary btn-sm" disabled>Siguiente</button>{% endif %}
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="quickPaymentModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form method="post" id="quick-payment-form">
+      {% csrf_token %}<input type="hidden" name="next" value="list">
+      <input type="hidden" name="payment_number" value="{{ quick_payment_number }}">
+      <div class="modal-header"><h5 class="modal-title"><i class="ti ti-cash me-1"></i>Registrar pago</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2"><strong id="quick-payment-document"></strong><span class="ms-2" id="quick-payment-supplier"></span></div>
+        <div class="row g-3">
+          <div class="col-md-4"><label class="form-label required">Fecha y hora</label><input type="datetime-local" class="form-control" name="payment_date" value="{{ quick_payment_date }}" required></div>
+          <div class="col-md-4"><label class="form-label required">Importe</label><div class="input-group"><span class="input-group-text" id="quick-payment-currency"></span><input type="number" class="form-control" name="amount" id="quick-payment-amount" min="0.01" step="0.01" required></div><div class="form-hint">Puede registrar un adelanto menor al saldo.</div></div>
+          <div class="col-md-4"><label class="form-label required">Medio de pago</label><select class="form-select" name="means_of_payment" required><option value="">Seleccionar</option>{% for means in payment_means %}<option value="{{ means.pk }}">{{ means.name }}</option>{% endfor %}</select></div>
+          <div class="col-12"><label class="form-label">Referencia / operacion</label><input class="form-control" name="reference" maxlength="100"></div>
+        </div>
+      </div>
+      <div class="modal-footer"><a class="btn btn-outline-secondary me-auto" id="quick-payment-details" href="#">Mas detalles</a><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary"><i class="ti ti-cash me-1"></i>Registrar pago</button></div>
+    </form>
+  </div></div>
+</div>
+<div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="ti ti-file-invoice me-1"></i>Detalle del documento de compra</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+    <div class="modal-body" id="document-preview-body"><div class="text-center text-muted py-4">Cargando…</div></div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const paymentModalEl = document.getElementById('quickPaymentModal');
+    if (paymentModalEl && window.bootstrap) {
+      const paymentModal = new bootstrap.Modal(paymentModalEl);
+      document.querySelectorAll('.js-quick-payment').forEach(function (button) {
+        button.addEventListener('click', function () {
+          const form = document.getElementById('quick-payment-form');
+          form.action = button.dataset.paymentUrl;
+          document.getElementById('quick-payment-document').textContent = button.dataset.document;
+          document.getElementById('quick-payment-supplier').textContent = button.dataset.supplier;
+          document.getElementById('quick-payment-currency').textContent = button.dataset.currency;
+          const amount = document.getElementById('quick-payment-amount');
+          amount.value = Number(button.dataset.balance).toFixed(2);
+          amount.max = button.dataset.balance;
+          document.getElementById('quick-payment-details').href = button.dataset.detailUrl;
+          paymentModal.show();
+        });
+      });
+    }
+    const modalEl = document.getElementById('documentPreviewModal');
+    const bodyEl = document.getElementById('document-preview-body');
+    if (!modalEl || !bodyEl || !window.bootstrap) return;
+    const modal = new bootstrap.Modal(modalEl);
+    document.querySelectorAll('.js-document-preview').forEach(function (button) {
+      button.addEventListener('click', async function (event) {
+        event.preventDefault();
+        bodyEl.innerHTML = '<div class="text-center text-muted py-4">Cargando…</div>';
+        modal.show();
+        try {
+          const response = await fetch(button.dataset.previewUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+          if (!response.ok) throw new Error('No se pudo cargar el documento');
+          bodyEl.innerHTML = await response.text();
+        } catch (error) {
+          bodyEl.innerHTML = '<div class="alert alert-danger mb-0">No se pudo cargar el detalle. Intenta nuevamente.</div>';
+        }
+      });
+    });
+  }());
+</script>
+{% endblock %}

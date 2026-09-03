@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post" novalidate>{% csrf_token %}
+    <div class="card-body">
+      {% include "components/form_errors_alert.html" with form=form %}
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label required">Codigo</label>{{ form.code }}</div>
+        <div class="col-md-8"><label class="form-label required">Nombre</label>{{ form.name }}</div>
+        <div class="col-12"><label class="form-check">{{ form.active }}<span class="form-check-label">Categoria activa</span></label></div>
+      </div>
+    </div>
+    <div class="card-footer d-flex gap-2"><button class="btn btn-primary">Guardar</button><a class="btn btn-outline-secondary" href="{% url 'users:configuracion' %}?item=categorias_gasto">Cancelar</a></div>
+  </form>
+</div>
+{% endblock %}

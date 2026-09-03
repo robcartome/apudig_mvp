@@ -3,7 +3,8 @@
   'use strict';
 
   const config = document.getElementById('sales-form-config')
-    || document.getElementById('inv-form-config');
+    || document.getElementById('inv-form-config')
+    || document.getElementById('purchase-form-config');
   const modalElement = document.getElementById('stockByWarehouseModal');
   const url = config?.dataset.stockByWarehouseUrl;
   if (!config || !modalElement || !url || !window.bootstrap || !window.ApiService) return;

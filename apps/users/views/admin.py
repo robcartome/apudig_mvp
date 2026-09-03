@@ -9,10 +9,13 @@ from django.db.models import Count, Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 
-from apps.companies.models import Company, CompanyBranding, Store, UserCompanyAccess
+from apps.companies.models import (
+    Company, CompanyBranding, CompanyOperationalSettings, Store, UserCompanyAccess,
+)
 from apps.users.forms import (
     CompanyAdminForm,
     CompanyBrandingAdminForm,
+    CompanyOperationalSettingsForm,
     PermissionForm,
     RoleForm,
     SetPasswordForm,
@@ -727,10 +730,22 @@ def configuracion(request):
 
     from django.urls import NoReverseMatch, reverse
     from apps.inventory.models import Brand, Category, Unit, Warehouse, WarehouseLocation
+    from apps.purchases.models import PurchaseCategory
     from apps.sales.models import PaymentMethod, MeansOfPayment
 
     company = _get_active_company(request)
     item = request.GET.get("item", None)
+
+    operational_form = None
+    if company:
+        operational_settings, _ = CompanyOperationalSettings.objects.get_or_create(company=company)
+        operational_form = CompanyOperationalSettingsForm(
+            request.POST or None, instance=operational_settings, company=company,
+        )
+        if request.method == "POST" and request.POST.get("settings_form") == "operational" and operational_form.is_valid():
+            operational_form.save()
+            messages.success(request, "Configuracion operativa actualizada para la empresa.")
+            return redirect("users:configuracion")
 
     item_label = None
     item_objects = []
@@ -787,6 +802,13 @@ def configuracion(request):
             item_add_url = reverse("sales:means_of_payment_create")
             item_edit_url = "sales:means_of_payment_update"
             item_delete_url = "sales:means_of_payment_delete"
+        elif item == "categorias_gasto":
+            item_label = "Categorias de gasto"
+            qs = PurchaseCategory.objects.filter(company=company).order_by("name") if company else PurchaseCategory.objects.none()
+            item_objects = list(qs)
+            item_add_url = reverse("purchases:expense_category_create")
+            item_edit_url = "purchases:expense_category_update"
+            item_delete_url = "purchases:expense_category_delete"
 
     return render(request, "admin_panel/configuracion.html", {
         "active_tab": "configuracion",
@@ -797,4 +819,5 @@ def configuracion(request):
         "item_add_url": item_add_url,
         "item_edit_url": item_edit_url,
         "item_delete_url": item_delete_url,
+        "operational_form": operational_form,
     })

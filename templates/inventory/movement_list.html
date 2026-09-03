@@ -74,9 +74,7 @@
           </td>
 
           <td>
-            {% if obj.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
-            {% elif obj.status == "CONFIRMED" %}<span class="badge bg-teal-lt">Confirmado</span>
-            {% else %}<span class="badge bg-dark text-dark-fg">Cerrado</span>{% endif %}
+            {% include "components/status_badge.html" with status=obj.status label=obj.get_status_display %}
           </td>
 
           <td class="text-muted">
@@ -209,9 +207,7 @@
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Estado</div>
                 <div class="fw-semibold">
-                  {% if obj.status == "DRAFT" %}<span class="badge bg-secondary-lt text-secondary">Borrador</span>
-                  {% elif obj.status == "CONFIRMED" %}<span class="badge bg-success-lt text-success">Confirmado</span>
-                  {% else %}<span class="badge bg-dark-lt text-dark">Cerrado</span>{% endif %}
+                  {% include "components/status_badge.html" with status=obj.status label=obj.get_status_display %}
                 </div>
               </div>
 

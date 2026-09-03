@@ -26,6 +26,7 @@ window.ProductPicker = (function ($) {
     skuId: 'qc-sku',
     unitId: 'qc-unit',
     saveButtonId: 'qc-btn-save',
+    priceDecimals: 2,
   };
 
   let settings = { ...DEFAULTS };
@@ -83,6 +84,10 @@ window.ProductPicker = (function ($) {
     getElement(settings.nameId).value = term || '';
     getElement(settings.skuId).value = '';
     getElement(settings.unitId).value = '';
+    const categoryEl = getElement('qc-category');
+    const tracksInventoryEl = getElement('qc-tracks-inventory');
+    if (categoryEl) categoryEl.value = '';
+    if (tracksInventoryEl) tracksInventoryEl.checked = true;
 
     const errorEl = getElement(settings.errorId);
     if (errorEl) errorEl.classList.add('d-none');
@@ -98,6 +103,8 @@ window.ProductPicker = (function ($) {
       const name = getElement(settings.nameId).value.trim();
       const sku = getElement(settings.skuId).value.trim();
       const unitId = getElement(settings.unitId).value;
+      const categoryId = getElement('qc-category')?.value || '';
+      const tracksInventory = getElement('qc-tracks-inventory')?.checked ?? true;
       const button = getElement(settings.saveButtonId);
       const errorEl = getElement(settings.errorId);
 
@@ -115,7 +122,7 @@ window.ProductPicker = (function ($) {
       try {
         const product = await ApiService.post(
           settings.createUrl,
-          { name, sku, unit_id: unitId }
+          { name, sku, unit_id: unitId, category_id: categoryId, tracks_inventory: tracksInventory }
         );
 
         bootstrap.Modal.getInstance(getElement(settings.modalId)).hide();
@@ -174,7 +181,7 @@ window.ProductPicker = (function ($) {
           ${supplierDetail}
         </div>
         <div class="text-end text-muted flex-shrink-0" style="font-size:.72rem">
-          P.Compra<br><strong>S/ ${parseFloat(product.supplier_purchase_price ?? product.price_purchase ?? 0).toFixed(2)}</strong>
+          P.Compra<br><strong>S/ ${parseFloat(product.supplier_purchase_price ?? product.price_purchase ?? 0).toFixed(settings.priceDecimals)}</strong>
         </div>
       </div>`);
   }

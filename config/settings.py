@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "apps.users.apps.UsersConfig",
     "apps.partners.apps.PartnersConfig",
     "apps.inventory.apps.InventoryConfig",
+    "apps.purchases.apps.PurchasesConfig",
     "apps.sales.apps.SalesConfig",
     "apps.billing.apps.BillingConfig",
     "apps.web.apps.WebConfig",

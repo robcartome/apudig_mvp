@@ -1,7 +1,9 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
-from apps.companies.models import Company, CompanyBranding, Store
+from apps.companies.models import Company, CompanyBranding, CompanyOperationalSettings, Store
+from apps.partners.models import Customer, DocumentType, Supplier
+from apps.sales.models import PaymentMethod
 from .models import Permission, Role, UserOperationalFlags
 
 User = get_user_model()
@@ -160,3 +162,52 @@ class StoreAdminForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"autofocus": True}),
         }
+
+
+class CompanyOperationalSettingsForm(forms.ModelForm):
+    class Meta:
+        model = CompanyOperationalSettings
+        exclude = ("company", "created_at", "updated_at")
+        widgets = {
+            name: forms.CheckboxInput(attrs={"class": "form-check-input"})
+            for name in (
+                "inventory_quantity_editable", "inventory_unit_cost_editable",
+                "sales_value_unit_editable", "sales_price_unit_editable", "sales_total_editable",
+                "purchases_value_unit_editable", "purchases_price_unit_editable", "purchases_total_editable",
+            )
+        }
+
+    price_decimal_places = forms.TypedChoiceField(
+        label="Decimales para precios",
+        choices=[(value, f"{value} decimales") for value in range(0, 7)],
+        coerce=int,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    default_igv_rate = forms.DecimalField(
+        label="IGV predeterminado (%)", min_value=0, max_value=100,
+        max_digits=5, decimal_places=2,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
+    )
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        self.fields["default_customer"].queryset = Customer.objects.filter(company=company, active=True).order_by("legal_name")
+        self.fields["default_supplier"].queryset = Supplier.objects.filter(company=company, active=True).order_by("name")
+        document_types = DocumentType.objects.filter(active=True, category__in=("SALES", "BILLING")).order_by("code")
+        self.fields["default_sales_document_type"].queryset = document_types
+        self.fields["default_purchase_document_type"].queryset = document_types
+        methods = PaymentMethod.objects.filter(company=company, active=True).order_by("name")
+        self.fields["default_sales_payment_method"].queryset = methods
+        self.fields["default_purchase_payment_method"].queryset = methods
+        for name, field in self.fields.items():
+            if not isinstance(field.widget, (forms.CheckboxInput, forms.NumberInput)):
+                field.widget.attrs["class"] = "form-select"
+
+    def clean(self):
+        cleaned = super().clean()
+        for field_name in ("default_customer", "default_supplier", "default_sales_payment_method", "default_purchase_payment_method"):
+            obj = cleaned.get(field_name)
+            if obj and obj.company_id != self.company.pk:
+                self.add_error(field_name, "La opcion debe pertenecer a la empresa activa.")
+        return cleaned

@@ -582,6 +582,8 @@ def get_movement_traceability_report(
             "movement__created_by",
             "movement__sales_document",
             "movement__reversal_of__sales_document",
+            "movement__purchase_document",
+            "movement__reversal_of__purchase_document",
             "product__unit",
             "product__category",
         )
@@ -671,6 +673,9 @@ def get_movement_traceability_report(
         sales_document = getattr(mv, "sales_document", None)
         if sales_document is None and mv.reversal_of_id:
             sales_document = getattr(mv.reversal_of, "sales_document", None)
+        purchase_document = mv.purchase_document
+        if purchase_document is None and mv.reversal_of_id:
+            purchase_document = mv.reversal_of.purchase_document
 
         rows.append({
             "movement_id": str(mv.pk),
@@ -689,6 +694,7 @@ def get_movement_traceability_report(
             "document": document,
             "reference_doc": mv.reference_doc or "-",
             "sales_document_id": str(sales_document.pk) if sales_document else "",
+            "purchase_document_id": str(purchase_document.pk) if purchase_document else "",
             "created_by": str(mv.created_by) if mv.created_by else "Sistema",
             "product_id": str(d.product_id),
             "sku": d.product.sku,

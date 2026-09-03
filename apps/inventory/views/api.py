@@ -37,6 +37,36 @@ def _require_auth(request):
     return not request.user.is_authenticated
 
 
+def _product_units_payload(product):
+    """Return active units with the product's principal unit first and always present."""
+    conversions = {
+        str(conversion.unit_id): conversion
+        for conversion in product.unit_conversions.all()
+        if conversion.active
+    }
+    base = conversions.pop(str(product.unit_id), None)
+    payload = []
+    if base:
+        payload.append({
+            "id": str(base.unit_id), "code": base.unit.code, "name": base.unit.name,
+            "factor": float(base.conversion_factor),
+            "sale_price": float(base.sale_price) if base.sale_price is not None else None,
+            "purchase_price": float(base.purchase_price) if base.purchase_price is not None else None,
+        })
+    else:
+        payload.append({
+            "id": str(product.unit_id), "code": product.unit.code, "name": product.unit.name,
+            "factor": 1, "sale_price": None, "purchase_price": None,
+        })
+    payload.extend({
+        "id": str(conversion.unit_id), "code": conversion.unit.code,
+        "name": conversion.unit.name, "factor": float(conversion.conversion_factor),
+        "sale_price": float(conversion.sale_price) if conversion.sale_price is not None else None,
+        "purchase_price": float(conversion.purchase_price) if conversion.purchase_price is not None else None,
+    } for conversion in conversions.values())
+    return payload
+
+
 @require_GET
 def product_search(request):
     """Return up to 50 products matching `q`, scoped to the active company."""
@@ -109,14 +139,7 @@ def product_search(request):
                 "sku":            p.sku or "",
                 "unit":           p.unit.code if p.unit else "",
                 "unit_id":        str(p.unit_id) if p.unit_id else "",
-                "units": [
-                    {"id": str(c.unit_id), "code": c.unit.code, "name": c.unit.name,
-                     "factor": float(c.conversion_factor),
-                     "sale_price": float(c.sale_price) if c.sale_price is not None else None,
-                     "purchase_price": float(c.purchase_price) if c.purchase_price is not None else None}
-                    for c in p.unit_conversions.all() if c.active
-                ] or [{"id": str(p.unit_id), "code": p.unit.code, "name": p.unit.name,
-                       "factor": 1, "sale_price": None, "purchase_price": None}],
+                "units": _product_units_payload(p),
                 "price_purchase": float(p.price_purchase or 0),
                 "supplier_code": p.matched_supplier_relations[0].supplier_code if p.matched_supplier_relations else "",
                 "supplier_product_name": p.matched_supplier_relations[0].supplier_product_name if p.matched_supplier_relations else "",
@@ -278,6 +301,8 @@ def product_quick_create(request):
     name    = (data.get("name")    or "").strip()
     sku     = (data.get("sku")     or "").strip()
     unit_id = (data.get("unit_id") or "").strip()
+    category_id = (data.get("category_id") or "").strip()
+    tracks_inventory = data.get("tracks_inventory", True) is not False
 
     if not name:
         return JsonResponse({"error": "El nombre del producto es requerido."}, status=400)
@@ -293,6 +318,11 @@ def product_quick_create(request):
         sku = "P-" + str(uuid_lib.uuid4())[:8].upper()
 
     company_id = _get_company_id(request)
+    category = None
+    if category_id:
+        category = Category.objects.filter(pk=category_id, company_id=company_id, active=True).first()
+        if not category:
+            return JsonResponse({"error": "Categoría no encontrada en la empresa activa."}, status=400)
 
     try:
         with transaction.atomic():
@@ -302,6 +332,8 @@ def product_quick_create(request):
                 unit=unit,
                 active=True,
                 company_id=company_id or None,
+                category=category,
+                tracks_inventory=tracks_inventory,
             )
             ProductUnit.objects.create(
                 product=product,

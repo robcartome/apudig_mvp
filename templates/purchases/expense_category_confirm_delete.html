@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Eliminar categoria de gasto{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+  <h3>Eliminar categoria de gasto</h3>
+  <p>Se eliminara <strong>{{ object }}</strong>. Si ya fue usada en un documento, el sistema conservara el registro y solicitara desactivarla.</p>
+  <form method="post">{% csrf_token %}<button class="btn btn-danger">Eliminar</button> <a class="btn btn-outline-secondary" href="{% url 'users:configuracion' %}?item=categorias_gasto">Cancelar</a></form>
+</div></div>
+{% endblock %}

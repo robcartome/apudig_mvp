@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Historico de precios de compra - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Historico de precios de compra</h2>{% endblock %}
+{% block content %}
+<div class="page-header mb-3"><div><div class="text-muted">Compara el precio facturado con compras anteriores y precios vigentes.</div></div></div>
+<div class="card mb-3"><div class="card-body"><form method="get" class="row g-2 align-items-end">
+  <div class="col-md-3"><label class="form-label">Producto</label><select name="product" class="form-select form-select-sm"><option value="">Todos</option>{% for product in products %}<option value="{{ product.pk }}" {% if product_id == product.pk|stringformat:'s' %}selected{% endif %}>{{ product }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><label class="form-label">Proveedor</label><select name="supplier" class="form-select form-select-sm"><option value="">Todos</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}" {% if supplier_id == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><label class="form-label">Desde</label><input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm"></div>
+  <div class="col-md-2"><label class="form-label">Hasta</label><input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm"></div>
+  <div class="col-auto"><button class="btn btn-primary btn-sm">Aplicar</button><a href="{% url 'purchases:price_history' %}" class="btn btn-ghost-secondary btn-sm">Limpiar</a></div>
+</form></div></div>
+<div class="card"><div class="table-responsive"><table class="table table-sm table-vcenter card-table">
+  <thead><tr><th>Fecha</th><th>Documento</th><th>Producto</th><th>Proveedor</th><th>Unidad</th><th class="text-end">P. facturado</th><th class="text-end">P. base PEN</th><th class="text-end">P. anterior</th><th class="text-end">Variacion</th><th class="text-end">P. proveedor</th><th class="text-end">P. producto</th></tr></thead>
+  <tbody>{% for row in rows %}<tr>
+    <td>{{ row.document.issue_date|date:"d/m/Y" }}</td><td><a href="{% url 'purchases:document_detail' row.document.pk %}">{{ row.document.series }}-{{ row.document.number }}</a></td><td>{{ row.product }}</td><td>{{ row.supplier }}</td><td>{{ row.line.unit_code }}</td>
+    <td class="text-end">{{ row.document.currency }} {{ row.invoiced_price|floatformat:6 }}</td><td class="text-end">S/ {{ row.base_invoiced_price|floatformat:6 }}</td><td class="text-end">{% if row.previous_price is not None %}S/ {{ row.previous_price|floatformat:6 }}{% else %}-{% endif %}</td>
+    <td class="text-end {% if row.variance > 0 %}text-danger{% elif row.variance < 0 %}text-success{% endif %}">{% if row.variance is not None %}{{ row.variance|floatformat:6 }} {% if row.variance_percent is not None %}({{ row.variance_percent|floatformat:2 }}%){% endif %}{% else %}-{% endif %}</td>
+    <td class="text-end">{% if row.current_supplier_price is not None %}S/ {{ row.current_supplier_price|floatformat:6 }}{% else %}-{% endif %}</td><td class="text-end">S/ {{ row.current_product_price|floatformat:2 }}</td>
+  </tr>{% empty %}<tr><td colspan="11" class="text-center text-muted py-4">No hay compras registradas para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

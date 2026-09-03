@@ -350,6 +350,8 @@ class MovementOrigin(models.TextChoices):
     MANUAL = "MANUAL", "Manual"
     SALE = "SALE", "Venta"
     SALE_REVERSAL = "SALE_REVERSAL", "Reversión de venta"
+    PURCHASE = "PURCHASE", "Compra"
+    PURCHASE_REVERSAL = "PURCHASE_REVERSAL", "Reversión de compra"
 
 
 class Movement(TimeStampedModel):
@@ -401,6 +403,20 @@ class Movement(TimeStampedModel):
     )
     document_type = models.ForeignKey(
         "partners.DocumentType", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
+    )
+    purchase_document = models.ForeignKey(
+        "purchases.PurchaseDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
+    )
+    purchase_receipt = models.ForeignKey(
+        "purchases.PurchaseReceipt",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"

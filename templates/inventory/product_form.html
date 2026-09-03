@@ -266,6 +266,12 @@
             {% endif %}
           </select>
         </div>
+        <div class="mb-3">
+          <label class="form-check">
+            {{ form.tracks_inventory }}<span class="form-check-label">Controla inventario</span>
+          </label>
+          <div class="form-hint">Desmarcar para servicios u otros conceptos que no deben generar movimientos de almacén.</div>
+        </div>
         <div class="mb-0">
           <label class="form-check">
             {{ form.active }}<span class="form-check-label">Producto activo</span>
