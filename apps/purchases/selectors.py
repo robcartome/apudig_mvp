@@ -17,7 +17,7 @@ from .models import (
 def search_purchase_documents(company_id, store_id=None, query=None, status=None):
     qs = PurchaseDocument.objects.for_company(company_id).select_related(
         "store", "supplier", "document_type", "payment_method"
-    ).prefetch_related("lines").annotate(
+    ).prefetch_related("lines__product", "lines__receipt_matches").annotate(
         paid_amount=Coalesce(
             Sum(
                 "installments__payment_allocations__amount",
@@ -55,7 +55,10 @@ def get_purchase_document(company_id, store_id, pk):
         PurchaseDocument.objects.for_company(company_id)
         .filter(store_id=store_id)
         .select_related("store", "supplier", "document_type", "created_by", "warehouse", "payment_method")
-        .prefetch_related("lines__product", "lines__unit", "inventory_movements")
+        .prefetch_related(
+            "lines__product", "lines__unit", "lines__receipt_matches__movement_detail__movement",
+            "inventory_movements",
+        )
         .get(pk=pk)
     )
 

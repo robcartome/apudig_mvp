@@ -447,6 +447,18 @@ class Movement(TimeStampedModel):
         return f"{self.type} {self.number} ({self.date:%Y-%m-%d})"
 
     @property
+    def related_purchase_documents(self):
+        """Facturas vinculadas directamente o conciliadas con esta recepción."""
+        documents = {}
+        if self.purchase_document_id:
+            documents[self.purchase_document_id] = self.purchase_document
+        for detail in self.details.all():
+            for match in detail.purchase_receipt_matches.all():
+                document = match.purchase_document_line.purchase_document
+                documents[document.pk] = document
+        return list(documents.values())
+
+    @property
     def lock_mode_enabled(self) -> bool:
         if not self.store_id:
             return True

@@ -1,7 +1,10 @@
 {% if status == "DRAFT" %}<span class="badge bg-secondary-lt text-secondary">{{ label }}</span>
-{% elif status == "REGISTERED" or status == "CONFIRMED" or status == "ISSUED" or status == "PAID" %}<span class="badge bg-success-lt text-success">{{ label }}</span>
+{% elif status == "REGISTERED" or status == "CONFIRMED" or status == "ISSUED" or status == "PAID" or status == "RECEIVED" %}<span class="badge bg-success-lt text-success">{{ label }}</span>
 {% elif status == "PARTIALLY_PAID" %}<span class="badge bg-info-lt text-info">{{ label }}</span>
+{% elif status == "PARTIALLY_RECEIVED" %}<span class="badge bg-info-lt text-info">{{ label }}</span>
 {% elif status == "UNPAID" %}<span class="badge bg-warning-lt text-warning">{{ label }}</span>
+{% elif status == "PENDING" %}<span class="badge bg-warning-lt text-warning">{{ label }}</span>
+{% elif status == "NOT_APPLICABLE" %}<span class="badge bg-secondary-lt text-secondary">{{ label }}</span>
 {% elif status == "CANCELLED" or status == "VOIDED" %}<span class="badge bg-danger-lt text-danger">{{ label }}</span>
 {% elif status == "CLOSED" %}<span class="badge bg-dark-lt text-dark">{{ label }}</span>
 {% else %}<span class="badge bg-muted-lt text-muted">{{ label|default:status }}</span>{% endif %}

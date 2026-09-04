@@ -49,6 +49,7 @@
           <th>Estado de pago</th>
           <th>Fecha de pago</th>
           <th class="text-end">Saldo por pagar</th>
+          <th>Recepción</th>
           <th>Estado</th>
           <th class="text-center">Operaciones</th>
         </tr>
@@ -66,6 +67,7 @@
           <td>{% include "components/status_badge.html" with status=doc.payment_status label=doc.get_payment_status_display %}</td>
           <td>{{ doc.last_payment_date|date:"d/m/Y H:i"|default:"—" }}</td>
           <td class="text-end fw-semibold">{{ doc.currency }} {{ doc.payment_balance|floatformat:2 }}</td>
+          <td>{% include "components/status_badge.html" with status=doc.delivery_status label=doc.delivery_status_label %}</td>
           <td>{% include "components/status_badge.html" with status=doc.document_status label=doc.get_document_status_display %}</td>
           <td class="text-center">
             <div class="d-inline-flex gap-1 align-items-center">
@@ -117,7 +119,7 @@
             </div>
           </td>
         </tr>{% empty %}<tr>
-          <td colspan="13" class="text-center text-muted py-4">No se encontraron documentos de compra.</td>
+          <td colspan="14" class="text-center text-muted py-4">No se encontraron documentos de compra.</td>
         </tr>{% endfor %}</tbody>
     </table>
   </div>

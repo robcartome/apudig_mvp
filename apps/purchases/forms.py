@@ -1,8 +1,9 @@
 from decimal import Decimal
 
 from django import forms
+from django.db.models import Q
 
-from apps.inventory.models import Product, Unit, Warehouse
+from apps.inventory.models import Movement, MovementStatus, MovementType, Product, Unit, Warehouse
 from apps.partners.models import DocumentType, Supplier
 from apps.sales.models import MeansOfPayment, PaymentMethod
 
@@ -21,6 +22,13 @@ _quantity = {
 
 
 class PurchaseDocumentForm(forms.ModelForm):
+    receipt_movements = forms.ModelMultipleChoiceField(
+        queryset=Movement.objects.none(),
+        required=False,
+        label="Guías / ingresos ya recibidos",
+        help_text="Relaciona ingresos previamente registrados. Las cantidades se concilian por producto.",
+        widget=forms.SelectMultiple(attrs={"class": "form-select", "size": 4}),
+    )
     class Meta:
         model = PurchaseDocument
         fields = (
@@ -74,6 +82,22 @@ class PurchaseDocumentForm(forms.ModelForm):
         self.fields["warehouse"].queryset = Warehouse.objects.filter(
             store_id=store_id, active=True
         ).order_by("name") if store_id else Warehouse.objects.none()
+        receipt_qs = Movement.objects.filter(
+            store_id=store_id,
+            type=MovementType.ENTRY,
+            status=MovementStatus.CONFIRMED,
+        ).select_related("supplier", "warehouse").order_by("-date")
+        if self.instance.pk:
+            linked_ids = self.instance.lines.filter(
+                receipt_matches__isnull=False
+            ).values_list("receipt_matches__movement_detail__movement_id", flat=True)
+            receipt_qs = receipt_qs.filter(
+                Q(purchase_document__isnull=True) | Q(pk__in=linked_ids)
+            ).distinct()
+            self.initial.setdefault("receipt_movements", list(linked_ids))
+        else:
+            receipt_qs = receipt_qs.filter(purchase_document__isnull=True)
+        self.fields["receipt_movements"].queryset = receipt_qs
 
     def clean_series(self):
         return (self.cleaned_data.get("series") or "").strip().upper()
@@ -93,7 +117,32 @@ class PurchaseDocumentForm(forms.ModelForm):
             self.instance.due_date = issue_date
         elif payment_method and not payment_method.is_cash and not cleaned.get("due_date"):
             self.add_error("due_date", "Indica la fecha de vencimiento para una compra a credito.")
+        if cleaned.get("receipt_movements"):
+            cleaned["register_inventory_movement"] = False
         return cleaned
+
+
+class PurchaseDocumentReceiptLinkForm(forms.Form):
+    receipt_movements = forms.ModelMultipleChoiceField(
+        queryset=Movement.objects.none(),
+        label="Guías / ingresos confirmados",
+        widget=forms.SelectMultiple(attrs={"class": "form-select", "size": 4}),
+    )
+
+    def __init__(self, *args, document=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not document:
+            return
+        linked_ids = document.lines.filter(receipt_matches__isnull=False).values_list(
+            "receipt_matches__movement_detail__movement_id", flat=True
+        )
+        self.fields["receipt_movements"].queryset = Movement.objects.filter(
+            store_id=document.store_id,
+            supplier_id=document.supplier_id,
+            type=MovementType.ENTRY,
+            status=MovementStatus.CONFIRMED,
+        ).filter(Q(purchase_document__isnull=True) | Q(pk__in=linked_ids)).distinct().order_by("-date")
+        self.initial["receipt_movements"] = list(linked_ids)
 
 
 class PurchaseDocumentLineForm(forms.Form):

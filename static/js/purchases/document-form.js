@@ -5,6 +5,7 @@
   if (!body || !config) return;
   const warehouse = document.getElementById('id_warehouse');
   const supplier = document.getElementById('id_supplier');
+  const registerInventoryMovement = document.getElementById('id_register_inventory_movement');
   const orderMode = config.dataset.orderMode === 'true';
   const editValue = config.dataset.editValue !== 'false';
   const editPrice = config.dataset.editPrice !== 'false';
@@ -27,6 +28,25 @@
   const dueDateField = document.getElementById('due-date-field');
   const paymentWorkflowHelp = document.getElementById('payment-workflow-help');
   const paymentMethods = JSON.parse(document.getElementById('purchase-payment-methods')?.textContent || '[]');
+  const receiptMovementsUrl = config.dataset.receiptMovementsUrl;
+  let availableReceiptMovements = [];
+
+  function updateInventoryReceptionControls(receiptMovements = []) {
+    const hasReceiptSource = receiptMovements.length > 0;
+    if (registerInventoryMovement) {
+      if (hasReceiptSource) registerInventoryMovement.checked = false;
+      registerInventoryMovement.disabled = hasReceiptSource;
+    }
+    if (warehouse) warehouse.disabled = hasReceiptSource || !registerInventoryMovement?.checked;
+  }
+
+  function updateReceiptLinkSummary(receiptMovements = []) {
+    const summary = document.getElementById('receipt-link-summary');
+    if (!summary) return;
+    const numbers = receiptMovements.map(movement => movement.number).filter(Boolean);
+    summary.classList.toggle('d-none', !numbers.length);
+    summary.querySelector('strong').textContent = numbers.join(', ');
+  }
 
   function updateCurrencyFields() {
     const foreignCurrency = currency?.value !== 'PEN';
@@ -55,6 +75,8 @@
   issueDate?.addEventListener('change', updatePaymentTerms);
   updateCurrencyFields();
   updatePaymentTerms();
+  registerInventoryMovement?.addEventListener('change', () => updateInventoryReceptionControls());
+  updateInventoryReceptionControls();
 
   ProductPicker.configure({
     searchUrl: config.dataset.searchUrl,
@@ -294,5 +316,152 @@
     ProductPicker.init(row);
     updateUnit(row);
     updateLineTotals(row);
+  });
+
+  function selectedReceiptMovements() {
+    return availableReceiptMovements.flatMap(movement => {
+      const selected = document.querySelector(`.receipt-movement-check[value="${movement.id}"]`)?.checked;
+      if (!selected) return [];
+      const details = movement.details.filter(detail =>
+        document.querySelector(`.receipt-detail-check[data-movement="${movement.id}"][value="${detail.id}"]`)?.checked
+      );
+      return details.length ? [{...movement, details}] : [];
+    });
+  }
+
+  function setReceiptMovementSelections(movements) {
+    const field = document.getElementById('id_receipt_movements');
+    if (!field) return;
+    const selected = new Set(movements.map(movement => movement.id));
+    Array.from(field.options).forEach(option => { option.selected = selected.has(option.value); });
+    updateInventoryReceptionControls(movements);
+    updateReceiptLinkSummary(movements);
+  }
+
+  const initialReceiptMovements = Array.from(
+    document.querySelectorAll('#id_receipt_movements option:checked')
+  ).map(option => ({id: option.value, number: option.textContent.trim()}));
+  if (initialReceiptMovements.length) setReceiptMovementSelections(initialReceiptMovements);
+
+  function importReceiptLines(movements) {
+    const importedDetails = movements.flatMap(movement => movement.details);
+    const reusableRows = Array.from(body.querySelectorAll('.line-row:not([hidden])'));
+    reusableRows.slice(importedDetails.length).forEach(row => {
+      const deleteInput = row.querySelector('input[name*="-DELETE"]');
+      if (deleteInput) deleteInput.value = 'on';
+      ProductPicker.destroy(row);
+      row.hidden = true;
+    });
+    importedDetails.forEach((detail, index) => {
+      let row = reusableRows[index];
+      if (row) {
+        const deleteInput = row.querySelector('input[name*="-DELETE"]');
+        if (deleteInput) deleteInput.value = '';
+        ProductPicker.destroy(row);
+        row.hidden = false;
+        row.querySelector('.product-select').innerHTML = '';
+        ProductPicker.init(row);
+      } else {
+        row = buildRow(Number(totalForms().value));
+        body.appendChild(row);
+        totalForms().value = Number(totalForms().value) + 1;
+        ProductPicker.init(row);
+      }
+      const select = row.querySelector('.product-select');
+      const sku = detail.product.sku || detail.product.barcode || 'SIN-SKU';
+      const label = `${sku} | ${detail.product.name}`;
+      window.jQuery(select).append(new Option(label, detail.product.id, true, true)).trigger('change');
+      // El selector visual no actualiza este campo cuando la selección se
+      // establece por código. Django requiere este id para crear la línea.
+      row.querySelector('input[name*="-product"]').value = detail.product.id;
+      row.dispatchEvent(new CustomEvent('product-picker:selected', {bubbles: true, detail: detail.product}));
+      const unit = row.querySelector('.product-unit-select');
+      unit.value = detail.unit_id;
+      unit.dispatchEvent(new Event('change', {bubbles: true}));
+      row.querySelector('input[name*="-quantity"]').value = detail.quantity;
+      row.querySelector('input[name*="-unit_price"]').value = detail.unit_price;
+      updateLineTotals(row, 'value');
+    });
+    setReceiptMovementSelections(movements);
+    updateSummary();
+  }
+
+  function renderReceiptMovements(movements) {
+    const table = document.getElementById('receipt-movements-table-wrap');
+    const empty = document.getElementById('receipt-movements-empty');
+    const list = document.getElementById('receipt-movements-body');
+    const importButton = document.getElementById('import-selected-receipts');
+    if (!table || !empty || !list) return;
+    availableReceiptMovements = movements;
+    if (!movements.length) {
+      table.classList.add('d-none'); empty.classList.remove('d-none');
+      empty.textContent = 'No hay ingresos confirmados pendientes para este proveedor.';
+      return;
+    }
+    empty.classList.add('d-none'); table.classList.remove('d-none');
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+    })[character]);
+    list.innerHTML = movements.map(movement => `
+      <tr>
+        <td><input class="form-check-input receipt-movement-check" type="checkbox" value="${movement.id}"></td>
+        <td><button type="button" class="btn btn-link p-0 receipt-movement-toggle" data-movement="${movement.id}">${escapeHtml(movement.number)}</button>${movement.reference ? `<div class="small text-muted">${escapeHtml(movement.reference)}</div>` : ''}</td>
+        <td>${escapeHtml(movement.date)}</td><td>${escapeHtml(movement.warehouse || '—')}</td>
+        <td class="text-end"><span class="badge bg-azure-lt">${movement.details.length}</span></td>
+      </tr>
+      <tr class="receipt-detail-row d-none" data-movement="${movement.id}"><td></td><td colspan="4"><div class="border rounded p-2"><div class="small fw-semibold mb-2">Productos recibidos</div>${movement.details.map(detail => `<label class="form-check mb-2"><input class="form-check-input receipt-detail-check" data-movement="${movement.id}" type="checkbox" value="${detail.id}" checked><span class="form-check-label"><strong>${escapeHtml(detail.product.sku || 'SIN-COD')}</strong> · ${escapeHtml(detail.product.name)} <span class="text-muted">(${escapeHtml(detail.quantity)} ${escapeHtml(detail.product.unit)})</span></span></label>`).join('')}</div></td></tr>
+    `).join('');
+    const refreshButton = () => { importButton.disabled = !selectedReceiptMovements().length; };
+    list.querySelectorAll('.receipt-movement-toggle').forEach(toggle => toggle.addEventListener('click', () => {
+      const movementId = toggle.dataset.movement;
+      const movementCheck = list.querySelector(`.receipt-movement-check[value="${movementId}"]`);
+      movementCheck.checked = true;
+      list.querySelector(`.receipt-detail-row[data-movement="${movementId}"]`)?.classList.toggle('d-none');
+      refreshButton();
+    }));
+    list.querySelectorAll('.receipt-movement-check').forEach(check => check.addEventListener('change', () => {
+      if (check.checked) list.querySelectorAll(`.receipt-detail-check[data-movement="${check.value}"]`).forEach(detail => { detail.checked = true; });
+      refreshButton();
+    }));
+    list.querySelectorAll('.receipt-detail-check').forEach(check => check.addEventListener('change', () => {
+      const movementCheck = list.querySelector(`.receipt-movement-check[value="${check.dataset.movement}"]`);
+      movementCheck.checked = Array.from(list.querySelectorAll(`.receipt-detail-check[data-movement="${check.dataset.movement}"]`)).some(detail => detail.checked);
+      refreshButton();
+    }));
+  }
+
+  async function loadReceiptMovements() {
+    if (!receiptMovementsUrl || !supplier?.value) return renderReceiptMovements([]);
+    try {
+      const documentParam = config.dataset.documentId ? `&document=${encodeURIComponent(config.dataset.documentId)}` : '';
+      const response = await window.ApiService.get(`${receiptMovementsUrl}?supplier=${encodeURIComponent(supplier.value)}${documentParam}`);
+      renderReceiptMovements(response.movements || []);
+    } catch (_) {
+      renderReceiptMovements([]);
+    }
+  }
+
+  document.querySelectorAll('[data-purchase-tab]').forEach(tab => tab.addEventListener('click', () => {
+    const receipts = tab.dataset.purchaseTab === 'receipts';
+    document.querySelectorAll('[data-purchase-tab]').forEach(item => item.classList.toggle('active', item === tab));
+    document.getElementById('purchase-detail-card')?.classList.toggle('d-none', receipts);
+    document.getElementById('purchase-receipts-card')?.classList.toggle('d-none', !receipts);
+    if (receipts) loadReceiptMovements();
+  }));
+  supplier?.addEventListener('change', () => {
+    setReceiptMovementSelections([]);
+    loadReceiptMovements();
+  });
+  document.getElementById('import-selected-receipts')?.addEventListener('click', () => {
+    const movements = selectedReceiptMovements();
+    if (!movements.length) return;
+    const count = movements.reduce((total, item) => total + item.details.length, 0);
+    document.getElementById('receipt-import-confirm-message').textContent = `Se reemplazarán las líneas actuales por ${count} productos de los ingresos seleccionados. ¿Deseas continuar?`;
+    document.getElementById('confirm-receipt-import').onclick = () => {
+      importReceiptLines(movements);
+      bootstrap.Modal.getInstance(document.getElementById('receiptImportConfirmModal'))?.hide();
+      document.querySelector('[data-purchase-tab="detail"]')?.click();
+    };
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('receiptImportConfirmModal')).show();
   });
 }());

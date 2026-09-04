@@ -295,6 +295,19 @@
           </div>
         </div>
 
+        {% if obj.related_purchase_documents %}
+        <div class="card border-primary-subtle mb-3">
+          <div class="card-body py-3">
+            <div class="text-muted small mb-1">Documentos de compra relacionados</div>
+            {% for purchase_document in obj.related_purchase_documents %}
+            <a class="btn btn-sm btn-outline-primary me-1 mb-1" href="{% url 'purchases:document_detail' purchase_document.pk %}">
+              <i class="ti ti-file-invoice me-1"></i>{{ purchase_document.document_type.name }} {{ purchase_document.series }}-{{ purchase_document.number }}
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
         <h6 class="mb-2">Productos Detallados</h6>
         {% if obj.type == "ADJUSTMENT" %}
         <div class="alert alert-warning py-2 px-3 mb-2 small">

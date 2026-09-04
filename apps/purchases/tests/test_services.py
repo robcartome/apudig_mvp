@@ -1,7 +1,9 @@
 from datetime import date
+from datetime import date
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.companies.models import Company, Store
 from apps.core.models import AuditLog
@@ -17,8 +19,9 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.inventory.selectors import get_movement_traceability_report
+from apps.inventory.services import confirm_movement, register_entry
 from apps.partners.models import DocumentType, Supplier
-from apps.purchases.models import PurchaseCategory, PurchaseDocumentStatus
+from apps.purchases.models import PurchaseCategory, PurchaseDeliveryStatus, PurchaseDocumentStatus
 from apps.purchases.selectors import get_purchase_price_history
 from apps.purchases.services import (
     cancel_purchase_document,
@@ -100,6 +103,38 @@ class PurchaseDocumentServiceTest(TestCase):
         document.refresh_from_db()
         self.assertEqual(document.document_status, PurchaseDocumentStatus.DRAFT)
         self.assertFalse(Movement.objects.exists())
+
+    def test_invoice_is_pending_when_goods_have_not_been_received(self):
+        document = self.create(register_inventory_movement=False)
+
+        register_purchase_document(document.pk, company_id=self.company.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(document.delivery_status, PurchaseDeliveryStatus.PENDING)
+
+    def test_invoice_matches_a_previous_inventory_entry_without_duplicate_stock(self):
+        entry = register_entry(
+            store_id=str(self.store.pk), warehouse_id=str(self.warehouse.pk),
+            date=timezone.now(),
+            lines=[{
+                "product_id": self.product.pk, "quantity": Decimal("2"),
+                "unit_id": self.unit.pk, "unit_price": Decimal("100"),
+            }],
+            supplier=self.supplier, origin=MovementOrigin.MANUAL,
+            reason="Guía de remisión GR-001", created_by=None,
+        )
+        confirm_movement(entry)
+        document = self.create(
+            register_inventory_movement=False,
+            receipt_movements=[entry],
+        )
+
+        register_purchase_document(document.pk, company_id=self.company.pk)
+
+        document.refresh_from_db()
+        self.assertEqual(document.delivery_status, PurchaseDeliveryStatus.RECEIVED)
+        self.assertEqual(document.lines.get().receipt_matches.count(), 1)
+        self.assertEqual(Movement.objects.count(), 1)
 
     def test_non_inventory_purchase_registers_without_movement(self):
         self.product.tracks_inventory = False

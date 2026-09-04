@@ -196,8 +196,13 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
     qs = (
         Movement.objects.for_store(store_id)
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
-                        "supplier", "customer", "document_type", "created_by")
-        .prefetch_related("details__product__unit", "details__unit")
+                        "supplier", "customer", "document_type", "created_by",
+                        "purchase_document__document_type", "purchase_document__supplier")
+        .prefetch_related(
+            "details__product__unit", "details__unit",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__document_type",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__supplier",
+        )
     )
     if movement_type:
         qs = qs.filter(type=movement_type)
@@ -218,9 +223,14 @@ def search_movements(store_id: str, query: str, movement_type: str | None = None
 def get_movement_detail(pk):
     return (
         Movement.objects
-        .prefetch_related("details__product__unit", "details__unit", "audit_logs__changed_by")
+        .prefetch_related(
+            "details__product__unit", "details__unit", "audit_logs__changed_by",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__document_type",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__supplier",
+        )
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
-                        "supplier", "customer", "carrier", "document_type", "created_by", "confirmed_by", "closed_by")
+                        "supplier", "customer", "carrier", "document_type", "created_by", "confirmed_by", "closed_by",
+                        "purchase_document__document_type", "purchase_document__supplier")
         .get(pk=pk)
     )
 

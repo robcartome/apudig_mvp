@@ -109,6 +109,7 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertContains(response, "Fecha de emisión")
         self.assertContains(response, "Fecha de vencimiento")
         self.assertContains(response, "Estado de pago")
+        self.assertContains(response, "Recepci")
         self.assertContains(response, "Operaciones")
         self.assertContains(response, reverse("purchases:document_preview", args=[document.pk]))
         self.assertContains(response, reverse("purchases:document_edit", args=[document.pk]))

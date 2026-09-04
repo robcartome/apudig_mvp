@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -12,6 +13,13 @@ class PurchaseDocumentStatus(models.TextChoices):
     DRAFT = "DRAFT", "Borrador"
     REGISTERED = "REGISTERED", "Registrado"
     CANCELLED = "CANCELLED", "Cancelado"
+
+
+class PurchaseDeliveryStatus(models.TextChoices):
+    PENDING = "PENDING", "Pendiente de recepción"
+    PARTIALLY_RECEIVED = "PARTIALLY_RECEIVED", "Recepción parcial"
+    RECEIVED = "RECEIVED", "Recibido"
+    NOT_APPLICABLE = "NOT_APPLICABLE", "No aplica"
 
 
 class PurchasePaymentStatus(models.TextChoices):
@@ -306,7 +314,7 @@ class PurchaseDocument(TimeStampedModel):
     igv_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    register_inventory_movement = models.BooleanField(default=True)
+    register_inventory_movement = models.BooleanField(default=False)
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.SET_NULL,
@@ -373,6 +381,31 @@ class PurchaseDocument(TimeStampedModel):
         """Identifica documentos creados desde el flujo separado de gastos."""
         lines = self.lines.all()
         return bool(lines) and all(line.purchase_category_id for line in lines)
+
+    @property
+    def delivery_status(self):
+        """Estado calculado desde conciliaciones de ingresos, no desde el pago."""
+        inventory_lines = [
+            line for line in self.lines.all()
+            if line.product_id and line.product.tracks_inventory
+        ]
+        if not inventory_lines:
+            return PurchaseDeliveryStatus.NOT_APPLICABLE
+        received_by_line = {}
+        for line in inventory_lines:
+            received_by_line[line.pk] = sum(
+                (match.stock_quantity for match in line.receipt_matches.all()),
+                Decimal("0"),
+            )
+        if all(received_by_line[line.pk] >= line.stock_quantity for line in inventory_lines):
+            return PurchaseDeliveryStatus.RECEIVED
+        if any(received_by_line.values()):
+            return PurchaseDeliveryStatus.PARTIALLY_RECEIVED
+        return PurchaseDeliveryStatus.PENDING
+
+    @property
+    def delivery_status_label(self):
+        return PurchaseDeliveryStatus(self.delivery_status).label
 
 
 class PurchaseDocumentLine(models.Model):
@@ -469,6 +502,36 @@ class PurchaseDocumentLine(models.Model):
     def __str__(self):
         concept = self.product or self.purchase_category
         return f"{self.position}. {concept} x {self.quantity}"
+
+
+class PurchaseDocumentReceiptMatch(models.Model):
+    """Cantidad de una recepción física aplicada a una línea facturada.
+
+    Al usar el detalle de movimiento se permiten entregas y facturas parciales
+    sin duplicar las existencias ni asignar una misma cantidad dos veces.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purchase_document_line = models.ForeignKey(
+        PurchaseDocumentLine, on_delete=models.CASCADE, related_name="receipt_matches"
+    )
+    movement_detail = models.ForeignKey(
+        "inventory.MovementDetail", on_delete=models.PROTECT, related_name="purchase_receipt_matches"
+    )
+    stock_quantity = models.DecimalField(max_digits=18, decimal_places=6)
+
+    class Meta:
+        db_table = "purchase_document_receipt_matches"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("purchase_document_line", "movement_detail"),
+                name="uniq_purchase_document_receipt_match",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(stock_quantity__gt=0),
+                name="purchase_document_receipt_match_quantity_gt_zero",
+            ),
+        ]
 
 
 class PurchasePayableInstallment(TimeStampedModel):

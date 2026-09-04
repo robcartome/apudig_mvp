@@ -3,6 +3,7 @@ inventory/views/operations.py — Vistas de movimientos de stock y consulta de s
 """
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
@@ -129,7 +130,17 @@ def movement_detail(request, pk):
     except Movement.DoesNotExist:
         from django.http import Http404
         raise Http404
-    return render(request, "inventory/movement_detail.html", {"movement": movement})
+    # A purchase may create this entry directly or reconcile it afterwards.
+    from apps.purchases.models import PurchaseDocument
+
+    related_purchase_documents = PurchaseDocument.objects.filter(
+        Q(pk=movement.purchase_document_id)
+        | Q(lines__receipt_matches__movement_detail__movement=movement)
+    ).select_related("document_type", "supplier").distinct().order_by("-issue_date", "-created_at")
+    return render(request, "inventory/movement_detail.html", {
+        "movement": movement,
+        "related_purchase_documents": related_purchase_documents,
+    })
 
 
 def _get_movement_for_store_or_404(pk, store_id):

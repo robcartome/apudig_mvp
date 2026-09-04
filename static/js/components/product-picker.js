@@ -187,8 +187,11 @@ window.ProductPicker = (function ($) {
   }
 
   function buildSelectedLabel(product) {
-    const code = product.sku || 'SIN-COD';
-    const name = product.name || product.text || '';
+    // Una opción cargada por código puede traer solo ``text`` con el formato
+    // "SKU | Nombre", sin las propiedades completas de una búsqueda AJAX.
+    const textParts = String(product.text || '').split('|').map(part => part.trim());
+    const code = product.sku || textParts[0] || 'SIN-COD';
+    const name = product.name || textParts.slice(1).join(' | ') || product.text || '';
     const total = (product.total_stock !== null && product.total_stock !== undefined) ? product.total_stock : '—';
     return `${code} | ${name} | Stock sucursal: ${total}`;
   }

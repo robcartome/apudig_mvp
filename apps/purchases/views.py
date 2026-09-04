@@ -2,7 +2,8 @@ from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.db.models import Q
+from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -11,13 +12,13 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.companies.models import CompanyOperationalSettings, Store
 from apps.core.models import AuditLog
-from apps.inventory.models import Category, Product, Unit
+from apps.inventory.models import Category, Movement, MovementStatus, MovementType, Product, Unit
 from apps.partners.models import Supplier
 from apps.sales.models import MeansOfPayment
 from apps.users.permissions import user_has_company_permission
 
 from .forms import (
-    PurchaseCategoryForm, PurchaseDocumentForm, PurchaseDocumentLineFormSet, PurchaseExpenseLineFormSet,
+    PurchaseCategoryForm, PurchaseDocumentForm, PurchaseDocumentReceiptLinkForm, PurchaseDocumentLineFormSet, PurchaseExpenseLineFormSet,
     PurchaseOrderForm, PurchaseOrderLineFormSet, PurchaseReceiptForm, PurchaseReceiptLineFormSet,
     SupplierPaymentForm,
     PurchaseInstallmentFormSet,
@@ -48,6 +49,7 @@ from .services import (
     create_purchase_document_draft,
     delete_purchase_document_draft,
     register_purchase_document,
+    reconcile_purchase_document_receipts,
     update_purchase_document_draft,
 )
 
@@ -213,6 +215,74 @@ def purchase_document_list(request):
     })
 
 
+@require_GET
+def purchase_receipt_movements_api(request):
+    """Ingresos confirmados disponibles para poblar una factura del proveedor."""
+    denied = _require_permission(request, "read")
+    if denied:
+        return denied
+    company_id, store = _active_scope(request)
+    supplier_id = request.GET.get("supplier")
+    if not supplier_id:
+        return JsonResponse({"movements": []})
+    linked_movement_ids = []
+    document_id = request.GET.get("document")
+    if document_id:
+        linked_movement_ids = PurchaseDocumentLine.objects.filter(
+            purchase_document_id=document_id,
+            purchase_document__company_id=company_id,
+            purchase_document__store_id=store.pk,
+            receipt_matches__isnull=False,
+        ).values_list("receipt_matches__movement_detail__movement_id", flat=True)
+    movements = (
+        Movement.objects.filter(
+            store_id=store.pk, supplier_id=supplier_id,
+            type=MovementType.ENTRY, status=MovementStatus.CONFIRMED,
+            purchase_document__isnull=True,
+        )
+        .filter(Q(details__purchase_receipt_matches__isnull=True) | Q(pk__in=linked_movement_ids))
+        .prefetch_related("details__product__unit_conversions__unit", "details__unit")
+        .order_by("-date")
+        .distinct()
+    )
+    payload = []
+    for movement in movements:
+        details = []
+        for detail in movement.details.all():
+            product = detail.product
+            conversions = list(product.unit_conversions.filter(active=True))
+            if not any(conversion.unit_id == product.unit_id for conversion in conversions):
+                conversions.insert(0, None)
+            units = [
+                {
+                    "id": str(product.unit_id if conversion is None else conversion.unit_id),
+                    "code": product.unit.code if conversion is None else conversion.unit.code,
+                    "name": product.unit.name if conversion is None else conversion.unit.name,
+                    "factor": 1 if conversion is None else str(conversion.conversion_factor),
+                    "purchase_price": None if conversion is None else str(conversion.purchase_price or ""),
+                }
+                for conversion in conversions
+            ]
+            details.append({
+                "id": str(detail.pk),
+                "product": {
+                    "id": str(product.pk), "name": product.name, "sku": product.sku,
+                    "barcode": product.barcode,
+                    "unit_id": str(product.unit_id), "unit": product.unit.code,
+                    "price_purchase": str(product.price_purchase), "units": units,
+                },
+                "quantity": str(detail.quantity), "unit_id": str(detail.unit_id),
+                "unit_price": str(detail.unit_price),
+            })
+        payload.append({
+            "id": str(movement.pk), "number": movement.number or "Sin número",
+            "reference": movement.reference_doc, "date": movement.date.strftime("%d/%m/%Y %H:%M"),
+            "warehouse": str(movement.warehouse), "warehouse_id": str(movement.warehouse_id or ""),
+            "details": details,
+        })
+    return JsonResponse({"movements": payload})
+
+
 def purchase_category_create(request):
     denied = _require_category_settings_permission(request)
     if denied:
@@ -319,6 +389,7 @@ def purchase_document_create(request):
                 currency=form.cleaned_data["currency"],
                 exchange_rate=form.cleaned_data["exchange_rate"],
                 register_inventory_movement=form.cleaned_data.get("register_inventory_movement", False),
+                receipt_movements=form.cleaned_data.get("receipt_movements"),
                 warehouse=form.cleaned_data.get("warehouse"),
                 notes=form.cleaned_data.get("notes", ""),
                 internal_reference=form.cleaned_data.get("internal_reference", ""),
@@ -499,6 +570,7 @@ def purchase_document_edit(request, pk):
                 currency=form.cleaned_data["currency"],
                 exchange_rate=form.cleaned_data["exchange_rate"],
                 register_inventory_movement=form.cleaned_data.get("register_inventory_movement", False),
+                receipt_movements=form.cleaned_data.get("receipt_movements"),
                 warehouse=form.cleaned_data.get("warehouse"),
                 notes=form.cleaned_data.get("notes", ""),
                 internal_reference=form.cleaned_data.get("internal_reference", ""),
@@ -535,14 +607,48 @@ def purchase_document_detail(request, pk):
             "line": line, "allocated": allocated,
             "acquired_unit_cost": line.unit_price + (allocated / line.quantity if line.quantity else 0),
         })
+    linked_receipt_movements = (
+        Movement.objects.filter(
+            details__purchase_receipt_matches__purchase_document_line__purchase_document=document
+        )
+        .select_related("warehouse", "supplier")
+        .distinct()
+        .order_by("-date")
+    )
     return render(request, "purchases/document_detail.html", {
         "purchase_document": document,
         "audit_logs": audit_logs,
         "payment_summary": payment_summary,
         "supplier_payments": payments,
         "landed_cost_summary": landed_summary, "landed_rows": landed_rows,
+        "linked_receipt_movements": linked_receipt_movements,
+        "receipt_link_form": PurchaseDocumentReceiptLinkForm(document=document),
         **_permission_context(request),
     })
+
+
+@require_POST
+def purchase_document_reconcile_receipts(request, pk):
+    denied = _require_permission(request, "manage")
+    if denied:
+        return denied
+    company_id, _ = _active_scope(request)
+    document = _document_or_404(request, pk)
+    form = PurchaseDocumentReceiptLinkForm(request.POST, document=document)
+    if form.is_valid():
+        try:
+            reconcile_purchase_document_receipts(
+                document.pk,
+                company_id=company_id,
+                receipt_movements=form.cleaned_data["receipt_movements"],
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "Recepción conciliada con la factura.")
+    else:
+        messages.error(request, "Selecciona al menos un ingreso confirmado del mismo proveedor.")
+    return redirect("purchases:document_detail", pk=document.pk)
 
 
 @require_GET
@@ -552,8 +658,12 @@ def purchase_document_preview(request, pk):
     if denied:
         return denied
     document = _document_or_404(request, pk)
+    linked_receipt_movements = Movement.objects.filter(
+        details__purchase_receipt_matches__purchase_document_line__purchase_document=document
+    ).select_related("warehouse").distinct().order_by("-date")
     return render(request, "purchases/partials/document_preview_content.html", {
         "purchase_document": document,
+        "linked_receipt_movements": linked_receipt_movements,
     })
 
 

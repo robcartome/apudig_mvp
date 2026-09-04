@@ -1,15 +1,20 @@
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.core.models import AuditLog
-from apps.inventory.models import MovementOrigin, Product, ProductSupplier, ProductUnit
+from apps.inventory.models import (
+    Movement, MovementDetail, MovementOrigin, MovementStatus, MovementType,
+    Product, ProductSupplier, ProductUnit,
+)
 from apps.inventory.services import confirm_movement, register_entry, register_exit
 
 from .models import (
     PurchaseDocument,
     PurchaseDocumentLine,
+    PurchaseDocumentReceiptMatch,
     PurchaseDocumentStatus,
 )
 
@@ -158,6 +163,89 @@ def _replace_lines(document, lines, calculated):
         )
 
 
+def _replace_receipt_matches(document, receipt_movements):
+    """Conciliar automáticamente ingresos confirmados contra líneas facturadas.
+
+    La asignación usa cantidades base de stock. Un detalle de ingreso puede
+    distribuirse entre varias facturas, pero nunca por encima de lo recibido.
+    """
+    movement_ids = {getattr(movement, "pk", movement) for movement in receipt_movements or []}
+    if not movement_ids:
+        return
+    movements = list(
+        # ``supplier`` es nullable y ``select_related`` genera un LEFT OUTER JOIN.
+        # PostgreSQL solo debe bloquear la fila de Movement, no el lado opcional.
+        Movement.objects.select_for_update(of=("self",)).filter(
+            pk__in=movement_ids
+        ).select_related("supplier")
+    )
+    if len(movements) != len(movement_ids):
+        raise ValueError("Uno de los ingresos seleccionados no existe.")
+    for movement in movements:
+        if (
+            movement.type != MovementType.ENTRY
+            or movement.status != MovementStatus.CONFIRMED
+            or movement.store_id != document.store_id
+            or movement.supplier_id != document.supplier_id
+        ):
+            raise ValueError("Los ingresos relacionados deben estar confirmados y pertenecer al mismo proveedor y sucursal.")
+        if movement.purchase_document_id and movement.purchase_document_id != document.pk:
+            raise ValueError("Uno de los ingresos ya está vinculado a otra factura.")
+
+    PurchaseDocumentReceiptMatch.objects.filter(
+        purchase_document_line__purchase_document=document
+    ).delete()
+    lines = list(
+        document.lines.select_related("product").filter(product__tracks_inventory=True)
+    )
+    details = list(
+        MovementDetail.objects.select_for_update().filter(
+            movement_id__in=movement_ids
+        ).select_related("movement")
+    )
+    details_by_product = {}
+    for detail in details:
+        used = detail.purchase_receipt_matches.exclude(
+            purchase_document_line__purchase_document=document
+        ).aggregate(total=Sum("stock_quantity"))["total"] or Decimal("0")
+        available = max(Decimal(str(detail.stock_quantity)) - used, Decimal("0"))
+        if available:
+            details_by_product.setdefault(detail.product_id, []).append([detail, available])
+
+    matches_created = 0
+    for line in lines:
+        pending = Decimal(str(line.stock_quantity))
+        for detail_data in details_by_product.get(line.product_id, []):
+            detail, available = detail_data
+            if pending <= 0:
+                break
+            allocated = min(pending, available)
+            PurchaseDocumentReceiptMatch.objects.create(
+                purchase_document_line=line,
+                movement_detail=detail,
+                stock_quantity=allocated,
+            )
+            matches_created += 1
+            detail_data[1] -= allocated
+            pending -= allocated
+    if not matches_created:
+        raise ValueError("Los ingresos seleccionados no contienen productos pendientes de esta factura.")
+
+
+@transaction.atomic
+def reconcile_purchase_document_receipts(document_id, *, company_id, receipt_movements):
+    """Relaciona ingresos posteriores a una factura ya registrada."""
+    document = PurchaseDocument.objects.select_for_update().get(
+        pk=document_id, company_id=company_id
+    )
+    if document.document_status != PurchaseDocumentStatus.REGISTERED:
+        raise ValueError("Solo se pueden conciliar recepciones de facturas registradas.")
+    _replace_receipt_matches(document, receipt_movements)
+    _audit(document, "RECONCILE_RECEIPT")
+    return document
+
+
+
 def _audit(document, action, user=None):
     AuditLog.objects.create(
         user=user,
@@ -214,6 +302,7 @@ def _update_current_purchase_prices(document):
 
 @transaction.atomic
 def create_purchase_document_draft(*, company_id, store, supplier, document_type, lines, created_by=None, **kwargs):
+    receipt_movements = kwargs.pop("receipt_movements", None)
     _validate_header(company_id, store, supplier, lines)
     _validate_warehouse(store, kwargs.get("warehouse"))
     _validate_purchase_order(company_id, store, supplier, kwargs.get("purchase_order"))
@@ -234,12 +323,14 @@ def create_purchase_document_draft(*, company_id, store, supplier, document_type
         **kwargs,
     )
     _replace_lines(document, normalized, calculated)
+    _replace_receipt_matches(document, receipt_movements)
     _audit(document, "CREATE", created_by)
     return document
 
 
 @transaction.atomic
 def update_purchase_document_draft(document_id, *, company_id, store, supplier, document_type, lines, updated_by=None, **kwargs):
+    receipt_movements = kwargs.pop("receipt_movements", None)
     document = PurchaseDocument.objects.select_for_update().get(pk=document_id, company_id=company_id)
     if document.document_status != PurchaseDocumentStatus.DRAFT:
         raise ValueError("Solo se pueden editar documentos en borrador.")
@@ -260,6 +351,7 @@ def update_purchase_document_draft(document_id, *, company_id, store, supplier, 
     document.full_clean(exclude=("created_by",))
     document.save()
     _replace_lines(document, normalized, calculated)
+    _replace_receipt_matches(document, receipt_movements)
     _audit(document, "UPDATE", updated_by)
     return document
 
@@ -317,6 +409,7 @@ def register_purchase_document(document_id, *, company_id, registered_by=None):
             description=f"Entrada por compra {document.series}-{document.number}",
         )
         confirm_movement(movement, confirmed_by=registered_by)
+        _replace_receipt_matches(document, [movement])
     _update_current_purchase_prices(document)
     document.document_status = PurchaseDocumentStatus.REGISTERED
     document.save(update_fields=["document_status", "updated_at"])
