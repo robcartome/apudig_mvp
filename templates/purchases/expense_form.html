@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}{{ title }} - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"><link rel="stylesheet" href="{% static 'css/inventory/movement_form.css' %}"><style>#expense-lines-table td.num-cell{text-align:right;padding-right:.6rem}#expense-lines-table .readonly-cell{background:#f8f9fa;color:#495057}#expense-lines-table input.form-control,#expense-lines-table .form-select{font-size:.78rem;min-height:calc(1.5em + .5rem + 2px);height:calc(1.5em + .5rem + 2px)}#expense-lines-table .quantity-input,#expense-lines-table .price-unit-input{min-width:90px}</style>{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3"><nav><ol class="breadcrumb mb-0">
+  <li class="breadcrumb-item"><a href="{% url 'purchases:document_list' %}">Compras</a></li>
+  <li class="breadcrumb-item active">{{ title }}</li>
+</ol></nav></div>
+{% if form.errors or formset.errors or formset.non_form_errors %}{% include "components/form_errors_alert.html" with form=form formset=formset %}{% endif %}
+<form method="post" novalidate>{% csrf_token %}
+  <div class="card mb-3 movement-header"><div class="card-header"><h3 class="card-title">Datos del gasto o servicio</h3></div><div class="card-body"><div class="row g-3">
+    <div class="col-12"><label class="form-label required">Proveedor</label>
+      {% url 'inventory:api_supplier_search' as supplier_search_url %}{% url 'partners:api_supplier_create' as supplier_create_url %}
+      {% include "components/partner_select.html" with field=form.supplier partner_type="supplier" search_url=supplier_search_url create_url=supplier_create_url selected_id=form.supplier.value selected_label=selected_supplier %}
+    </div>
+    <div class="col-md-4"><label class="form-label required">Tipo de documento</label>{{ form.document_type }}</div>
+    <div class="col-md-2"><label class="form-label">Serie</label>{{ form.series }}</div>
+    <div class="col-md-2"><label class="form-label">Número</label>{{ form.number }}</div>
+    <div class="col-md-2"><label class="form-label required">Emisión</label>{{ form.issue_date }}</div>
+    <div class="col-md-2"><label class="form-label">Vencimiento</label>{{ form.due_date }}</div>
+    <div class="col-md-3"><label class="form-label">Condicion de pago</label>{{ form.payment_method }}</div>
+    <div class="col-md-3"><label class="form-label">Moneda</label>{{ form.currency }}</div>
+    <div class="col-md-3"><label class="form-label">Tipo de cambio</label>{{ form.exchange_rate }}</div>
+    <div class="col-md-3"><label class="form-label">Referencia interna</label>{{ form.internal_reference }}</div>
+  </div></div></div>
+  <div class="card mb-3"><div class="card-header"><h3 class="card-title">Detalle del gasto</h3></div>
+    {{ formset.management_form }}<div class="table-responsive"><table class="table table-sm table-vcenter card-table" id="expense-lines-table"><thead class="table-light"><tr>
+      <th>#</th><th style="min-width:180px">Categoría</th><th style="min-width:260px">Descripción</th><th>Cantidad</th><th style="min-width:150px">Tipo IGV</th><th>Valor Unit.</th><th>SubTotal</th><th>IGV</th><th>Total</th><th>OP</th>
+    </tr></thead><tbody id="expense-lines-body">{% for lf in formset %}<tr class="expense-line-row"><td class="line-num">{{ forloop.counter }}<span class="d-none">{{ lf.DELETE }}</span></td>
+      <td>{{ lf.purchase_category }}</td><td>{{ lf.description }}</td><td>{{ lf.quantity }}</td><td>{{ lf.tax_type }}{{ lf.igv_rate }}{{ lf.discount_amount }}</td><td>{{ lf.unit_price }}</td><td class="num-cell readonly-cell line-subtotal">0.00</td><td class="num-cell readonly-cell line-igv">0.00</td><td class="num-cell readonly-cell fw-semibold line-total">0.00</td><td><button type="button" class="btn btn-sm btn-outline-danger remove-expense-line" title="Eliminar"><i class="ti ti-x"></i></button></td>
+    </tr>{% endfor %}</tbody><tfoot><tr><td colspan="10"><button type="button" class="btn btn-sm btn-outline-primary" id="add-expense-line"><i class="ti ti-plus me-1"></i>Agregar gasto</button></td></tr><tr><td colspan="6"></td><td colspan="3"><table class="table table-sm mb-0"><tbody><tr><td class="text-muted">Subtotal</td><td class="text-end fw-semibold" id="expense-summary-subtotal">0.00</td></tr><tr><td class="text-muted">IGV</td><td class="text-end fw-semibold" id="expense-summary-igv">0.00</td></tr><tr class="table-active"><td class="fw-bold">Total</td><td class="text-end fw-bold fs-5" id="expense-summary-total">0.00</td></tr></tbody></table></td><td></td></tr></tfoot></table></div>
+  </div>
+  <template id="expense-empty-row"><tr class="expense-line-row"><td class="line-num">__number__<span class="d-none">{{ formset.empty_form.DELETE }}</span></td><td>{{ formset.empty_form.purchase_category }}</td><td>{{ formset.empty_form.description }}</td><td>{{ formset.empty_form.quantity }}</td><td>{{ formset.empty_form.tax_type }}{{ formset.empty_form.igv_rate }}{{ formset.empty_form.discount_amount }}</td><td>{{ formset.empty_form.unit_price }}</td><td class="num-cell readonly-cell line-subtotal">0.00</td><td class="num-cell readonly-cell line-igv">0.00</td><td class="num-cell readonly-cell fw-semibold line-total">0.00</td><td><button type="button" class="btn btn-sm btn-outline-danger remove-expense-line"><i class="ti ti-x"></i></button></td></tr></template>
+  <div class="card mb-3"><div class="card-header"><h3 class="card-title">Información adicional</h3></div><div class="card-body">{{ form.notes }}</div></div>
+  <div class="d-flex gap-2"><button class="btn btn-primary"><i class="ti ti-device-floppy me-1"></i>Guardar borrador</button><a href="{% url 'purchases:document_list' %}" class="btn btn-outline-secondary">Cancelar</a></div>
+</form>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script><script src="{% static 'js/api.js' %}"></script><script src="{% static 'js/components/partner-picker.js' %}"></script>
+<script src="{% static 'js/purchases/expense-form.js' %}"></script>
+{% endblock %}

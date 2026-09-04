@@ -136,12 +136,12 @@ class QuotationHeaderForm(forms.ModelForm):
     number = forms.CharField(required=False, max_length=8)
 
     # ── Campos de solo-UI (no se guardan directamente en el modelo) ───────────
-    igv_rate_default = forms.ChoiceField(
+    igv_rate_default = forms.DecimalField(
         label="IGV",
-        choices=[("18", "18%"), ("10", "10%"), ("4", "4%"), ("0", "0%")],
-        initial="18",
+        min_value=Decimal("0"), max_value=Decimal("100"),
+        max_digits=5, decimal_places=2, initial=Decimal("18"),
         required=False,
-        widget=forms.Select(attrs=_select),
+        widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
     )
     payment_method = forms.ModelChoiceField(
         queryset=PaymentMethod.objects.none(),

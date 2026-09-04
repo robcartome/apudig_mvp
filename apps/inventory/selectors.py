@@ -196,8 +196,13 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
     qs = (
         Movement.objects.for_store(store_id)
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
-                        "supplier", "customer", "document_type", "created_by")
-        .prefetch_related("details__product__unit", "details__unit")
+                        "supplier", "customer", "document_type", "created_by",
+                        "purchase_document__document_type", "purchase_document__supplier")
+        .prefetch_related(
+            "details__product__unit", "details__unit",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__document_type",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__supplier",
+        )
     )
     if movement_type:
         qs = qs.filter(type=movement_type)
@@ -218,9 +223,14 @@ def search_movements(store_id: str, query: str, movement_type: str | None = None
 def get_movement_detail(pk):
     return (
         Movement.objects
-        .prefetch_related("details__product__unit", "details__unit", "audit_logs__changed_by")
+        .prefetch_related(
+            "details__product__unit", "details__unit", "audit_logs__changed_by",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__document_type",
+            "details__purchase_receipt_matches__purchase_document_line__purchase_document__supplier",
+        )
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
-                        "supplier", "customer", "carrier", "document_type", "created_by", "confirmed_by", "closed_by")
+                        "supplier", "customer", "carrier", "document_type", "created_by", "confirmed_by", "closed_by",
+                        "purchase_document__document_type", "purchase_document__supplier")
         .get(pk=pk)
     )
 
@@ -582,6 +592,8 @@ def get_movement_traceability_report(
             "movement__created_by",
             "movement__sales_document",
             "movement__reversal_of__sales_document",
+            "movement__purchase_document",
+            "movement__reversal_of__purchase_document",
             "product__unit",
             "product__category",
         )
@@ -671,6 +683,9 @@ def get_movement_traceability_report(
         sales_document = getattr(mv, "sales_document", None)
         if sales_document is None and mv.reversal_of_id:
             sales_document = getattr(mv.reversal_of, "sales_document", None)
+        purchase_document = mv.purchase_document
+        if purchase_document is None and mv.reversal_of_id:
+            purchase_document = mv.reversal_of.purchase_document
 
         rows.append({
             "movement_id": str(mv.pk),
@@ -689,6 +704,7 @@ def get_movement_traceability_report(
             "document": document,
             "reference_doc": mv.reference_doc or "-",
             "sales_document_id": str(sales_document.pk) if sales_document else "",
+            "purchase_document_id": str(purchase_document.pk) if purchase_document else "",
             "created_by": str(mv.created_by) if mv.created_by else "Sistema",
             "product_id": str(d.product_id),
             "sku": d.product.sku,

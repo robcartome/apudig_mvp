@@ -103,6 +103,14 @@
           </div>
         </li>
 
+        {# Compras #}
+        <li class="nav-item">
+          <a class="nav-link {% if '/purchases/' in request.path %}active{% endif %}" href="{% url 'purchases:document_list' %}" data-tooltip-label="Compras">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-shopping-cart fs-2"></i></span>
+            <span class="nav-link-title">Compras</span>
+          </a>
+        </li>
+
         {# ─── Inventario (movimientos) ─── #}
         {% with inv_name=request.resolver_match.url_name|default:'' %}
         <li class="nav-item">

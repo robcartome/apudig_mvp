@@ -76,6 +76,10 @@
           <dt class="col-5 text-muted">Documento de venta</dt>
           <dd class="col-7"><a href="{% url 'sales:document_detail' movement.reversal_of.sales_document.pk %}">{{ movement.series }}-{{ movement.number }}</a></dd>
           {% endif %}
+          {% for purchase_document in related_purchase_documents %}
+          <dt class="col-5 text-muted">Documento de compra</dt>
+          <dd class="col-7"><a href="{% url 'purchases:document_detail' purchase_document.pk %}">{{ purchase_document.document_type.name }} {{ purchase_document.series }}-{{ purchase_document.number }}</a><div class="small text-muted">{{ purchase_document.supplier_name }}</div></dd>
+          {% endfor %}
           {% if movement.reason %}
           <dt class="col-5 text-muted">Motivo</dt>
           <dd class="col-7">{{ movement.reason }}</dd>

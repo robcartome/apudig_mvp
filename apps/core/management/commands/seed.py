@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Brand, Category, PriceList, Unit
 from apps.partners.models import DocumentType
+from apps.purchases.models import PurchaseCategory
 from apps.sales.models import DocumentSeries
 from apps.users.models import Permission, Role, RolePermission, User, UserStore
 
@@ -67,6 +68,17 @@ CATEGORIES = [
     ("OTROS", "Otros"),
 ]
 
+PURCHASE_EXPENSE_CATEGORIES = [
+    ("ALQUILER", "Alquileres"),
+    ("SERVICIOS", "Servicios generales"),
+    ("HONORARIOS", "Honorarios profesionales"),
+    ("FLETE", "Fletes y transporte"),
+    ("MANTENIMIENTO", "Mantenimiento y reparaciones"),
+    ("SUMINISTROS", "Suministros y útiles"),
+    ("SERV_PUBLICOS", "Servicios públicos"),
+    ("OTROS_GASTOS", "Otros gastos"),
+]
+
 BRANDS = [
     "Akona", "Poelsan","GreenPlains", "GPA", "LUMO", "Rain", "Ranagua", "Cubull", "VALMAX", "C&A","KNAUF", "Stanley", "Makita", "Bosch", "3M", "Truper",
     "Black & Decker", "Dewalt""Sin Marca",
@@ -93,6 +105,7 @@ class Command(BaseCommand):
         self._seed_roles()
         self._seed_sales_document_permissions()
         company, store = self._seed_company(options["company"], options["ruc"])
+        self._seed_purchase_expense_categories(company)
         user = self._seed_superuser(options["email"], options["password"])
         self._seed_user_access(user, company, store)
         self._seed_document_series(company, store)
@@ -135,6 +148,19 @@ class Command(BaseCommand):
             if ok:
                 created += 1
         self.stdout.write(f"  Marcas:               {created} creadas / {len(BRANDS)} total")
+
+    def _seed_purchase_expense_categories(self, company):
+        created = 0
+        for code, name in PURCHASE_EXPENSE_CATEGORIES:
+            _, ok = PurchaseCategory.objects.update_or_create(
+                company=company, code=code,
+                defaults={"name": name, "active": True},
+            )
+            if ok:
+                created += 1
+        self.stdout.write(
+            f"  Categorías de gasto:  {created} creadas / {len(PURCHASE_EXPENSE_CATEGORIES)} total"
+        )
 
     def _seed_price_lists(self):
         lists = [

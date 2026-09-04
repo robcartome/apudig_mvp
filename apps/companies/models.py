@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -108,4 +109,57 @@ class CompanyDocumentSettings(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.company} / {self.document_type}"
+
+
+class CompanyOperationalSettings(TimeStampedModel):
+    """Preferencias operativas que se aplican a todos los locales de una empresa."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.OneToOneField(
+        Company, on_delete=models.CASCADE, related_name="operational_settings"
+    )
+
+    inventory_quantity_editable = models.BooleanField(default=True)
+    inventory_unit_cost_editable = models.BooleanField(default=True)
+    sales_value_unit_editable = models.BooleanField(default=False)
+    sales_price_unit_editable = models.BooleanField(default=True)
+    sales_total_editable = models.BooleanField(default=False)
+    purchases_value_unit_editable = models.BooleanField(default=True)
+    purchases_price_unit_editable = models.BooleanField(default=True)
+    purchases_total_editable = models.BooleanField(default=False)
+    price_decimal_places = models.PositiveSmallIntegerField(default=2)
+    default_igv_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("18.00")
+    )
+
+    default_customer = models.ForeignKey(
+        "partners.Customer", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="default_for_company_settings",
+    )
+    default_supplier = models.ForeignKey(
+        "partners.Supplier", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="default_for_company_settings",
+    )
+    default_sales_document_type = models.ForeignKey(
+        "partners.DocumentType", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="default_sales_for_companies",
+    )
+    default_purchase_document_type = models.ForeignKey(
+        "partners.DocumentType", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="default_purchase_for_companies",
+    )
+    default_sales_payment_method = models.ForeignKey(
+        "sales.PaymentMethod", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="default_sales_for_companies",
+    )
+    default_purchase_payment_method = models.ForeignKey(
+        "sales.PaymentMethod", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="default_purchases_for_companies",
+    )
+
+    class Meta:
+        db_table = "company_operational_settings"
+
+    def __str__(self) -> str:
+        return f"Configuracion operativa - {self.company}"
 

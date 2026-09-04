@@ -226,6 +226,10 @@
             <a href="{% url 'sales:document_detail' entry.sales_document_id %}" target="_blank" class="text-decoration-none">
               {{ entry.document }}
             </a>
+            {% elif entry.purchase_document_id %}
+            <a href="{% url 'purchases:document_detail' entry.purchase_document_id %}" target="_blank" class="text-decoration-none">
+              {{ entry.document }}
+            </a>
             {% else %}
             <a href="{% url 'inventory:movement_operation_readonly' entry.movement_id %}" target="_blank" class="text-decoration-none">
               {{ entry.document }}
