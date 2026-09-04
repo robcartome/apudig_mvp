@@ -146,7 +146,7 @@ class ProductForm(forms.ModelForm):
         fields = (
             "name", "sku", "barcode", "description", "model",
             "price_purchase", "price_sale",
-            "category", "brand", "unit", "active",
+            "category", "brand", "unit", "tracks_inventory", "active",
         )
         widgets = {
             "name": forms.TextInput(attrs={**_text, "placeholder": "Nombre del producto"}),
@@ -159,6 +159,7 @@ class ProductForm(forms.ModelForm):
             "category": forms.HiddenInput(),
             "brand": forms.HiddenInput(),
             "unit": forms.Select(attrs={"class": "form-select form-select-sm"}),
+            "tracks_inventory": forms.CheckboxInput(attrs=_check),
             "active": forms.CheckboxInput(attrs=_check),
         }
 

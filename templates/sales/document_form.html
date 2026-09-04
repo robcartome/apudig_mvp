@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static l10n %}
 {% block title %}{{ title }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
 
@@ -12,6 +12,8 @@
   #lines-table td.num-cell { text-align:right; padding-right:.6rem; }
   #lines-table .readonly-cell { background:#f8f9fa; color:#495057; }
   #lines-table .price-unit-input, .quantity-input-group { min-width:90px; }
+  {% if not operational_settings.sales_value_unit_editable %}#lines-table .valor-unit-display { pointer-events:none; background:#f8f9fa; }{% endif %}
+  {% if not operational_settings.sales_price_unit_editable %}#lines-table .price-unit-input { pointer-events:none; background:#f8f9fa; }{% endif %}
 </style>
 {% endblock %}
 
@@ -25,7 +27,11 @@
      data-price-list-url="{% url 'inventory:api_price_list_prices' pk='00000000-0000-0000-0000-000000000000' %}"
      data-series-options-url="{% url 'sales:api_series_options' %}"
      data-series-number-url="{% url 'sales:api_series_next_number' pk='00000000-0000-0000-0000-000000000000' %}"
-     data-igv-rate="{{ igv_rate }}"
+     data-igv-rate="{{ igv_rate|unlocalize }}"
+     data-price-decimals="{{ price_decimal_places }}"
+     data-edit-value="{{ operational_settings.sales_value_unit_editable|yesno:'true,false' }}"
+     data-edit-price="{{ operational_settings.sales_price_unit_editable|yesno:'true,false' }}"
+     data-edit-total="{{ operational_settings.sales_total_editable|yesno:'true,false' }}"
      style="display:none"></div>
 
 <div class="page-header d-print-none mb-3">
@@ -248,7 +254,7 @@
             <td class="num-cell">
               {{ lf.igv_rate }}{# hidden, para cálculo #}
               <input type="text" class="form-control form-control-sm valor-unit-display text-end"
-                     value="0.00" disabled readonly tabindex="-1"
+                     value="0.00" {% if not operational_settings.sales_value_unit_editable %}readonly tabindex="-1"{% endif %}
                      title="Precio sin IGV">
             </td>
 
@@ -258,7 +264,7 @@
               {{ lf.discount_amount }}{# hidden #}
               <input type="number" class="form-control form-control-sm price-unit-input text-end"
                      step="0.01" min="0" value="{{ lf.initial.price_with_igv|default:'' }}"
-                     placeholder="0.00">
+                     placeholder="0.00" {% if not operational_settings.sales_price_unit_editable %}readonly{% endif %}>
             </td>
 
             {# SubTotal (readonly, computed) #}
@@ -268,7 +274,7 @@
             <td class="num-cell readonly-cell line-igv text-end">0.00</td>
 
             {# Total (readonly, computed) #}
-            <td class="num-cell readonly-cell line-total fw-semibold text-end">0.00</td>
+            <td class="num-cell readonly-cell line-total fw-semibold text-end" {% if operational_settings.sales_total_editable %}contenteditable="true" role="textbox" title="Editar total de línea"{% endif %}>0.00</td>
 
             {# OP: memo + eliminar #}
             <td class="text-center" style="white-space:nowrap">

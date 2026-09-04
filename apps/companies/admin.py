@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from .models import Company, CompanyBranding, CompanyDocumentSettings, Store, UserCompanyAccess
+from .models import (
+    Company, CompanyBranding, CompanyDocumentSettings, CompanyOperationalSettings,
+    Store, UserCompanyAccess,
+)
 
 
 @admin.register(Company)
@@ -33,3 +36,9 @@ class CompanyDocumentSettingsAdmin(admin.ModelAdmin):
     list_display = ("id", "company", "document_type", "format", "template_name")
     list_filter = ("company",)
     search_fields = ("document_type",)
+
+
+@admin.register(CompanyOperationalSettings)
+class CompanyOperationalSettingsAdmin(admin.ModelAdmin):
+    list_display = ("company", "sales_price_unit_editable", "purchases_price_unit_editable")
+    search_fields = ("company__name", "company__ruc")

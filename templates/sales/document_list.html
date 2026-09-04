@@ -52,8 +52,8 @@
 
 <div class="card">
   <div class="table-responsive">
-    <table class="table table-vcenter table-hover card-table">
-      <thead>
+    <table class="table table-vcenter table-hover card-table mb-0">
+      <thead class="table-light">
         <tr>
           <th>Documento</th>
           <th>Tipo</th>
@@ -64,7 +64,7 @@
           <th class="text-center">Operaciones</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="small">
         {% for v in page_obj %}
         <tr>
           <td class="fw-semibold">
@@ -79,11 +79,7 @@
           </td>
           <td class="text-muted small">{{ v.issue_date|date:"d/m/Y" }}</td>
           <td>
-            {% if v.status == "DRAFT" %}<span class="badge bg-secondary-lt">Borrador</span>
-            {% elif v.status == "ISSUED" %}<span class="badge bg-success-lt">Emitido</span>
-            {% elif v.status == "VOIDED" %}<span class="badge bg-danger-lt">Anulado</span>
-            {% elif v.status == "CANCELLED" %}<span class="badge bg-muted-lt">Cancelado</span>
-            {% else %}<span class="badge bg-muted-lt">{{ v.status }}</span>{% endif %}
+            {% include "components/status_badge.html" with status=v.status label=v.get_status_display %}
           </td>
           <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
           <td class="text-center">

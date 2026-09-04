@@ -1,0 +1,394 @@
+{% extends "base.html" %}{% load static l10n %}
+{% block title %}{{ title }} - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">{{ title }}</h2>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{% static 'css/inventory/movement_form.css' %}">
+<style>
+    #lines-table td.num-cell {
+        text-align: right;
+        padding-right: .6rem;
+    }
+
+    #lines-table .readonly-cell {
+        background: #f8f9fa;
+        color: #495057;
+    }
+
+    #lines-table .value-unit-input,
+    #lines-table .price-unit-input,
+    #lines-table .line-total-input,
+    #lines-table .quantity-input-group {
+        min-width: 90px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-print-none mb-3">
+    <nav>
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'purchases:document_list' %}">Compras</a></li>
+            <li class="breadcrumb-item active">{{ title }}</li>
+        </ol>
+    </nav>
+</div>
+{% if form.errors or formset.errors or formset.non_form_errors %}
+    {% include "components/form_errors_alert.html" with form=form formset=formset %}
+{% endif %}
+<form method="post" novalidate id="purchase-form">
+    {% csrf_token %}
+    <div class="card mb-3 movement-header">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title">
+                <span class="badge bg-success-lt text-success me-2">Compra directa</span>Cabecera del comprobante
+            </h3>
+            <span class="badge bg-secondary-lt">
+                {% if purchase_document %}
+                    {{ purchase_document.get_document_status_display }}
+                {% else %}
+                    Borrador
+                {% endif %}
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12 col-xl-5">
+                    <label class="form-label required">Proveedor</label>
+                    {% url 'inventory:api_supplier_search' as supplier_search_url %}
+                    {% url 'partners:api_supplier_create' as supplier_create_url %}
+                    {% include "components/partner_select.html" with field=form.supplier partner_type="supplier" search_url=supplier_search_url create_url=supplier_create_url selected_id=form.supplier.value selected_label=selected_supplier %}
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label">Condicion de pago</label>
+                    {{ form.payment_method }}
+                </div>
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label">Moneda</label>
+                    {{ form.currency }}
+                </div>
+                <div class="col-md-6 col-xl-2" id="exchange-rate-field">
+                    <label class="form-label">Tipo de cambio</label>
+                    {{ form.exchange_rate }}
+                    <div class="form-hint">Tipo de cambio guardado en este documento.</div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label required">Tipo de documento</label>
+                    {{ form.document_type }}
+                </div>
+                <div class="col-md-3 col-xl-2">
+                    <label class="form-label">Serie</label>
+                    {{ form.series }}
+                </div>
+                <div class="col-md-3 col-xl-2">
+                    <label class="form-label">Numero</label>
+                    {{ form.number }}
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <label class="form-label">Fecha de creacion</label>
+                    <input class="form-control" type="datetime-local"
+                        value="{% if purchase_document %}{{ purchase_document.created_at|date:'Y-m-d\TH:i' }}{% else %}{% now 'Y-m-d\TH:i' %}{% endif %}"
+                        readonly>
+                </div>
+                <div class="col-md-4 col-xl-2">
+                    <label class="form-label required">Fecha de emision</label>
+                    {{ form.issue_date }}
+                </div>
+                <div class="col-md-4 col-xl-3" id="due-date-field">
+                    <label class="form-label">Fecha de vencimiento</label>
+                    {{ form.due_date }}
+                    <div class="form-hint">Obligatoria cuando la compra es a credito.</div>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label">Referencia interna</label>
+                    {{ form.internal_reference }}
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label">Orden de compra relacionada</label>
+                    {{ form.purchase_order }}
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label">Almacen</label>
+                    {{ form.warehouse }}
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <div class="form-check mt-4">{{ form.register_inventory_movement }}<label class="form-check-label"
+                            for="{{ form.register_inventory_movement.id_for_label }}">Registrar recepcion de
+                            inventario ahora</label>
+                        <div class="form-hint">Márcalo solo si la mercadería llega junto con la factura.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="alert alert-info py-2" id="payment-workflow-help">
+        El pago se habilita despues de registrar el documento. Desde el listado podras pagarlo total o parcialmente.
+    </div>
+    <div class="alert alert-secondary py-2 d-none" id="receipt-link-summary">
+        <i class="ti ti-link me-1"></i>Esta factura se conciliar&aacute; con los ingresos: <strong></strong>.
+        No se generar&aacute; una nueva recepci&oacute;n de inventario.
+    </div>
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><button type="button" class="nav-link active" data-purchase-tab="detail">Detalle de
+                compra</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-purchase-tab="receipts">Ingresos / Guías de
+                remisión</button></li>
+    </ul>
+    <div class="card mb-3" id="purchase-detail-card">
+        <div class="card-header">
+            <h3 class="card-title d-flex gap-2">Detalle de la compra <span
+                    class="badge bg-azure-lt text-azure">Editable</span></h3>
+        </div>
+        {{ formset.management_form }}
+        <div class="table-responsive">
+            <table class="table table-sm table-vcenter mb-0" id="lines-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th style="min-width:360px">Bien o Servicio</th>
+                        <th>UND.</th>
+                        <th class="text-end">Cantidad</th>
+                        <th style="min-width:170px">Tipo IGV</th>
+                        <th class="text-end">Valor Unit.</th>
+                        <th class="text-end">Precio Unit.</th>
+                        <th class="text-end">SubTotal</th>
+                        <th class="text-end">IGV</th>
+                        <th class="text-end">Total</th>
+                        <th>Operaciones</th>
+                    </tr>
+                </thead>
+                <tbody id="purchase-lines-body">
+                    {% for lf in formset %}
+                    <tr class="line-row"
+                        data-init-unit-id="{{ lf.initial.product_unit_id|default:'' }}"
+                        data-init-unit="{{ lf.initial.product_unit|default:'' }}"
+                        data-base-unit-id="{{ lf.initial.base_unit_id|default:'' }}"
+                        data-base-unit-code="{{ lf.initial.base_unit_code|default:'' }}">
+                        <td class="line-num text-muted">{{ forloop.counter }}{{ lf.DELETE.as_hidden }}</td>
+                        <td>
+                            {{ lf.product }}
+                            <select class="product-select w-100">
+                                {% if lf.product.value %}
+                                    <option value="{{ lf.product.value }}" selected>
+                                        {{ lf.initial.product_name }}
+                                    </option>
+                                {% endif %}
+                            </select>
+                            {{ lf.description }}
+                            {{ lf.memo }}
+                        </td>
+                        <td>
+                            {{ lf.unit }}
+                            <select class="form-select form-select-sm product-unit-select">
+                                {% for conversion in lf.initial.product_units %}
+                                <option value="{{ conversion.unit_id }}"
+                                    data-factor="{{ conversion.conversion_factor }}"
+                                    data-code="{{ conversion.unit.code }}"
+                                    data-price="{{ conversion.purchase_price|default_if_none:'' }}" {% if conversion.unit_id|stringformat:'s' == lf.initial.product_unit_id|stringformat:'s' %}selected{% endif %}>
+                                    {{ conversion.unit.code }} - {{ conversion.unit.name }}
+                                </option>
+                                {% empty %}
+                                <option value="{{ lf.initial.product_unit_id|default:'' }}" data-factor="1">
+                                    {{ lf.initial.product_unit|default:'-' }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="unit-equivalence text-muted small"></div>
+                        </td>
+                        <td>
+                            <div class="input-group input-group-sm quantity-input-group">{{ lf.quantity }}<button
+                                    type="button" class="btn btn-outline-secondary stock-info-btn"
+                                    title="Ver existencias por almacén"><i
+                                        class="ti ti-building-warehouse"></i></button></div>
+                        </td>
+                        <td>{{ lf.tax_type }}{{ lf.igv_rate.as_hidden }}{{ lf.discount_amount.as_hidden }}</td>
+                        <td>{{ lf.unit_price }}</td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm text-end price-unit-input"
+                                inputmode="decimal" autocomplete="off" value="0.00" {% if not operational_settings.purchases_price_unit_editable %}readonly{% endif %}>
+                        </td>
+                        <td class="num-cell readonly-cell line-subtotal">0.00</td>
+                        <td class="num-cell readonly-cell line-igv">0.00</td>
+                        <td>{% if operational_settings.purchases_total_editable %}<input type="text"
+                                class="form-control form-control-sm text-end fw-semibold line-total-input"
+                                inputmode="decimal" autocomplete="off" value="0.00">{% else %}<span
+                                class="d-block num-cell readonly-cell fw-semibold line-total">0.00</span>{% endif %}
+                        </td>
+                        <td class="d-none">{{ lf.update_purchase_price }}</td>
+                        <td>
+                            <div class="d-flex gap-1"><button type="button"
+                                    class="btn btn-sm btn-outline-secondary memo-btn" title="Memo de línea"><i
+                                        class="ti ti-note"></i></button><button type="button"
+                                    class="btn btn-sm btn-outline-danger remove-line"><i class="ti ti-x"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="11"><button type="button" class="btn btn-sm btn-outline-primary"
+                                id="add-purchase-line"><i class="ti ti-plus me-1"></i>Agregar línea</button></td>
+                    </tr>
+                    <tr>
+                        <td colspan="6"></td>
+                        <td colspan="4" class="pe-3">
+                            <table class="table table-sm mb-0 ms-auto" style="width:auto; min-width:280px">
+                                <tbody>
+                                    <tr>
+                                        <td class="text-muted">Descuento (-)</td>
+                                        <td class="text-end fw-semibold" id="summary-discount">0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Total gravada</td>
+                                        <td class="text-end fw-semibold" id="summary-taxable">0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Total exonerada</td>
+                                        <td class="text-end fw-semibold" id="summary-exempt">0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Total inafecta / importación</td>
+                                        <td class="text-end fw-semibold" id="summary-unaffected">0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Total IGV</td>
+                                        <td class="text-end fw-semibold" id="summary-igv">0.00</td>
+                                    </tr>
+                                    <tr class="table-active">
+                                        <td class="fw-bold">Total</td>
+                                        <td class="text-end fw-bold fs-5" id="summary-total">0.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <div class="card mb-3 d-none" id="purchase-receipts-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title">Ingresos disponibles del proveedor</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="import-selected-receipts" disabled>
+                <i class="ti ti-download me-1"></i>Usar ingresos seleccionados
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info py-2">Haz clic en el número del ingreso para revisar sus productos. Puedes
+                seleccionar varios ingresos y excluir productos antes de importarlos. Los ingresos ya relacionados con
+                otra factura no se muestran.</div>
+            <div class="d-none" aria-hidden="true">{{ form.receipt_movements }}</div>
+            <div id="receipt-movements-empty" class="text-muted">Seleccione primero un proveedor.</div>
+            <div class="table-responsive d-none" id="receipt-movements-table-wrap">
+                <table class="table table-sm table-vcenter">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Ingreso / guía</th>
+                            <th>Fecha</th>
+                            <th>Almacén</th>
+                            <th class="text-end">Productos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="receipt-movements-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Informacion adicional</h3>
+        </div>
+        <div class="card-body">{{ form.notes }}</div>
+    </div>
+    <div class="d-grid d-md-flex gap-2 mt-3">
+        <button class="btn btn-primary"><i class="ti ti-device-floppy me-1"></i>Guardar borrador</button>
+        <a href="{% if purchase_document %}{% url 'purchases:document_detail' purchase_document.pk %}{% else %}{% url 'purchases:document_list' %}{% endif %}"
+            class="btn btn-outline-secondary">
+            <i class="ti ti-x me-1"></i>Cancelar
+        </a>
+    </div>
+</form>
+{% include "components/stock_by_warehouse_modal.html" %}
+<div class="modal fade" id="purchaseMemoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Memo de la línea</h5><button type="button" class="btn-close"
+                    data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body"><textarea id="purchase-memo-text" class="form-control" rows="5" maxlength="1000"
+                    placeholder="Observaciones internas de esta línea"></textarea></div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary"
+                    id="purchase-memo-save">Guardar memo</button></div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="receiptImportConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmar importación de ingresos</h5><button type="button" class="btn-close"
+                    data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="receipt-import-confirm-message" class="mb-0"></p>
+                <p class="small text-muted mt-2 mb-0">Las líneas actuales serán reemplazadas. No se modificará el
+                    inventario ni se registrará la factura todavía.</p>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary"
+                    id="confirm-receipt-import">Aceptar e importar</button></div>
+        </div>
+    </div>
+</div>
+<div id="purchase-form-config" hidden data-search-url="{% url 'inventory:api_product_search' %}"
+    data-stock-url="{% url 'inventory:api_product_stock' %}"
+    data-stock-by-warehouse-url="{% url 'inventory:api_product_stock_by_warehouse' %}"
+    data-create-url="{% url 'inventory:api_product_create' %}"
+    data-edit-value="{{ operational_settings.purchases_value_unit_editable|yesno:'true,false' }}"
+    data-document-id="{% if purchase_document %}{{ purchase_document.pk }}{% endif %}"
+    data-edit-price="{{ operational_settings.purchases_price_unit_editable|yesno:'true,false' }}"
+    data-edit-total="{{ operational_settings.purchases_total_editable|yesno:'true,false' }}"
+    data-receipt-movements-url="{% url 'purchases:receipt_movements_api' %}"
+    data-price-decimals="{{ price_decimal_places }}" data-igv-rate="{{ default_igv_rate|unlocalize }}"></div>
+{{ payment_methods|json_script:"purchase-payment-methods" }}
+<div class="modal fade" id="quickCreateModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crear producto</h5><button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="qc-error" class="alert alert-danger d-none"></div><input id="qc-name" class="form-control mb-2"
+                    placeholder="Nombre"><input id="qc-sku" class="form-control mb-2" placeholder="SKU"><select
+                    id="qc-unit" class="form-select mb-2">{% for unit in units %}<option value="{{ unit.pk }}">{{
+                        unit.code }} - {{ unit.name }}</option>{% endfor %}</select>
+                <select id="qc-category" class="form-select mb-2">
+                    <option value="">Sin categoría</option>{% for category in product_categories %}<option
+                        value="{{ category.pk }}">{{ category.name }}</option>{% endfor %}
+                </select>
+                <label class="form-check"><input id="qc-tracks-inventory" class="form-check-input" type="checkbox"
+                        checked><span class="form-check-label">Controla inventario</span></label>
+                <div class="form-hint">Desmarcar para servicios, fletes u otros conceptos sin stock.</div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary"
+                    id="qc-btn-save">Crear</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/components/partner-picker.js' %}"></script>
+<script src="{% static 'js/components/product-picker.js' %}"></script>
+<script src="{% static 'js/components/stock-by-warehouse.js' %}"></script>
+<script src="{% static 'js/purchases/document-form.js' %}"></script>{% endblock %}

@@ -48,10 +48,8 @@ from apps.sales.services import (
 from apps.inventory.models import PriceList, Warehouse
 from apps.partners.models import DocumentType
 from apps.core.models import AuditLog
+from apps.companies.models import CompanyOperationalSettings
 from apps.users.permissions import user_has_company_permission
-
-DEFAULT_IGV_RATE = 18
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -104,15 +102,21 @@ def _lines_from_formset(formset) -> list[dict]:
 
 
 def _document_form_context(company_id, header_form, line_formset, title, document=None):
+    operational_settings = CompanyOperationalSettings.objects.filter(company_id=company_id).first()
+    settings = operational_settings or CompanyOperationalSettings(company_id=company_id)
+    for form in line_formset.forms:
+        form.fields["igv_rate"].initial = settings.default_igv_rate
     return {
         "header_form": header_form,
         "line_formset": line_formset,
         "title": title,
         "sales_document": document,
-        "igv_rate": DEFAULT_IGV_RATE,
+        "igv_rate": settings.default_igv_rate,
+        "price_decimal_places": settings.price_decimal_places,
         "price_lists": PriceList.objects.filter(
             company_id=company_id, active=True
         ).order_by("name") if company_id else PriceList.objects.none(),
+        "operational_settings": settings,
     }
 
 
@@ -184,7 +188,12 @@ def document_create(request):
         return redirect_resp
 
     company_id, store_id = _get_ids(request)
-    document_type = request.GET.get("document_type", "NV")
+    company_settings = CompanyOperationalSettings.objects.filter(company_id=company_id).first()
+    configured_document_type = (
+        str(company_settings.default_sales_document_type_id)
+        if company_settings and company_settings.default_sales_document_type_id else "NV"
+    )
+    document_type = request.GET.get("document_type", configured_document_type)
 
     if request.method == "POST":
         document_type = request.POST.get("document_type", "NV")
@@ -214,9 +223,15 @@ def document_create(request):
                 except ValueError as exc:
                     messages.error(request, str(exc))
     else:
+        initial = {"document_type": document_type, "store": store_id}
+        if company_settings:
+            initial.update(
+                customer=company_settings.default_customer_id,
+                payment_method=company_settings.default_sales_payment_method_id,
+            )
         header_form = SalesDocumentHeaderForm(
             company_id=company_id, store_id=store_id, document_type=document_type,
-            initial={"document_type": document_type, "store": store_id},
+            initial=initial,
         )
         line_formset = SalesDocumentLineFormSet(prefix="lines")
 

@@ -7,7 +7,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.companies.models import Company, Store
+from apps.companies.models import Company, CompanyOperationalSettings, Store
 from apps.core.models import AuditLog
 from apps.inventory.models import (
     Category,
@@ -645,6 +645,26 @@ class SalesDocumentViewsTest(TestCase):
         today = timezone.localdate().isoformat()
         self.assertTrue(
             resp.context["header_form"].initial["issue_date"].startswith(today)
+        )
+
+    def test_create_uses_company_price_decimals_and_default_igv(self):
+        self._login()
+        CompanyOperationalSettings.objects.update_or_create(
+            company=self.company,
+            defaults={
+                "price_decimal_places": 4,
+                "default_igv_rate": Decimal("15.50"),
+            },
+        )
+
+        response = self.client.get(reverse("sales:document_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-price-decimals="4"', html=False)
+        self.assertContains(response, 'data-igv-rate="15.50"', html=False)
+        self.assertEqual(
+            response.context["line_formset"].forms[0].fields["igv_rate"].initial,
+            Decimal("15.50"),
         )
 
     def test_create_shows_line_formset_errors(self):

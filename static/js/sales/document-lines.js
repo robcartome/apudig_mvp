@@ -17,8 +17,18 @@
   if (!linesBody) return;
 
   const configEl  = document.getElementById('sales-form-config');
-  let IGV_RATE = parseFloat(document.getElementById('id_igv_rate_default')?.value)
-               || parseFloat(configEl.dataset.igvRate) || 18;
+  const editValue = configEl.dataset.editValue === 'true';
+  const editPrice = configEl.dataset.editPrice !== 'false';
+  const editTotal = configEl.dataset.editTotal === 'true';
+  const configuredPriceDecimals = Number(configEl.dataset.priceDecimals);
+  const PRICE_DECIMALS = Number.isInteger(configuredPriceDecimals)
+    ? Math.min(6, Math.max(0, configuredPriceDecimals)) : 2;
+  const PRICE_ZERO = (0).toFixed(PRICE_DECIMALS);
+  const PRICE_STEP = PRICE_DECIMALS === 0 ? '1' : `0.${'0'.repeat(PRICE_DECIMALS - 1)}1`;
+  const headerIgvRate = parseFloat(document.getElementById('id_igv_rate_default')?.value);
+  const configuredIgvRate = parseFloat(configEl.dataset.igvRate);
+  let IGV_RATE = Number.isFinite(headerIgvRate)
+    ? headerIgvRate : (Number.isFinite(configuredIgvRate) ? configuredIgvRate : 18);
   let IGV_MULT = 1 + IGV_RATE / 100;             // e.g. 1.18
   // Build the price-list API URL template (replace the placeholder UUID)
   const PRICE_LIST_URL_TPL = configEl.dataset.priceListUrl;
@@ -37,7 +47,8 @@
 
   // ── IGV rate header select ────────────────────────────────────────────────
   document.getElementById('id_igv_rate_default')?.addEventListener('change', function () {
-    IGV_RATE = parseFloat(this.value) || 18;
+    const rate = parseFloat(this.value);
+    IGV_RATE = Number.isFinite(rate) ? rate : 18;
     IGV_MULT = 1 + IGV_RATE / 100;
     configEl.dataset.igvRate = IGV_RATE;
     linesBody.querySelectorAll('input[name*="-igv_rate"]').forEach(el => { el.value = IGV_RATE; });
@@ -55,6 +66,7 @@
     skuId: 'qc-sku',
     unitId: 'qc-unit',
     saveButtonId: 'qc-btn-save',
+    priceDecimals: PRICE_DECIMALS,
   });
 
   // ── Flatpickr date pickers (no usado — se usa datetime-local nativo) ──────────────────
@@ -103,7 +115,7 @@
     hint.textContent = `1 ${unitCode} = ${formatQuantity(factor)} ${row.dataset.baseUnitCode || ''}${total}`;
   }
 
-  function fmt(n) { return isFinite(n) ? n.toFixed(2) : '0.00'; }
+  function fmt(n) { return isFinite(n) ? n.toFixed(PRICE_DECIMALS) : PRICE_ZERO; }
   function normalizeQuantityInput(input) {
     let value = input.value.replace(',', '.').replace(/[^\d.]/g, '');
     const separator = value.indexOf('.');
@@ -264,7 +276,7 @@
         <input type="hidden" name="lines-${index}-igv_rate" id="id_lines-${index}-igv_rate"
                value="${IGV_RATE}">
         <input type="text" class="form-control form-control-sm valor-unit-display text-end"
-               value="0.00" disabled readonly tabindex="-1" title="Precio sin IGV">
+               value="${PRICE_ZERO}" disabled readonly tabindex="-1" title="Precio sin IGV">
       </td>
 
       <td>
@@ -274,12 +286,12 @@
                id="id_lines-${index}-discount_amount" value="0">
         <input type="hidden" name="lines-${index}-memo" id="id_lines-${index}-memo" value="">
         <input type="number" class="form-control form-control-sm price-unit-input text-end"
-               step="0.01" min="0" value="" placeholder="0.00">
+               step="${PRICE_STEP}" min="0" value="" placeholder="${PRICE_ZERO}">
       </td>
 
-      <td class="num-cell readonly-cell line-subtotal text-end">0.00</td>
-      <td class="num-cell readonly-cell line-igv text-end">0.00</td>
-      <td class="num-cell readonly-cell line-total fw-semibold text-end">0.00</td>
+      <td class="num-cell readonly-cell line-subtotal text-end">${PRICE_ZERO}</td>
+      <td class="num-cell readonly-cell line-igv text-end">${PRICE_ZERO}</td>
+      <td class="num-cell readonly-cell line-total fw-semibold text-end">${PRICE_ZERO}</td>
 
       <td class="text-center" style="white-space:nowrap">
         <input type="hidden" name="lines-${index}-id" value="">
@@ -298,6 +310,7 @@
     const row     = event.target.closest('.line-row');
     const product = event.detail;
 
+    row.dataset.basePrice = product.price_sale ?? 0;
     setProductUnits(row, product);
 
     // Fill description hidden field
@@ -306,9 +319,8 @@
 
     // Fill precio_unitario (inc-IGV) from price_sale
     const priceInput = row.querySelector('input.price-unit-input');
-    row.dataset.basePrice = product.price_sale || 0;
-    if (priceInput && parseFloat(product.price_sale) > 0) {
-      priceInput.value = priceForSelectedUnit(row, product.price_sale).toFixed(2);
+    if (priceInput && product.price_sale !== null && product.price_sale !== undefined) {
+      priceInput.value = priceForSelectedUnit(row, product.price_sale).toFixed(PRICE_DECIMALS);
     }
 
     calcRow(row);
@@ -323,7 +335,7 @@
         const price = (data.prices || {})[product.id];
         if (price && priceInput) {
           row.dataset.basePrice = price;
-          priceInput.value = priceForSelectedUnit(row, price).toFixed(2);
+          priceInput.value = priceForSelectedUnit(row, price).toFixed(PRICE_DECIMALS);
           calcRow(row);
           updateSummary();
         }
@@ -346,7 +358,26 @@
 
   // ── Input events for recalculation ────────────────────────────────────────
   linesBody.addEventListener('input', event => {
-    if (event.target.matches('input.price-unit-input, input[name*="-quantity"]')) {
+    if (event.target.matches('.line-total') && editTotal) {
+      const row = event.target.closest('.line-row');
+      const qty = parseFloat(row?.querySelector('input[name*="-quantity"]')?.value) || 0;
+      const discount = parseFloat(row?.querySelector('input[name*="-discount_amount"]')?.value) || 0;
+      const rate = parseFloat(row?.querySelector('input[name*="-igv_rate"]')?.value) || IGV_RATE;
+      const taxType = row?.querySelector('select[name*="-tax_type"]')?.value || '10';
+      const factor = TAXED.has(taxType) ? 1 + rate / 100 : 1;
+      const requestedTotal = parseFloat(event.target.textContent.replace(',', '.')) || 0;
+      const priceInput = row?.querySelector('input.price-unit-input');
+      if (priceInput && qty > 0) priceInput.value = (((requestedTotal / factor + discount) / qty) * factor).toFixed(PRICE_DECIMALS);
+      updateSummary();
+    } else if (event.target.matches('input.valor-unit-display')) {
+      const row = event.target.closest('.line-row');
+      const rate = parseFloat(row?.querySelector('input[name*="-igv_rate"]')?.value) || IGV_RATE;
+      const taxType = row?.querySelector('select[name*="-tax_type"]')?.value || '10';
+      const factor = TAXED.has(taxType) ? 1 + rate / 100 : 1;
+      const priceInput = row?.querySelector('input.price-unit-input');
+      if (priceInput) priceInput.value = ((parseFloat(event.target.value) || 0) * factor).toFixed(PRICE_DECIMALS);
+      updateSummary();
+    } else if (event.target.matches('input.price-unit-input, input[name*="-quantity"]')) {
       const row = event.target.closest('.line-row');
       if (row) {
         if (event.target.matches('input[name*="-quantity"]')) {
@@ -356,6 +387,18 @@
         calcRow(row);
         updateSummary();
       }
+    }
+  });
+
+  linesBody.querySelectorAll('.line-row').forEach(row => {
+    const valueInput = row.querySelector('.valor-unit-display');
+    const priceInput = row.querySelector('.price-unit-input');
+    const totalCell = row.querySelector('.line-total');
+    if (valueInput) valueInput.readOnly = !editValue;
+    if (priceInput) priceInput.readOnly = !editPrice;
+    if (totalCell && editTotal) {
+      totalCell.contentEditable = 'true';
+      totalCell.setAttribute('role', 'textbox');
     }
   });
 
@@ -459,7 +502,7 @@
 
         const priceInput = row.querySelector('input.price-unit-input');
         row.dataset.basePrice = prices[productId];
-        if (priceInput) priceInput.value = priceForSelectedUnit(row, prices[productId]).toFixed(2);
+        if (priceInput) priceInput.value = priceForSelectedUnit(row, prices[productId]).toFixed(PRICE_DECIMALS);
         calcRow(row);
       });
       updateSummary();
@@ -520,9 +563,10 @@
 
     // If unit_price (ex-tax) is set but price-unit-input is empty, compute inc-tax
     const priceInput = row.querySelector('input.price-unit-input');
+    if (priceInput) priceInput.step = PRICE_STEP;
     const unitHidden = row.querySelector('input[name*="-unit_price"]');
     if (priceInput && !priceInput.value && unitHidden?.value) {
-      priceInput.value = (parseFloat(unitHidden.value) * IGV_MULT).toFixed(2);
+      priceInput.value = (parseFloat(unitHidden.value) * IGV_MULT).toFixed(PRICE_DECIMALS);
     }
 
     // Sync igv_rate hidden → igv display
@@ -680,7 +724,7 @@
     const price = priceForSelectedUnit(row, row.dataset.basePrice || 0);
     const priceInput = row?.querySelector('input.price-unit-input');
     if (priceInput && Number.isFinite(price)) {
-      priceInput.value = Number(price).toFixed(2);
+      priceInput.value = Number(price).toFixed(PRICE_DECIMALS);
       calcRow(row);
       updateSummary();
     }

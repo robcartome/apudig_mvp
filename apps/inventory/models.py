@@ -350,6 +350,8 @@ class MovementOrigin(models.TextChoices):
     MANUAL = "MANUAL", "Manual"
     SALE = "SALE", "Venta"
     SALE_REVERSAL = "SALE_REVERSAL", "Reversión de venta"
+    PURCHASE = "PURCHASE", "Compra"
+    PURCHASE_REVERSAL = "PURCHASE_REVERSAL", "Reversión de compra"
 
 
 class Movement(TimeStampedModel):
@@ -402,6 +404,20 @@ class Movement(TimeStampedModel):
     document_type = models.ForeignKey(
         "partners.DocumentType", on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )
+    purchase_document = models.ForeignKey(
+        "purchases.PurchaseDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
+    )
+    purchase_receipt = models.ForeignKey(
+        "purchases.PurchaseReceipt",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )
@@ -429,6 +445,18 @@ class Movement(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.type} {self.number} ({self.date:%Y-%m-%d})"
+
+    @property
+    def related_purchase_documents(self):
+        """Facturas vinculadas directamente o conciliadas con esta recepción."""
+        documents = {}
+        if self.purchase_document_id:
+            documents[self.purchase_document_id] = self.purchase_document
+        for detail in self.details.all():
+            for match in detail.purchase_receipt_matches.all():
+                document = match.purchase_document_line.purchase_document
+                documents[document.pk] = document
+        return list(documents.values())
 
     @property
     def lock_mode_enabled(self) -> bool:
