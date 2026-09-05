@@ -1,6 +1,7 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block title %}Documentos de venta — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Documentos de venta</h2>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/components/table-scroll-sync.css' %}">{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -23,65 +24,54 @@
 
 <div class="card mb-3">
   <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-4">
-        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-               placeholder="Buscar por cliente, RUC o número…">
-      </div>
-      <div class="col-md-2">
-        <select name="document_type" class="form-select form-select-sm">
-          <option value="">Todos los tipos</option>
-          {% for type in document_types %}<option value="{{ type.code }}" {% if document_type == type.code %}selected{% endif %}>{{ type.name }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="col-md-2">
-        <select name="status" class="form-select form-select-sm">
-          <option value="">Todos los estados</option>
-          {% for code, label in status_choices %}
-          <option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
-        <a href="{% url 'sales:document_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
-      </div>
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4"><label class="form-label small mb-1">Búsqueda rápida</label><div class="input-group input-group-sm"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Cliente, documento, serie o número"><button class="btn btn-outline-secondary" type="submit" title="Buscar"><i class="ti ti-search"></i></button></div></div>
+      <div class="col-md-4"><label class="form-label small mb-1">Fechas de emisión</label><div class="input-group input-group-sm"><input type="date" name="date_from" value="{{ date_from }}" class="form-control" title="Desde"><span class="input-group-text">a</span><input type="date" name="date_to" value="{{ date_to }}" class="form-control" title="Hasta"></div></div>
+      <div class="col-md-auto"><button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#salesAdvancedFilters" aria-expanded="{% if advanced_filters_active %}true{% else %}false{% endif %}" aria-controls="salesAdvancedFilters"><i class="ti ti-filter me-1"></i><span class="js-filter-toggle-label">{% if advanced_filters_active %}Ocultar filtros{% else %}Mostrar filtros{% endif %}</span><i class="ti {% if advanced_filters_active %}ti-chevron-up{% else %}ti-chevron-down{% endif %} ms-1 js-filter-toggle-chevron"></i></button></div>
+      <div class="col-12 collapse js-advanced-filters{% if advanced_filters_active %} show{% endif %}" id="salesAdvancedFilters"><div class="rounded border bg-light-subtle p-3 mt-1"><div class="row g-2 align-items-end">
+        <div class="col-sm-6 col-lg-3"><label class="form-label small mb-1">Fechas de creación</label><div class="input-group input-group-sm"><input type="date" name="created_from" value="{{ created_from }}" class="form-control" title="Desde"><span class="input-group-text">a</span><input type="date" name="created_to" value="{{ created_to }}" class="form-control" title="Hasta"></div></div>
+        <div class="col-sm-3 col-lg-1"><label class="form-label small mb-1">Serie</label><input name="series" value="{{ series }}" class="form-control form-control-sm"></div>
+        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Número</label><input name="number" value="{{ number }}" class="form-control form-control-sm"></div>
+        <div class="col-sm-6 col-lg-2"><label class="form-label small mb-1">Cliente / documento</label><input name="customer" value="{{ customer }}" class="form-control form-control-sm"></div>
+        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Total desde</label><input type="number" min="0" step="0.01" name="total_min" value="{{ total_min }}" class="form-control form-control-sm"></div>
+        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Total hasta</label><input type="number" min="0" step="0.01" name="total_max" value="{{ total_max }}" class="form-control form-control-sm"></div>
+        <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Tipo</label><select name="document_type" class="form-select form-select-sm"><option value="">Todos</option>{% for type in document_types %}<option value="{{ type.code }}" {% if document_type == type.code %}selected{% endif %}>{{ type.name }}</option>{% endfor %}</select></div>
+        <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Estado</label><select name="status" class="form-select form-select-sm"><option value="">Todos</option>{% for code,label in status_choices %}<option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div class="col-auto"><button class="btn btn-primary btn-sm" type="submit"><i class="ti ti-search me-1"></i>Aplicar filtros</button><a href="{% url 'sales:document_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a></div>
+      </div></div></div>
     </form>
   </div>
 </div>
 
 <div class="card">
-  <div class="table-responsive">
-    <table class="table table-vcenter table-hover card-table mb-0">
+  <div class="table-scroll-top js-table-scroll-top" data-scroll-target="#sales-documents-table-scroll" aria-label="Desplazamiento horizontal superior"><div></div></div>
+  <div class="table-responsive" id="sales-documents-table-scroll">
+    <table class="table table-vcenter table-hover card-table mb-0 text-nowrap">
       <thead class="table-light">
         <tr>
-          <th>Documento</th>
-          <th>Tipo</th>
+          <th>Fecha de creación</th>
+          <th>Fecha de emisión</th>
+          <th>Serie</th>
+          <th>Número</th>
           <th>Cliente</th>
-          <th>Emisión</th>
-          <th>Estado</th>
           <th class="text-end">Total</th>
+          <th>Estado</th>
           <th class="text-center">Operaciones</th>
         </tr>
       </thead>
       <tbody class="small">
         {% for v in page_obj %}
         <tr>
-          <td class="fw-semibold">
-            <a href="{% url 'sales:document_detail' v.pk %}">{{ v.series_code }}-{{ v.number|default:"(borrador)" }}</a>
-          </td>
-          <td class="text-muted small">
-            {{ v.document_type.name }}
-          </td>
+          <td class="text-muted small">{{ v.created_at|date:"d/m/Y H:i" }}</td>
+          <td class="text-muted small">{{ v.issue_date|date:"d/m/Y" }}</td>
+          <td>{{ v.series_code|default:"—" }}</td>
+          <td class="fw-semibold"><a href="{% url 'sales:document_detail' v.pk %}">{{ v.number|default:"(borrador)" }}</a></td>
           <td>
             <div>{{ v.customer_legal_name }}</div>
             <div class="text-muted small">{{ v.customer_document_number }}</div>
           </td>
-          <td class="text-muted small">{{ v.issue_date|date:"d/m/Y" }}</td>
-          <td>
-            {% include "components/status_badge.html" with status=v.status label=v.get_status_display %}
-          </td>
           <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
+          <td>{% include "components/status_badge.html" with status=v.status label=v.get_status_display %}</td>
           <td class="text-center">
             <div class="d-inline-flex gap-1 align-items-center">
             <a href="{% url 'sales:document_detail' v.pk %}"
@@ -125,27 +115,28 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
+          <td colspan="8" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot class="table-light"><tr><th colspan="8" class="text-end py-3">Total filtrado (no incluye anulados, cancelados ni rechazados):
+        {% for item in filtered_totals %}<span class="ms-3">{{ item.currency }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
+      </th></tr></tfoot>
     </table>
   </div>
-  {% if page_obj.has_other_pages %}
   <div class="card-footer d-flex align-items-center">
     <p class="m-0 text-muted">
-      Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} documentos
+      {% if page_obj.paginator.count %}Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} documentos{% else %}Mostrando 0 documentos{% endif %}
     </p>
     <ul class="pagination m-0 ms-auto">
       {% if page_obj.has_previous %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&document_type={{ document_type }}">ant</a></li>
-      {% endif %}
+      <li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+      {% else %}<li class="page-item disabled"><span class="page-link">Anterior</span></li>{% endif %}
       {% if page_obj.has_next %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&document_type={{ document_type }}">sig</a></li>
-      {% endif %}
+      <li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>
+      {% else %}<li class="page-item disabled"><span class="page-link">Siguiente</span></li>{% endif %}
     </ul>
   </div>
-  {% endif %}
 </div>
 
 <div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
@@ -164,6 +155,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/components/table-scroll-sync.js' %}"></script>
+<script src="{% static 'js/components/filter-toggle.js' %}"></script>
 <script>
   (function () {
     'use strict';

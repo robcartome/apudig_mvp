@@ -90,18 +90,20 @@ class SalesDocumentServiceTest(TestCase):
             store=self.store, name="AlmacÃ©n ventas", is_default=True
         )
 
-    def _create_draft(self, series=None, lines=None):
-        return create_sales_document_draft(
-            store_id=str(self.store.id),
-            customer=self.customer,
-            document_type=DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
-            series=series or self.fac_series,
-            lines=lines or [_make_line(self.product)],
-            created_by=None,
-            issue_date=timezone.now().date(),
-            currency="PEN",
-            register_inventory_movement=False,
-        )
+    def _create_draft(self, series=None, lines=None, **overrides):
+        values = {
+            "store_id": str(self.store.id),
+            "customer": self.customer,
+            "document_type": DocumentType.objects.get_or_create(code="01", defaults={"name": "01", "category": "INTERNAL"})[0],
+            "series": series or self.fac_series,
+            "lines": lines or [_make_line(self.product)],
+            "created_by": None,
+            "issue_date": timezone.now().date(),
+            "currency": "PEN",
+            "register_inventory_movement": False,
+        }
+        values.update(overrides)
+        return create_sales_document_draft(**values)
 
     def test_create_draft_calculates_totals(self):
         v = self._create_draft()
@@ -110,6 +112,33 @@ class SalesDocumentServiceTest(TestCase):
         self.assertEqual(v.igv_total, Decimal("36.00"))
         self.assertEqual(v.total, Decimal("236.00"))
         self.assertEqual(v.status, "DRAFT")
+
+    def test_global_discount_can_be_applied_after_tax(self):
+        document = self._create_draft(global_discount_amount=Decimal("10"))
+
+        self.assertEqual(document.taxable_amount, Decimal("200.00"))
+        self.assertEqual(document.igv_total, Decimal("36.00"))
+        self.assertEqual(document.total_discount, Decimal("10.00"))
+        self.assertEqual(document.total, Decimal("226.00"))
+
+    def test_global_discount_can_be_applied_before_tax(self):
+        document = self._create_draft(
+            global_discount_amount=Decimal("10"),
+            global_discount_before_tax=True,
+        )
+
+        self.assertEqual(document.taxable_amount, Decimal("190.00"))
+        self.assertEqual(document.igv_total, Decimal("34.20"))
+        self.assertEqual(document.total, Decimal("224.20"))
+
+    def test_global_discount_cannot_exceed_document_total(self):
+        with self.assertRaisesRegex(ValueError, "descuento general"):
+            self._create_draft(global_discount_amount=Decimal("999"))
+
+    def test_sale_line_exposes_price_unit_including_igv(self):
+        document = self._create_draft()
+
+        self.assertEqual(document.lines.get().price_unit, Decimal("118.00"))
 
     def test_draft_has_no_number(self):
         v = self._create_draft()
@@ -540,6 +569,43 @@ class SalesDocumentViewsTest(TestCase):
         self._login()
         resp = self.client.get(reverse("sales:document_list"))
         self.assertEqual(resp.status_code, 200)
+        today = timezone.localdate()
+        self.assertEqual(
+            resp.context["date_from"], today.replace(day=1).isoformat()
+        )
+        self.assertEqual(resp.context["date_to"][:7], today.strftime("%Y-%m"))
+
+    def test_list_applies_document_filters_uses_80_rows_and_totals(self):
+        self._login()
+        document = self._create_draft()
+        issue_date = document.issue_date.isoformat()
+        created_date = timezone.localtime(document.created_at).date().isoformat()
+
+        response = self.client.get(reverse("sales:document_list"), {
+            "date_from": issue_date,
+            "date_to": issue_date,
+            "series": "F002",
+            "customer": "20666666666",
+            "created_from": created_date,
+            "created_to": created_date,
+            "total_min": "1",
+            "total_max": "999",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.per_page, 80)
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertTrue(response.context["advanced_filters_active"])
+        self.assertEqual(
+            response.context["filtered_totals"],
+            [{"currency": "PEN", "amount": document.total}],
+        )
+        self.assertContains(
+            response,
+            "Total filtrado (no incluye anulados, cancelados ni rechazados)",
+        )
+        self.assertContains(response, "js-table-scroll-top")
+        self.assertContains(response, 'id="salesAdvancedFilters"', html=False)
 
     def test_list_shows_document_operations(self):
         self._login()
@@ -635,6 +701,9 @@ class SalesDocumentViewsTest(TestCase):
         self.assertContains(resp, 'name="warehouse"')
         self.assertContains(resp, 'name="number"')
         self.assertContains(resp, 'name="issue_date"')
+        self.assertContains(resp, 'name="global_discount_amount"')
+        self.assertContains(resp, 'name="global_discount_before_tax"')
+        self.assertContains(resp, "Descuento general")
         self.assertContains(resp, 'type="datetime-local"')
         self.assertContains(resp, 'id="edit-number-btn"')
         self.assertContains(resp, 'data-series-options-url=')
@@ -654,6 +723,7 @@ class SalesDocumentViewsTest(TestCase):
             defaults={
                 "price_decimal_places": 4,
                 "default_igv_rate": Decimal("15.50"),
+                "sales_value_unit_editable": True,
             },
         )
 
@@ -662,6 +732,7 @@ class SalesDocumentViewsTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-price-decimals="4"', html=False)
         self.assertContains(response, 'data-igv-rate="15.50"', html=False)
+        self.assertContains(response, 'data-edit-value="true"', html=False)
         self.assertEqual(
             response.context["line_formset"].forms[0].fields["igv_rate"].initial,
             Decimal("15.50"),

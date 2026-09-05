@@ -12,13 +12,18 @@ Rutas:
   document_credit    GET+POST /ventas/comprobantes/<uuid:pk>/nota-credito/
   document_pdf       GET      /ventas/comprobantes/<uuid:pk>/pdf/
 """
+from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db.models import Sum
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.sales.forms import (
@@ -131,6 +136,8 @@ def _document_service_fields(cleaned_data):
         "price_list": cleaned_data.get("price_list"),
         "register_inventory_movement": cleaned_data.get("register_inventory_movement", False),
         "warehouse": cleaned_data.get("warehouse"),
+        "global_discount_amount": cleaned_data.get("global_discount_amount") or Decimal("0"),
+        "global_discount_before_tax": cleaned_data.get("global_discount_before_tax", False),
         "notes": cleaned_data.get("notes", ""),
         "internal_reference": cleaned_data.get("internal_reference", ""),
         "number": cleaned_data.get("number", "") if cleaned_data.get("manual_number") else "",
@@ -160,19 +167,82 @@ def document_list(request):
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     document_type = request.GET.get("document_type", "")
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    date_from_text = request.GET.get("date_from", month_start.isoformat())
+    date_to_text = request.GET.get("date_to", month_end.isoformat())
+    created_from_text = request.GET.get("created_from", "")
+    created_to_text = request.GET.get("created_to", "")
+    number = request.GET.get("number", "").strip()
+    series = request.GET.get("series", "").strip()
+    customer = request.GET.get("customer", "").strip()
+    total_min_text = request.GET.get("total_min", "").strip()
+    total_max_text = request.GET.get("total_max", "").strip()
 
-    qs = search_sales_documents(store_id, query=q or None, status=status or None)
+    def decimal_or_none(value):
+        try:
+            parsed = Decimal(value) if value else None
+            return parsed if parsed is None or parsed.is_finite() else None
+        except (ArithmeticError, ValueError):
+            return None
+
+    def date_or_none(value):
+        try:
+            return parse_date(value) if value else None
+        except ValueError:
+            return None
+
+    qs = search_sales_documents(
+        store_id,
+        query=q or None,
+        status=status or None,
+        date_from=date_or_none(date_from_text),
+        date_to=date_or_none(date_to_text),
+        created_from=date_or_none(created_from_text),
+        created_to=date_or_none(created_to_text),
+        number=number or None,
+        series=series or None,
+        customer=customer or None,
+        total_min=decimal_or_none(total_min_text),
+        total_max=decimal_or_none(total_max_text),
+    )
     if document_type:
         qs = qs.filter(document_type__code=document_type)
 
-    paginator = Paginator(qs, 25)
+    filtered_totals = list(
+        SalesDocument.objects.filter(pk__in=qs.order_by().values("pk"))
+        .exclude(status__in=("VOIDED", "CANCELLED", "SUNAT_REJECTED"))
+        .values("currency")
+        .annotate(amount=Sum("total"))
+        .order_by("currency")
+    )
+    paginator = Paginator(qs, 80)
     page = paginator.get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
 
     context = {
         "page_obj": page,
         "q": q,
         "status": status,
         "document_type": document_type,
+        "date_from": date_from_text,
+        "date_to": date_to_text,
+        "created_from": created_from_text,
+        "created_to": created_to_text,
+        "number": number,
+        "series": series,
+        "customer": customer,
+        "total_min": total_min_text,
+        "total_max": total_max_text,
+        "filtered_totals": filtered_totals,
+        "pagination_query": query_params.urlencode(),
+        "advanced_filters_active": any((
+            created_from_text, created_to_text, number, series, customer,
+            total_min_text, total_max_text, status, document_type,
+        )),
         "status_choices": SALES_DOCUMENT_STATUS_CHOICES,
         "document_types": DocumentType.objects.filter(
             active=True, category__in=("SALES", "BILLING")
@@ -308,9 +378,7 @@ def document_edit(request, pk):
                 "description": line.description,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
-                "price_with_igv": round(
-                    float(line.unit_price) * (1 + float(line.igv_rate) / 100), 2
-                ),
+                "price_with_igv": line.price_unit,
                 "discount_amount": line.discount_amount,
                 "tax_type": line.tax_type,
                 "igv_rate": line.igv_rate,

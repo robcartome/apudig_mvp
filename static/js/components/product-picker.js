@@ -27,6 +27,7 @@ window.ProductPicker = (function ($) {
     unitId: 'qc-unit',
     saveButtonId: 'qc-btn-save',
     priceDecimals: 2,
+    priceMode: 'purchase',
   };
 
   let settings = { ...DEFAULTS };
@@ -162,9 +163,14 @@ window.ProductPicker = (function ($) {
       ? (totalStock > 0 ? 'text-success' : totalStock < 0 ? 'text-danger' : 'text-muted')
       : 'text-muted';
 
-    const supplierDetail = product.supplier_code || product.supplier_product_name
+    const showSalePrice = settings.priceMode === 'sale';
+    const supplierDetail = !showSalePrice && (product.supplier_code || product.supplier_product_name)
       ? `<div class="text-primary" style="font-size:.72rem">Proveedor: ${esc(product.supplier_code || 'SIN-COD')} ${esc(product.supplier_product_name || '')}</div>`
       : '';
+    const priceLabel = showSalePrice ? 'P.Venta' : 'P.Compra';
+    const priceValue = showSalePrice
+      ? product.price_sale
+      : (product.supplier_purchase_price ?? product.price_purchase);
     return $(`
       <div class="d-flex justify-content-between align-items-start gap-3 py-1" title='${esc(product.name || product.text)}'>
         <div style="min-width:0">
@@ -181,7 +187,7 @@ window.ProductPicker = (function ($) {
           ${supplierDetail}
         </div>
         <div class="text-end text-muted flex-shrink-0" style="font-size:.72rem">
-          P.Compra<br><strong>S/ ${parseFloat(product.supplier_purchase_price ?? product.price_purchase ?? 0).toFixed(settings.priceDecimals)}</strong>
+          ${priceLabel}<br><strong>S/ ${parseFloat(priceValue ?? 0).toFixed(settings.priceDecimals)}</strong>
         </div>
       </div>`);
   }

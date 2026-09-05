@@ -233,16 +233,16 @@
 
         {# ─── Reportes ─── #}
         <li class="nav-item">
-          <a class="nav-link {% if '/reportes/' in request.path %}active{% endif %}"
+          <a class="nav-link {% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' %}active{% endif %}"
              href="#sidebar-reports"
              data-bs-toggle="collapse"
              data-tooltip-label="Reportes"
-             aria-expanded="{% if '/reportes/' in request.path %}true{% else %}false{% endif %}">
+             aria-expanded="{% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' %}true{% else %}false{% endif %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-chart-bar fs-2"></i></span>
             <span class="nav-link-title">Reportes</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if '/reportes/' in request.path %}show{% endif %}" id="sidebar-reports">
+          <div class="collapse {% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' %}show{% endif %}" id="sidebar-reports">
             <ul class="navbar-nav ps-lg-3">
               <li class="nav-item">
                 <a class="nav-link {% if 'stock_report_detail' in request.resolver_match.url_name|default:'' %}active{% endif %}"
@@ -259,6 +259,10 @@
               <li class="nav-item">
                 <a class="nav-link {% if 'kardex_report' in request.resolver_match.url_name|default:'' %}active{% endif %}"
                    href="{% url 'inventory:kardex_report' %}">Kardex de Inventario</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.url_name == 'price_history' %}active{% endif %}"
+                   href="{% url 'purchases:price_history' %}">Histórico de Precios de Compra</a>
               </li>
             </ul>
           </div>

@@ -152,10 +152,10 @@
       <td class="text-right">{{ sales_document.currency }} {{ sales_document.unaffected_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
-    {% if sales_document.total_discount %}
+    {% if sales_document.global_discount_amount %}
     <tr>
-      <td>Dctos. globales</td>
-      <td class="text-right">- {{ sales_document.currency }} {{ sales_document.total_discount|floatformat:2 }}</td>
+      <td>Descuento general{% if sales_document.global_discount_before_tax %} antes del IGV{% endif %}</td>
+      <td class="text-right">- {{ sales_document.currency }} {{ sales_document.global_discount_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
     <tr>

@@ -1,8 +1,11 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -26,7 +29,7 @@ from .forms import (
 )
 from .models import (
     PurchaseCategory, PurchaseDocument, PurchaseDocumentLine, PurchaseDocumentStatus,
-    PurchaseOrder, PurchaseOrderStatus, PurchaseReceipt, SupplierPayment,
+    PurchaseOrder, PurchaseOrderStatus, PurchasePaymentStatus, PurchaseReceipt, SupplierPayment,
     PurchaseLandedCost,
 )
 from .order_services import (
@@ -199,13 +202,82 @@ def purchase_document_list(request):
     company_id, store = _active_scope(request)
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
-    qs = search_purchase_documents(company_id, store.pk, query or None, status or None)
-    page = Paginator(qs, 25).get_page(request.GET.get("page"))
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    date_from_text = request.GET.get("date_from", month_start.isoformat())
+    date_to_text = request.GET.get("date_to", month_end.isoformat())
+    created_from_text = request.GET.get("created_from", "")
+    created_to_text = request.GET.get("created_to", "")
+    number = request.GET.get("number", "").strip()
+    series = request.GET.get("series", "").strip()
+    supplier = request.GET.get("supplier", "").strip()
+    payment_status = request.GET.get("payment_status", "")
+    total_min_text = request.GET.get("total_min", "").strip()
+    total_max_text = request.GET.get("total_max", "").strip()
+
+    def decimal_or_none(value):
+        try:
+            parsed = Decimal(value) if value else None
+            return parsed if parsed is None or parsed.is_finite() else None
+        except (ArithmeticError, ValueError):
+            return None
+
+    def date_or_none(value):
+        try:
+            return parse_date(value) if value else None
+        except ValueError:
+            return None
+
+    qs = search_purchase_documents(
+        company_id,
+        store.pk,
+        query or None,
+        status or None,
+        date_from=date_or_none(date_from_text),
+        date_to=date_or_none(date_to_text),
+        created_from=date_or_none(created_from_text),
+        created_to=date_or_none(created_to_text),
+        number=number or None,
+        series=series or None,
+        supplier=supplier or None,
+        payment_status=payment_status or None,
+        total_min=decimal_or_none(total_min_text),
+        total_max=decimal_or_none(total_max_text),
+    )
+    filtered_totals = list(
+        PurchaseDocument.objects.filter(pk__in=qs.order_by().values("pk"))
+        .exclude(document_status=PurchaseDocumentStatus.CANCELLED)
+        .values("currency")
+        .annotate(amount=Sum("total"))
+        .order_by("currency")
+    )
+    page = Paginator(qs, 80).get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
     return render(request, "purchases/document_list.html", {
         "page_obj": page,
         "q": query,
         "status": status,
+        "date_from": date_from_text,
+        "date_to": date_to_text,
+        "created_from": created_from_text,
+        "created_to": created_to_text,
+        "number": number,
+        "series": series,
+        "supplier": supplier,
+        "payment_status": payment_status,
+        "total_min": total_min_text,
+        "total_max": total_max_text,
+        "filtered_totals": filtered_totals,
+        "pagination_query": query_params.urlencode(),
         "status_choices": PurchaseDocumentStatus.choices,
+        "payment_status_choices": PurchasePaymentStatus.choices,
+        "advanced_filters_active": any((
+            created_from_text, created_to_text, number, series, supplier,
+            payment_status, total_min_text, total_max_text, status,
+        )),
         "payment_means": MeansOfPayment.objects.filter(
             company_id=company_id, active=True
         ).order_by("name"),
@@ -391,6 +463,8 @@ def purchase_document_create(request):
                 register_inventory_movement=form.cleaned_data.get("register_inventory_movement", False),
                 receipt_movements=form.cleaned_data.get("receipt_movements"),
                 warehouse=form.cleaned_data.get("warehouse"),
+                global_discount_amount=form.cleaned_data.get("global_discount_amount") or Decimal("0"),
+                global_discount_before_tax=form.cleaned_data.get("global_discount_before_tax", False),
                 notes=form.cleaned_data.get("notes", ""),
                 internal_reference=form.cleaned_data.get("internal_reference", ""),
             )
@@ -467,6 +541,8 @@ def purchase_expense_create(request):
                 payment_method=form.cleaned_data.get("payment_method"),
                 currency=form.cleaned_data["currency"], exchange_rate=form.cleaned_data["exchange_rate"],
                 purchase_order=None, register_inventory_movement=False, warehouse=None,
+                global_discount_amount=form.cleaned_data.get("global_discount_amount") or Decimal("0"),
+                global_discount_before_tax=form.cleaned_data.get("global_discount_before_tax", False),
                 notes=form.cleaned_data.get("notes", ""),
                 internal_reference=form.cleaned_data.get("internal_reference", ""),
             )
@@ -508,6 +584,8 @@ def purchase_expense_edit(request, pk):
                 payment_method=form.cleaned_data.get("payment_method"),
                 currency=form.cleaned_data["currency"], exchange_rate=form.cleaned_data["exchange_rate"],
                 purchase_order=None, register_inventory_movement=False, warehouse=None,
+                global_discount_amount=form.cleaned_data.get("global_discount_amount") or Decimal("0"),
+                global_discount_before_tax=form.cleaned_data.get("global_discount_before_tax", False),
                 notes=form.cleaned_data.get("notes", ""),
                 internal_reference=form.cleaned_data.get("internal_reference", ""),
             )
@@ -572,6 +650,8 @@ def purchase_document_edit(request, pk):
                 register_inventory_movement=form.cleaned_data.get("register_inventory_movement", False),
                 receipt_movements=form.cleaned_data.get("receipt_movements"),
                 warehouse=form.cleaned_data.get("warehouse"),
+                global_discount_amount=form.cleaned_data.get("global_discount_amount") or Decimal("0"),
+                global_discount_before_tax=form.cleaned_data.get("global_discount_before_tax", False),
                 notes=form.cleaned_data.get("notes", ""),
                 internal_reference=form.cleaned_data.get("internal_reference", ""),
             )
@@ -722,6 +802,7 @@ def purchase_price_history(request):
     supplier_id = request.GET.get("supplier", "")
     date_from = request.GET.get("date_from") or None
     date_to = request.GET.get("date_to") or None
+    output_format = request.GET.get("format", "")
     rows = get_purchase_price_history(
         company_id, store.pk,
         product_id=product_id or None,
@@ -729,7 +810,13 @@ def purchase_price_history(request):
         date_from=date_from,
         date_to=date_to,
     )
-    return render(request, "purchases/price_history.html", {
+    operational_settings = CompanyOperationalSettings.objects.filter(
+        company_id=company_id
+    ).first()
+    price_decimal_places = (
+        operational_settings.price_decimal_places if operational_settings else 2
+    )
+    context = {
         "rows": rows,
         "products": Product.objects.filter(company_id=company_id, active=True).order_by("name"),
         "suppliers": Supplier.objects.filter(company_id=company_id, active=True).order_by("name"),
@@ -737,7 +824,75 @@ def purchase_price_history(request):
         "supplier_id": supplier_id,
         "date_from": date_from or "",
         "date_to": date_to or "",
-    })
+        "price_decimal_places": price_decimal_places,
+    }
+    if output_format == "xlsx":
+        return _purchase_price_history_xlsx(rows, price_decimal_places)
+    if output_format == "print":
+        return render(request, "purchases/price_history_print.html", context)
+    return render(request, "purchases/price_history.html", context)
+
+
+def _purchase_price_history_xlsx(rows, price_decimal_places):
+    """Export the filtered purchase price history to an Excel workbook."""
+    import io
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Histórico de precios"
+    headers = [
+        "Fecha", "Documento", "Producto", "Proveedor", "Unidad",
+        "Moneda", "P. facturado", "P. base PEN", "P. anterior PEN",
+        "Variación PEN", "Variación %", "P. proveedor PEN", "P. producto PEN",
+    ]
+    worksheet.append(headers)
+    header_fill = PatternFill("solid", fgColor="1A7F64")
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.alignment = Alignment(horizontal="center")
+
+    for row in rows:
+        worksheet.append([
+            row["document"].issue_date,
+            f'{row["document"].series}-{row["document"].number}',
+            str(row["product"]),
+            str(row["supplier"]),
+            row["line"].unit_code,
+            row["document"].currency,
+            float(row["invoiced_price"]),
+            float(row["base_invoiced_price"]),
+            float(row["previous_price"]) if row["previous_price"] is not None else None,
+            float(row["variance"]) if row["variance"] is not None else None,
+            float(row["variance_percent"]) if row["variance_percent"] is not None else None,
+            float(row["current_supplier_price"]) if row["current_supplier_price"] is not None else None,
+            float(row["current_product_price"]),
+        ])
+
+    price_format = "0" if price_decimal_places == 0 else "0." + ("0" * price_decimal_places)
+    for row_number in range(2, worksheet.max_row + 1):
+        for column_number in (7, 8, 9, 10, 12, 13):
+            worksheet.cell(row_number, column_number).number_format = price_format
+        worksheet.cell(row_number, 11).number_format = "0.00"
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+    for column_number in range(1, worksheet.max_column + 1):
+        letter = get_column_letter(column_number)
+        max_length = max(len(str(cell.value or "")) for cell in worksheet[letter])
+        worksheet.column_dimensions[letter].width = min(max_length + 3, 55)
+
+    output = io.BytesIO()
+    workbook.save(output)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="historico_precios_compra.xlsx"'
+    return response
 
 
 def purchase_analytics(request):

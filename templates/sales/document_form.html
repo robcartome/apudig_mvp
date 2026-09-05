@@ -305,24 +305,31 @@
               <table class="table table-sm mb-0 ms-auto" style="width:auto; min-width:260px">
                 <tbody>
                   <tr>
-                    <td class="text-muted">Descuento (-)</td>
+                    <td class="text-muted">Descuentos por ítem (-)</td>
+                    <td class="text-end fw-semibold" id="summary-line-discount">0.00</td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted"><label for="{{ header_form.global_discount_amount.id_for_label }}" class="mb-0">Descuento general (-)</label></td>
+                    <td style="min-width:140px">{{ header_form.global_discount_amount }}{% for error in header_form.global_discount_amount.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                  </tr>
+                  <tr>
+                    <td colspan="2"><label class="form-check mb-0">{{ header_form.global_discount_before_tax }}<span class="form-check-label">Aplicar antes del IGV</span></label><div class="form-hint">Desmarcado: el importe se resta directamente del total final.</div></td>
+                  </tr>
+                  <tr>
+                    <td class="text-muted">Total descuento (-)</td>
                     <td class="text-end fw-semibold" id="summary-discount">0.00</td>
                   </tr>
                   <tr>
-                    <td class="text-muted">Total Descuento (-)</td>
+                    <td class="text-muted">Total Exportación</td>
                     <td class="text-end fw-semibold" id="summary-export">0.00</td>
                   </tr>
                   <tr>
-                    <td class="text-muted">Total Exportación</td>
+                    <td class="text-muted">Total Exonerada</td>
                     <td class="text-end fw-semibold" id="summary-exempt">0.00</td>
                   </tr>
                   <tr>
-                    <td class="text-muted">Total Exonerada</td>
-                    <td class="text-end fw-semibold" id="summary-unaffected">0.00</td>
-                  </tr>
-                  <tr>
                     <td class="text-muted">Total Inafecta</td>
-                    <td class="text-end fw-semibold" id="summary-free">0.00</td>
+                    <td class="text-end fw-semibold" id="summary-unaffected">0.00</td>
                   </tr>
                   <tr>
                     <td class="text-muted">Total Gravada</td>
@@ -334,7 +341,7 @@
                   </tr>
                   <tr>
                     <td class="text-muted">Total Gratuita</td>
-                    <td class="text-end fw-semibold">0.00</td>
+                    <td class="text-end fw-semibold" id="summary-free">0.00</td>
                   </tr>
                   <tr class="table-active">
                     <td class="fw-bold">Total</td>
@@ -422,7 +429,7 @@
 <script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260830-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260905-2"></script>
 {% endblock %}
