@@ -26,6 +26,7 @@ from ..services import delete_movement, update_movement
 
 
 MOVEMENT_SORTS = {
+    "created": "created_at",
     "date": ("date", "created_at"),
     "code": ("operation_year", "operation_number"),
     "type": "type",
@@ -199,7 +200,7 @@ def movement_list(request):
         "warehouses": get_warehouses_for_store(store_id, active_only=True) if store_id else [],
         "list_filters": filters,
         "filter_search_placeholder": "Documento, operación, cliente o proveedor",
-        "filter_date_label": "Fechas del movimiento",
+        "filter_date_label": "Fechas de movimiento",
         "filter_collapse_id": "movementAdvancedFilters",
         "filter_advanced_template": "inventory/partials/movement_list_filters.html",
         "filter_reset_url": reverse("inventory:movement_list"),

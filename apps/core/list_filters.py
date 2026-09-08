@@ -51,11 +51,16 @@ def read_list_filters(request, *, default_current_month=True):
         if default_current_month
         else ("", "")
     )
-
     values = {
         "q": request.GET.get("q", "").strip(),
-        "date_from": request.GET.get("date_from", defaults[0]),
-        "date_to": request.GET.get("date_to", defaults[1]),
+        "date_from": (
+            "" if "show_all_dates" in request.GET
+            else request.GET.get("date_from", defaults[0])
+        ),
+        "date_to": (
+            "" if "show_all_dates" in request.GET
+            else request.GET.get("date_to", defaults[1])
+        ),
         "created_from": request.GET.get("created_from", ""),
         "created_to": request.GET.get("created_to", ""),
         "series": request.GET.get("series", "").strip(),

@@ -130,6 +130,16 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertContains(response, self.supplier.name)
         self.assertContains(response, self.product.name)
 
+    def test_list_can_remove_default_date_filter(self):
+        response = self.client.get(
+            reverse("purchases:document_list"), {"show_all_dates": "1"}
+        )
+
+        self.assertEqual(response.context["date_from"], "")
+        self.assertEqual(response.context["date_to"], "")
+        self.assertEqual(response.context["list_filters"]["date_from"], "")
+        self.assertEqual(response.context["list_filters"]["date_to"], "")
+
     def test_list_applies_document_filters_uses_80_rows_and_totals(self):
         self.client.post(reverse("purchases:document_create"), self.payload())
         document = PurchaseDocument.objects.get()

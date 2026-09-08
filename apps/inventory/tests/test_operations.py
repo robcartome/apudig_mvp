@@ -62,6 +62,25 @@ class MovementViewsTest(TestCase):
     def test_movement_list_ok(self):
         resp = self.client.get(reverse("inventory:movement_list"))
         self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Fecha de creación")
+        self.assertContains(resp, "Fecha de movimiento")
+        self.assertContains(resp, 'name="show_all_dates"', html=False)
+
+    def test_movement_list_can_show_records_outside_current_month(self):
+        self._post_movement(
+            reverse("inventory:entry_create"),
+            {"date": "2020-01-15T10:00"},
+        )
+
+        default_response = self.client.get(reverse("inventory:movement_list"))
+        all_dates_response = self.client.get(
+            reverse("inventory:movement_list"), {"show_all_dates": "1"}
+        )
+
+        self.assertEqual(default_response.context["page_obj"].paginator.count, 0)
+        self.assertEqual(all_dates_response.context["page_obj"].paginator.count, 1)
+        self.assertEqual(all_dates_response.context["list_filters"]["date_from"], "")
+        self.assertEqual(all_dates_response.context["list_filters"]["date_to"], "")
 
     def test_stock_by_warehouse_api_includes_all_company_warehouses(self):
         other_store = Store.objects.create(company=self.company, name="Secundaria")

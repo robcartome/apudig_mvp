@@ -1,7 +1,7 @@
 from django.template import Context, Template
 from django.test import RequestFactory, SimpleTestCase
 
-from apps.core.list_filters import sort_queryset
+from apps.core.list_filters import read_list_filters, sort_queryset
 
 
 class RecordingQuerySet:
@@ -65,3 +65,24 @@ class ListSortingTest(SimpleTestCase):
         self.assertIn("dir=desc", html)
         self.assertNotIn("page=3", html)
         self.assertIn('aria-sort="ascending"', html)
+
+
+class ListFiltersTest(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_show_all_dates_overrides_current_month_and_submitted_dates(self):
+        request = self.factory.get("/", {
+            "q": "tornillo",
+            "date_from": "2026-09-01",
+            "date_to": "2026-09-30",
+            "show_all_dates": "1",
+        })
+
+        filters = read_list_filters(request)
+
+        self.assertEqual(filters["date_from"], "")
+        self.assertEqual(filters["date_to"], "")
+        self.assertIsNone(filters["date_from_value"])
+        self.assertIsNone(filters["date_to_value"])
+        self.assertEqual(filters["q"], "tornillo")
