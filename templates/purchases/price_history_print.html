@@ -6,25 +6,28 @@
   <style>
     body { font-family: Arial, sans-serif; font-size: 9px; margin: 8mm; }
     h2 { font-size: 15px; margin-bottom: 4px; }
-    .meta { color: #666; margin-bottom: 10px; }
+    .meta { color: #666; margin-bottom: 5px; }
+    .note { background: #eef6ff; border: 1px solid #c9ddf2; padding: 6px; margin-bottom: 10px; }
     table { width: 100%; border-collapse: collapse; }
     th { background: #1a7f64; color: #fff; padding: 5px; text-align: left; }
     td { padding: 4px 5px; border-bottom: 1px solid #ddd; }
     tr:nth-child(even) td { background: #f7f7f7; }
     .right { text-align: right; white-space: nowrap; }
+    .date { color: #666; font-size: 8px; }
     @page { size: landscape; margin: 8mm; }
   </style>
 </head>
 <body>
   <h2>Histórico de precios de compra</h2>
   <div class="meta">{% if date_from %}Desde: {{ date_from }}{% endif %}{% if date_to %} · Hasta: {{ date_to }}{% endif %}</div>
+  <div class="note">Precios unitarios con IGV, convertidos a PEN y a la unidad base del producto. No se aplican descuentos globales. Solo se muestran cambios de precio.</div>
   <table>
-    <thead><tr><th>Fecha</th><th>Documento</th><th>Producto</th><th>Proveedor</th><th>UM</th><th class="right">P. facturado</th><th class="right">P. base PEN</th><th class="right">P. anterior</th><th class="right">Variación</th><th class="right">P. proveedor</th><th class="right">P. producto</th></tr></thead>
+    <thead><tr><th>Código</th><th>Producto</th><th>Proveedor</th><th class="right">Último precio</th><th class="right">Anterior 1</th><th class="right">Anterior 2</th><th class="right">Anterior 3</th><th class="right">Anterior 4</th><th class="right">Variación</th></tr></thead>
     <tbody>{% for row in rows %}<tr>
-      <td>{{ row.document.issue_date|date:"d/m/Y" }}</td><td>{{ row.document.series }}-{{ row.document.number }}</td><td>{{ row.product }}</td><td>{{ row.supplier }}</td><td>{{ row.line.unit_code }}</td>
-      <td class="right">{{ row.document.currency }} {{ row.invoiced_price|floatformat:price_decimal_places }}</td><td class="right">S/ {{ row.base_invoiced_price|floatformat:price_decimal_places }}</td><td class="right">{% if row.previous_price is not None %}S/ {{ row.previous_price|floatformat:price_decimal_places }}{% else %}-{% endif %}</td>
-      <td class="right">{% if row.variance is not None %}{{ row.variance|floatformat:price_decimal_places }}{% if row.variance_percent is not None %} ({{ row.variance_percent|floatformat:2 }}%){% endif %}{% else %}-{% endif %}</td><td class="right">{% if row.current_supplier_price is not None %}S/ {{ row.current_supplier_price|floatformat:price_decimal_places }}{% else %}-{% endif %}</td><td class="right">S/ {{ row.current_product_price|floatformat:price_decimal_places }}</td>
-    </tr>{% empty %}<tr><td colspan="11">No hay compras registradas para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+      <td>{{ row.product.sku }}</td><td>{{ row.product.name }}</td><td>{{ row.supplier }}</td>
+      {% for price in row.prices %}<td class="right">{% if price %}PEN {{ price.price|floatformat:price_decimal_places }}<br><span class="date">{{ price.document.issue_date|date:"d/m/Y" }}{% if price.document.series or price.document.number %} · {{ price.document.series }}-{{ price.document.number }}{% endif %}</span>{% else %}—{% endif %}</td>{% endfor %}
+      <td class="right">{% if row.latest_variance is not None %}{{ row.latest_variance|floatformat:price_decimal_places }}{% if row.latest_variance_percent is not None %} ({{ row.latest_variance_percent|floatformat:2 }}%){% endif %}{% else %}—{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="9">No hay cambios de precio para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
   </table>
   <script>window.onload = function(){ window.print(); };</script>
 </body>

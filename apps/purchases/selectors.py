@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 from decimal import Decimal
 
 from django.db.models import DecimalField, ExpressionWrapper, F, Max, Q, Sum, Value
@@ -151,6 +151,112 @@ def get_purchase_price_history(
         previous_by_product_supplier[key] = base_invoiced_price
     rows.reverse()
     return rows
+
+
+def get_purchase_price_comparison(
+    company_id, store_id=None, *, product_id=None, supplier_id=None,
+    date_from=None, date_to=None, price_decimal_places=2, price_count=5,
+):
+    """Return the latest effective unit-price changes per product and supplier.
+
+    Prices use ``PurchaseDocumentLine.price_unit`` (IGV included when taxable),
+    converted to PEN and the product base unit. Global document discounts are
+    deliberately not part of this comparison.
+
+    The queryset is streamed and each group retains at most ``price_count``
+    events, so memory and rendered output no longer grow with every invoice.
+    Rows before ``date_from`` are still read as a baseline, which lets the first
+    price inside the selected period be compared correctly.
+    """
+    price_count = max(1, min(int(price_count), 5))
+    quantizer = Decimal("1").scaleb(-price_decimal_places)
+    qs = (
+        PurchaseDocumentLine.objects
+        .filter(
+            purchase_document__company_id=company_id,
+            purchase_document__document_status=PurchaseDocumentStatus.REGISTERED,
+            product__isnull=False,
+        )
+        .select_related("purchase_document__supplier", "product")
+        .only(
+            "id", "position", "product_id", "unit_price", "tax_type", "igv_rate",
+            "conversion_factor", "purchase_document_id", "product__id", "product__sku",
+            "product__name", "purchase_document__id", "purchase_document__issue_date",
+            "purchase_document__created_at", "purchase_document__currency",
+            "purchase_document__exchange_rate", "purchase_document__supplier_id",
+            "purchase_document__series", "purchase_document__number",
+            "purchase_document__supplier__id", "purchase_document__supplier__name",
+        )
+        .order_by(
+            "purchase_document__issue_date",
+            "purchase_document__created_at",
+            "position",
+            "pk",
+        )
+    )
+    if store_id:
+        qs = qs.filter(purchase_document__store_id=store_id)
+    if product_id:
+        qs = qs.filter(product_id=product_id)
+    if supplier_id:
+        qs = qs.filter(purchase_document__supplier_id=supplier_id)
+    if date_to:
+        qs = qs.filter(purchase_document__issue_date__lte=date_to)
+
+    previous_by_group = {}
+    groups = {}
+    for line in qs.iterator(chunk_size=2000):
+        document = line.purchase_document
+        key = (line.product_id, document.supplier_id)
+        currency_factor = document.exchange_rate if document.currency != "PEN" else Decimal("1")
+        base_price = line.price_unit * currency_factor / line.conversion_factor
+        comparable_price = base_price.quantize(quantizer)
+        previous_price = previous_by_group.get(key)
+        changed = previous_price is None or comparable_price != previous_price
+        previous_by_group[key] = comparable_price
+
+        if not changed or (date_from and document.issue_date < date_from):
+            continue
+
+        group = groups.setdefault(key, {
+            "product": line.product,
+            "supplier": document.supplier,
+            "events": deque(maxlen=price_count),
+        })
+        variance = comparable_price - previous_price if previous_price is not None else None
+        variance_percent = (
+            variance * Decimal("100") / previous_price
+            if variance is not None and previous_price else None
+        )
+        group["events"].append({
+            "document": document,
+            "price": comparable_price,
+            "previous_price": previous_price,
+            "variance": variance,
+            "variance_percent": variance_percent,
+        })
+
+    rows = []
+    for key, group in groups.items():
+        prices = list(reversed(group["events"]))
+        latest = prices[0]
+        prices.extend([None] * (price_count - len(prices)))
+        rows.append({
+            "product": group["product"],
+            "supplier": group["supplier"],
+            "prices": prices,
+            "latest_variance": latest["variance"],
+            "latest_variance_percent": latest["variance_percent"],
+        })
+
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["product"].sku.casefold(),
+            row["product"].name.casefold(),
+            row["supplier"].name.casefold(),
+        ),
+    )
 
 
 def get_purchase_analytics(company_id, store_id, *, date_from=None, date_to=None, supplier_id=None):

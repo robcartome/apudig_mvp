@@ -35,6 +35,7 @@ class PurchaseDocumentViewTest(TestCase):
     def payload(self):
         return {
             "supplier": str(self.supplier.pk), "document_type": str(self.document_type.pk), "series": "F001", "number": "99", "issue_date": date(2026, 9, 1).isoformat(), "currency": "PEN", "exchange_rate": "1",
+            "update_purchase_prices": "on",
             "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "1000",
             "lines-0-product": str(self.product.pk), "lines-0-description": "Producto facturado", "lines-0-unit": str(self.unit.pk), "lines-0-quantity": "2", "lines-0-unit_price": "10", "lines-0-discount_amount": "0", "lines-0-tax_type": "10", "lines-0-igv_rate": "18", "lines-0-update_purchase_price": "on",
         }
@@ -211,6 +212,35 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertContains(response, 'class="form-control form-control-sm text-end value-unit-display"', html=False)
         self.assertEqual(response.context["formset"].forms[0].fields["igv_rate"].initial, Decimal("15.50"))
 
+    def test_purchase_form_updates_purchase_prices_by_default(self):
+        response = self.client.get(reverse("purchases:document_create"))
+
+        self.assertContains(response, 'id="id_update_purchase_prices"', html=False)
+        self.assertContains(response, "Actualizar precios de compra al registrar")
+        self.assertTrue(response.context["form"]["update_purchase_prices"].value())
+
+    def test_purchase_form_can_disable_purchase_price_update_for_all_lines(self):
+        payload = self.payload()
+        payload.pop("update_purchase_prices")
+
+        response = self.client.post(reverse("purchases:document_create"), payload)
+
+        self.assertRedirects(
+            response,
+            reverse("purchases:document_list"),
+            fetch_redirect_response=False,
+        )
+        document = PurchaseDocument.objects.get()
+        self.assertFalse(document.lines.get().update_purchase_price)
+        edit_response = self.client.get(
+            reverse("purchases:document_edit", args=[document.pk])
+        )
+        self.assertFalse(edit_response.context["form"]["update_purchase_prices"].value())
+
+        self.client.post(reverse("purchases:document_register", args=[document.pk]))
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.price_purchase, Decimal("0"))
+
     def test_purchase_value_unit_editability_uses_company_setting(self):
         settings, _ = CompanyOperationalSettings.objects.update_or_create(
             company=self.company,
@@ -265,10 +295,13 @@ class PurchaseDocumentViewTest(TestCase):
     def test_price_history_view_is_available(self):
         response = self.client.get(reverse("purchases:price_history"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Historico de precios de compra")
+        self.assertContains(response, "Histórico de precios de compra")
         self.assertContains(response, 'id="price-history-product"', html=False)
         self.assertContains(response, "Exportar Excel")
         self.assertContains(response, "Exportar PDF")
+        self.assertContains(response, "precios unitarios con IGV")
+        self.assertContains(response, "No se aplican descuentos globales")
+        self.assertContains(response, "Último precio")
 
     def test_price_history_uses_configured_price_decimals(self):
         CompanyOperationalSettings.objects.update_or_create(
@@ -282,7 +315,7 @@ class PurchaseDocumentViewTest(TestCase):
         response = self.client.get(reverse("purchases:price_history"))
 
         self.assertEqual(response.context["price_decimal_places"], 3)
-        self.assertContains(response, "PEN 10.000")
+        self.assertContains(response, "PEN 11,800")
 
     def test_price_history_exports_xlsx_and_print_view(self):
         excel_response = self.client.get(

@@ -22,6 +22,13 @@ _quantity = {
 
 
 class PurchaseDocumentForm(forms.ModelForm):
+    update_purchase_prices = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Actualizar precios de compra al registrar",
+        help_text="Actualiza el precio de compra del producto y del proveedor con el precio unitario del comprobante.",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
     global_discount_amount = forms.DecimalField(
         min_value=Decimal("0"), max_digits=14, decimal_places=2,
         required=False, initial=Decimal("0"),
@@ -99,6 +106,14 @@ class PurchaseDocumentForm(forms.ModelForm):
             status=MovementStatus.CONFIRMED,
         ).select_related("supplier", "warehouse").order_by("-date")
         if self.instance.pk:
+            if not self.is_bound:
+                self.initial.setdefault(
+                    "update_purchase_prices",
+                    not self.instance.lines.filter(
+                        product__isnull=False,
+                        update_purchase_price=False,
+                    ).exists(),
+                )
             linked_ids = self.instance.lines.filter(
                 receipt_matches__isnull=False
             ).values_list("receipt_matches__movement_detail__movement_id", flat=True)

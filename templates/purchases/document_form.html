@@ -117,10 +117,16 @@
                     {{ form.warehouse }}
                 </div>
                 <div class="col-md-6 col-xl-3">
+                    <div class="form-check mt-4">{{ form.update_purchase_prices }}<label class="form-check-label"
+                            for="{{ form.update_purchase_prices.id_for_label }}">Actualizar precios de compra al registrar</label>
+                        <div class="form-hint small">Usará el precio unitario del comprobante para actualizar el producto y su relación con el proveedor.</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl-3">
                     <div class="form-check mt-4">{{ form.register_inventory_movement }}<label class="form-check-label"
                             for="{{ form.register_inventory_movement.id_for_label }}">Registrar recepcion de
                             inventario ahora</label>
-                        <div class="form-hint">Márcalo solo si la mercadería llega junto con la factura.</div>
+                        <div class="form-hint small">Márcalo solo si la mercadería llega junto con la factura.</div>
                     </div>
                 </div>
             </div>

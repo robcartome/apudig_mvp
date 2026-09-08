@@ -22,7 +22,7 @@ from apps.inventory.selectors import get_movement_traceability_report
 from apps.inventory.services import confirm_movement, register_entry
 from apps.partners.models import DocumentType, Supplier
 from apps.purchases.models import PurchaseCategory, PurchaseDeliveryStatus, PurchaseDocumentStatus
-from apps.purchases.selectors import get_purchase_price_history
+from apps.purchases.selectors import get_purchase_price_comparison, get_purchase_price_history
 from apps.purchases.services import (
     cancel_purchase_document,
     create_purchase_document_draft,
@@ -263,3 +263,56 @@ class PurchaseDocumentServiceTest(TestCase):
         self.assertEqual(rows[0]["previous_price"], Decimal("11.8"))
         self.assertEqual(rows[0]["variance"], Decimal("2.36"))
         self.assertEqual(rows[0]["variance_percent"], Decimal("20"))
+
+    def test_price_comparison_keeps_only_changes_and_ignores_global_discount(self):
+        first = self.create(lines=[self.line(unit_price=Decimal("10"))])
+        register_purchase_document(first.pk, company_id=self.company.pk)
+        repeated = self.create(
+            number="11",
+            global_discount_amount=Decimal("5"),
+            lines=[self.line(unit_price=Decimal("10"))],
+        )
+        register_purchase_document(repeated.pk, company_id=self.company.pk)
+        changed = self.create(number="12", lines=[self.line(unit_price=Decimal("12"))])
+        register_purchase_document(changed.pk, company_id=self.company.pk)
+
+        rows = get_purchase_price_comparison(
+            self.company.pk,
+            self.store.pk,
+            price_decimal_places=2,
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["product"], self.product)
+        self.assertEqual(rows[0]["supplier"], self.supplier)
+        self.assertEqual(
+            [event["price"] if event else None for event in rows[0]["prices"]],
+            [Decimal("14.16"), Decimal("11.80"), None, None, None],
+        )
+        self.assertEqual(rows[0]["latest_variance"], Decimal("2.36"))
+        self.assertEqual(rows[0]["latest_variance_percent"], Decimal("20"))
+
+    def test_price_comparison_uses_price_before_date_range_as_baseline(self):
+        first = self.create(
+            issue_date=date(2026, 8, 31),
+            lines=[self.line(unit_price=Decimal("10"))],
+        )
+        register_purchase_document(first.pk, company_id=self.company.pk)
+        changed = self.create(
+            number="11",
+            issue_date=date(2026, 9, 1),
+            lines=[self.line(unit_price=Decimal("12"))],
+        )
+        register_purchase_document(changed.pk, company_id=self.company.pk)
+
+        rows = get_purchase_price_comparison(
+            self.company.pk,
+            self.store.pk,
+            date_from=date(2026, 9, 1),
+            price_decimal_places=2,
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["prices"][0]["price"], Decimal("14.16"))
+        self.assertEqual(rows[0]["prices"][0]["previous_price"], Decimal("11.80"))
+        self.assertEqual(rows[0]["latest_variance"], Decimal("2.36"))
