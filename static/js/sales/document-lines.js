@@ -67,6 +67,7 @@
     unitId: 'qc-unit',
     saveButtonId: 'qc-btn-save',
     priceDecimals: PRICE_DECIMALS,
+    priceMode: 'sale',
   });
 
   // ── Flatpickr date pickers (no usado — se usa datetime-local nativo) ──────────────────
@@ -137,7 +138,7 @@
   }
 
   // ── Per-row calculation ────────────────────────────────────────────────────
-  function calcRow(row) {
+  function calcRow(row, preserveValueDisplay = false) {
     const priceIncInput = row.querySelector('input.price-unit-input');
     const unitPriceHidden = row.querySelector('input[name*="-unit_price"]');
     const qtyInput  = row.querySelector('input[name*="-quantity"]');
@@ -150,7 +151,7 @@
     const taxType  = taxSel?.value || '10';
     const igvRate  = parseFloat(igvHidden?.value) || IGV_RATE;
     const discount = parseFloat(discHidden?.value) || 0;
-    const mult     = 1 + igvRate / 100;
+    const mult     = TAXED.has(taxType) ? 1 + igvRate / 100 : 1;
 
     // ex-tax unit price (what backend stores as unit_price)
     const unitPriceEx = priceInc / mult;
@@ -171,19 +172,25 @@
 
     // Actualizar Valor Unit. (precio ex-IGV)
     const valorCell = row.querySelector('.valor-unit-display');
-    if (valorCell) valorCell.value = fmt(unitPriceEx);
+    if (valorCell && !preserveValueDisplay) valorCell.value = fmt(unitPriceEx);
 
-    return { subtotal, igvAmt, lineTotal, discount, taxType };
+    return { subtotal, igvAmt, lineTotal, discount, taxType, igvRate };
   }
 
   // ── Grand totals ───────────────────────────────────────────────────────────
-  function updateSummary() {
+  function updateSummary(preserveValueRow = null) {
     let sumSub = 0, sumDisc = 0, sumBase = 0, sumExempt = 0;
     let sumUnaffected = 0, sumExport = 0, sumFree = 0, sumIgv = 0, sumTotal = 0;
+    const calculatedRows = [];
 
     linesBody.querySelectorAll('.line-row').forEach(row => {
       if (row.style.opacity === '0.3') return;          // deleted rows
-      const { subtotal, igvAmt, lineTotal, discount, taxType } = calcRow(row);
+      const calculated = calcRow(
+        row,
+        row === preserveValueRow,
+      );
+      const { subtotal, igvAmt, lineTotal, discount, taxType } = calculated;
+      calculatedRows.push(calculated);
       sumSub   += subtotal;
       sumDisc  += discount;
       if (taxType === '10') sumBase += subtotal;
@@ -197,9 +204,37 @@
       }
     });
 
+    const globalDiscountInput = document.getElementById('id_global_discount_amount');
+    const beforeTaxInput = document.getElementById('id_global_discount_before_tax');
+    const globalDiscount = Math.max(parseFloat(globalDiscountInput?.value) || 0, 0);
+    if (beforeTaxInput?.checked && globalDiscount > 0) {
+      const eligibleBase = calculatedRows.reduce(
+        (total, line) => total + (line.taxType === '11' ? 0 : line.subtotal),
+        0,
+      );
+      if (eligibleBase > 0) {
+        const appliedDiscount = Math.min(globalDiscount, eligibleBase);
+        calculatedRows.forEach(line => {
+          if (line.taxType === '11' || line.subtotal <= 0) return;
+          const discountPart = appliedDiscount * line.subtotal / eligibleBase;
+          if (line.taxType === '10') {
+            sumBase -= discountPart;
+            sumIgv -= discountPart * line.igvRate / 100;
+          } else if (line.taxType === '20') sumExempt -= discountPart;
+          else if (line.taxType === '30') sumUnaffected -= discountPart;
+          else if (line.taxType === '40') sumExport -= discountPart;
+        });
+        sumSub -= appliedDiscount;
+        sumTotal = sumBase + sumExempt + sumUnaffected + sumExport + sumIgv;
+      }
+    } else {
+      sumTotal = Math.max(sumTotal - globalDiscount, 0);
+    }
+
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
     set('summary-subtotal', sumSub);
-    set('summary-discount', sumDisc);
+    set('summary-line-discount', sumDisc);
+    set('summary-discount', sumDisc + globalDiscount);
     set('summary-base',     sumBase);
     set('summary-exempt',   sumExempt);
     set('summary-unaffected', sumUnaffected);
@@ -376,7 +411,7 @@
       const factor = TAXED.has(taxType) ? 1 + rate / 100 : 1;
       const priceInput = row?.querySelector('input.price-unit-input');
       if (priceInput) priceInput.value = ((parseFloat(event.target.value) || 0) * factor).toFixed(PRICE_DECIMALS);
-      updateSummary();
+      updateSummary(row);
     } else if (event.target.matches('input.price-unit-input, input[name*="-quantity"]')) {
       const row = event.target.closest('.line-row');
       if (row) {
@@ -408,6 +443,8 @@
       if (row) { calcRow(row); updateSummary(); }
     }
   });
+  document.getElementById('id_global_discount_amount')?.addEventListener('input', updateSummary);
+  document.getElementById('id_global_discount_before_tax')?.addEventListener('change', updateSummary);
 
   // ── Add / Remove lines ─────────────────────────────────────────────────────
   document.getElementById('add-line').addEventListener('click', () => {

@@ -22,6 +22,14 @@ _quantity = {
 
 
 class PurchaseDocumentForm(forms.ModelForm):
+    global_discount_amount = forms.DecimalField(
+        min_value=Decimal("0"), max_digits=14, decimal_places=2,
+        required=False, initial=Decimal("0"),
+        widget=forms.NumberInput(attrs={
+            "class": "form-control form-control-sm text-end",
+            "min": "0", "step": "0.01",
+        }),
+    )
     receipt_movements = forms.ModelMultipleChoiceField(
         queryset=Movement.objects.none(),
         required=False,
@@ -34,7 +42,7 @@ class PurchaseDocumentForm(forms.ModelForm):
         fields = (
             "supplier", "purchase_order", "document_type", "series", "number", "payment_method", "issue_date", "due_date",
             "currency", "exchange_rate", "register_inventory_movement", "warehouse",
-            "notes", "internal_reference",
+            "global_discount_amount", "global_discount_before_tax", "notes", "internal_reference",
         )
         widgets = {
             "supplier": forms.HiddenInput(),
@@ -51,6 +59,8 @@ class PurchaseDocumentForm(forms.ModelForm):
             "exchange_rate": forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0.000001"}),
             "register_inventory_movement": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "warehouse": forms.Select(attrs=_select),
+            "global_discount_amount": forms.NumberInput(attrs={**_text, "min": "0", "step": "0.01"}),
+            "global_discount_before_tax": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "notes": forms.Textarea(attrs={**_text, "rows": 3}),
             "internal_reference": forms.TextInput(attrs=_text),
         }
@@ -59,6 +69,7 @@ class PurchaseDocumentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["issue_date"].input_formats = ["%Y-%m-%d"]
         self.fields["due_date"].input_formats = ["%Y-%m-%d"]
+        self.fields["global_discount_amount"].required = False
         if company_id and not self.instance.company_id:
             self.instance.company_id = company_id
         # ModelForm ejecuta PurchaseDocument.clean() durante is_valid(). La
@@ -105,6 +116,9 @@ class PurchaseDocumentForm(forms.ModelForm):
     def clean_number(self):
         return (self.cleaned_data.get("number") or "").strip()
 
+    def clean_global_discount_amount(self):
+        return self.cleaned_data.get("global_discount_amount") or Decimal("0")
+
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("currency") == "PEN":
@@ -150,7 +164,7 @@ class PurchaseDocumentLineForm(forms.Form):
     description = forms.CharField(max_length=500, required=False, widget=forms.HiddenInput())
     unit = forms.ModelChoiceField(queryset=Unit.objects.all().order_by("code"), required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(min_value=Decimal("0.0001"), max_digits=14, decimal_places=4, widget=forms.TextInput(attrs=_quantity))
-    unit_price = forms.DecimalField(min_value=0, max_digits=14, decimal_places=6, widget=forms.NumberInput(attrs={"class": "form-control form-control-sm text-end value-unit-input", "step": "0.000001", "inputmode": "decimal", "placeholder": "0.00"}))
+    unit_price = forms.DecimalField(min_value=0, max_digits=14, decimal_places=6, widget=forms.HiddenInput())
     discount_amount = forms.DecimalField(min_value=0, max_digits=14, decimal_places=2, required=False, initial=0, widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}))
     tax_type = forms.ChoiceField(choices=PurchaseTaxType.choices, initial=PurchaseTaxType.TAXED, widget=forms.Select(attrs={"class": "form-select form-select-sm"}))
     igv_rate = forms.DecimalField(min_value=0, max_digits=5, decimal_places=2, required=False, initial=18, widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}))

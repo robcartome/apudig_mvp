@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -149,6 +150,13 @@ class SaleLineBase(models.Model):
 
     class Meta:
         abstract = True
+
+    @property
+    def price_unit(self):
+        """Precio comercial unitario, incluido IGV para líneas gravadas."""
+        if self.tax_type != "10":
+            return self.unit_price
+        return self.unit_price * (Decimal("1") + self.igv_rate / Decimal("100"))
 
 
 # ── Cotizaciones ──────────────────────────────────────────────────────────────
@@ -346,6 +354,8 @@ class SalesDocument(TimeStampedModel):
     other_charges = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     igv_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    global_discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    global_discount_before_tax = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     reference_document = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="credit_notes"
@@ -401,7 +411,11 @@ class SalesDocument(TimeStampedModel):
                 fields=("series", "number"),
                 condition=~models.Q(number=""),
                 name="uniq_issued_sales_document_number",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(global_discount_amount__gte=0),
+                name="sales_document_global_discount_gte_zero",
+            ),
         ]
 
     def __str__(self) -> str:

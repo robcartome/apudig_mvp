@@ -454,6 +454,14 @@ class SalesDocumentHeaderForm(forms.ModelForm):
 
     number = forms.CharField(required=False, max_length=8)
     manual_number = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    global_discount_amount = forms.DecimalField(
+        min_value=Decimal("0"), max_digits=14, decimal_places=2,
+        required=False, initial=Decimal("0"),
+        widget=forms.NumberInput(attrs={
+            "class": "form-control form-control-sm text-end",
+            "min": "0", "step": "0.01",
+        }),
+    )
 
     def __init__(self, *args, company_id=None, store_id=None, document_type=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -534,6 +542,9 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         if self.instance.pk and self.instance.number and not self.is_bound:
             self.initial["manual_number"] = True
 
+    def clean_global_discount_amount(self):
+        return self.cleaned_data.get("global_discount_amount") or Decimal("0")
+
     def clean(self):
         cleaned_data = super().clean()
         store = cleaned_data.get("store")
@@ -580,6 +591,8 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             "price_list",
             "register_inventory_movement",
             "warehouse",
+            "global_discount_amount",
+            "global_discount_before_tax",
             "notes",
             "internal_reference",
         )
@@ -589,6 +602,10 @@ class SalesDocumentHeaderForm(forms.ModelForm):
                 attrs=_select,
             ),
             "register_inventory_movement": forms.CheckboxInput(attrs=_check),
+            "global_discount_amount": forms.NumberInput(
+                attrs={**_text, "min": "0", "step": "0.01"}
+            ),
+            "global_discount_before_tax": forms.CheckboxInput(attrs=_check),
         }
 
 

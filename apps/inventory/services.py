@@ -66,11 +66,7 @@ def register_entry(
     created_by=None,
     **kwargs,
 ) -> Movement:
-    """
-    Registra una entrada de mercadería y actualiza el stock.
-
-    lines: lista de dict con claves 'product_id', 'quantity', 'unit_price'.
-    """
+    """Guarda una entrada en borrador sin modificar existencias."""
     movement = Movement.objects.create(
         type=MovementType.ENTRY,
         status=MovementStatus.DRAFT,
@@ -80,9 +76,8 @@ def register_entry(
         created_by=created_by,
         **kwargs,
     )
-    _create_details_and_update_stock(movement, lines, delta=+1)
+    _create_movement_details(movement, lines)
     _log_movement_audit(movement, MovementAuditLog.ActionType.CREATE, created_by, after_data=_movement_snapshot(movement))
-    _close_related_confirmed_movements(movement, changed_by=created_by)
     return movement
 
 
@@ -95,7 +90,7 @@ def register_exit(
     created_by=None,
     **kwargs,
 ) -> Movement:
-    """Registra una salida de mercadería y descuenta stock."""
+    """Guarda una salida en borrador sin modificar existencias."""
     movement = Movement.objects.create(
         type=MovementType.EXIT,
         status=MovementStatus.DRAFT,
@@ -105,9 +100,8 @@ def register_exit(
         created_by=created_by,
         **kwargs,
     )
-    _create_details_and_update_stock(movement, lines, delta=-1)
+    _create_movement_details(movement, lines)
     _log_movement_audit(movement, MovementAuditLog.ActionType.CREATE, created_by, after_data=_movement_snapshot(movement))
-    _close_related_confirmed_movements(movement, changed_by=created_by)
     return movement
 
 
@@ -121,7 +115,7 @@ def register_transfer(
     created_by=None,
     **kwargs,
 ) -> Movement:
-    """Transfiere mercadería entre almacenes dentro de la misma sucursal."""
+    """Guarda una transferencia en borrador sin modificar existencias."""
     movement = Movement.objects.create(
         type=MovementType.TRANSFER,
         status=MovementStatus.DRAFT,
@@ -132,12 +126,8 @@ def register_transfer(
         created_by=created_by,
         **kwargs,
     )
-    normalized_lines = _create_details_and_update_stock(
-        movement, lines, delta=-1, warehouse_id=warehouse_origin_id
-    )
-    _update_stock_bulk(normalized_lines, warehouse_id=warehouse_dest_id, delta=+1)
+    _create_movement_details(movement, lines)
     _log_movement_audit(movement, MovementAuditLog.ActionType.CREATE, created_by, after_data=_movement_snapshot(movement))
-    _close_related_confirmed_movements(movement, changed_by=created_by)
     return movement
 
 
@@ -150,7 +140,7 @@ def register_adjustment(
     created_by=None,
     **kwargs,
 ) -> Movement:
-    """Registra un ajuste por conteo físico y sincroniza stock al valor contado."""
+    """Guarda un conteo físico en borrador sin modificar existencias."""
     movement = Movement.objects.create(
         type=MovementType.ADJUSTMENT,
         status=MovementStatus.DRAFT,
@@ -160,9 +150,8 @@ def register_adjustment(
         created_by=created_by,
         **kwargs,
     )
-    _create_adjustment_details_and_update_stock(movement, lines)
+    _create_adjustment_details(movement, lines)
     _log_movement_audit(movement, MovementAuditLog.ActionType.CREATE, created_by, after_data=_movement_snapshot(movement))
-    _close_related_confirmed_movements(movement, changed_by=created_by)
     return movement
 
 
@@ -170,13 +159,19 @@ def register_adjustment(
 def confirm_movement(movement: Movement, confirmed_by=None) -> Movement:
     movement = Movement.objects.select_for_update().get(pk=movement.pk)
 
-    if movement.status == MovementStatus.CLOSED:
-        raise ValueError("El movimiento ya está cerrado.")
-
     if movement.status == MovementStatus.CONFIRMED:
         return movement
+    if movement.status == MovementStatus.REVERSED:
+        raise ValueError("El movimiento ya fue revertido.")
+    if _lock_mode_enabled(movement) and _has_posterior_related_movements(movement):
+        raise ValueError(
+            "No se puede aplicar el movimiento con esta fecha porque existen operaciones "
+            "aplicadas posteriores para el mismo producto y almacén."
+        )
 
     before = _movement_snapshot(movement)
+
+    _apply_existing_movement_stock(movement)
 
     movement.status = MovementStatus.CONFIRMED
     movement.confirmed_at = timezone.now()
@@ -189,32 +184,31 @@ def confirm_movement(movement: Movement, confirmed_by=None) -> Movement:
         confirmed_by,
         before_data=before,
         after_data=_movement_snapshot(movement),
-        message="Movimiento confirmado",
+        message="Movimiento aplicado al stock",
     )
 
-    _close_if_posterior_exists(movement, changed_by=confirmed_by)
+    if movement.reversal_of_id:
+        _mark_original_reversed(movement, changed_by=confirmed_by)
     return movement
 
 
 @transaction.atomic
 def update_movement(movement: Movement, *, lines: list[dict], updated_by=None, **kwargs) -> Movement:
-    """
-    Actualiza un movimiento existente recalculando su impacto en stock.
-
-    El flujo es: revertir stock anterior -> actualizar cabecera y líneas -> aplicar stock nuevo.
-    """
+    """Actualiza un borrador, que todavía no tiene impacto en stock."""
     movement = Movement.objects.select_for_update().get(pk=movement.pk)
     _ensure_movement_mutable(movement)
     before = _movement_snapshot(movement)
 
-    _reverse_movement_stock(movement)
     movement.details.all().delete()
 
     for field, value in kwargs.items():
         setattr(movement, field, value)
     movement.save()
 
-    _apply_movement_stock(movement, lines)
+    if movement.type == MovementType.ADJUSTMENT:
+        _create_adjustment_details(movement, lines)
+    else:
+        _create_movement_details(movement, lines)
     _log_movement_audit(
         movement,
         MovementAuditLog.ActionType.UPDATE,
@@ -223,18 +217,15 @@ def update_movement(movement: Movement, *, lines: list[dict], updated_by=None, *
         after_data=_movement_snapshot(movement),
         message="Actualización en borrador",
     )
-    _close_if_posterior_exists(movement, changed_by=updated_by)
-    _close_related_confirmed_movements(movement, changed_by=updated_by)
     return movement
 
 
 @transaction.atomic
 def delete_movement(movement: Movement, *, deleted_by=None) -> None:
-    """Elimina un movimiento revirtiendo primero su impacto de stock."""
+    """Elimina un borrador; nunca revierte stock porque aún no fue aplicado."""
     movement = Movement.objects.select_for_update().get(pk=movement.pk)
     _ensure_movement_mutable(movement)
     before = _movement_snapshot(movement)
-    _reverse_movement_stock(movement)
     _log_movement_audit(
         movement,
         MovementAuditLog.ActionType.DELETE,
@@ -248,11 +239,8 @@ def delete_movement(movement: Movement, *, deleted_by=None) -> None:
 
 # ── Helpers internos ───────────────────────────────────────────────────────────
 
-def _create_details_and_update_stock(
-    movement: Movement, lines: list[dict], delta: int, warehouse_id: str | None = None
-) -> list[dict]:
+def _create_movement_details(movement: Movement, lines: list[dict]) -> list[dict]:
     lines = _normalize_uom_lines(lines)
-    wh_id = warehouse_id or movement.warehouse_id
     for line in lines:
         MovementDetail.objects.create(
             movement=movement,
@@ -263,24 +251,24 @@ def _create_details_and_update_stock(
             unit_price=line.get("unit_price", Decimal("0")),
             location_id=line.get("location_id") or None,
         )
-    _update_stock_bulk(lines, warehouse_id=wh_id, delta=delta)
     return lines
 
 
-def _create_adjustment_details_and_update_stock(movement: Movement, lines: list[dict]) -> None:
+def _create_adjustment_details(movement: Movement, lines: list[dict]) -> None:
     if not movement.warehouse_id:
         return
 
     lines = _normalize_uom_lines(lines)
     for line in lines:
-        stock, _ = StockByWarehouse.objects.select_for_update().get_or_create(
-            product_id=line["product_id"],
-            warehouse_id=movement.warehouse_id,
-            defaults={"quantity": Decimal("0")},
+        system_qty = (
+            StockByWarehouse.objects
+            .filter(product_id=line["product_id"], warehouse_id=movement.warehouse_id)
+            .values_list("quantity", flat=True)
+            .first()
+            or Decimal("0")
         )
-
         physical_qty = line["stock_quantity"]
-        difference = physical_qty - Decimal(str(stock.quantity))
+        difference = physical_qty - Decimal(str(system_qty))
 
         MovementDetail.objects.create(
             movement=movement,
@@ -293,9 +281,6 @@ def _create_adjustment_details_and_update_stock(movement: Movement, lines: list[
             location_id=line.get("location_id") or None,
         )
 
-        stock.quantity = physical_qty
-        stock.save(update_fields=["quantity"])
-
 
 def _movement_lines(movement: Movement) -> list[dict]:
     return [
@@ -305,31 +290,34 @@ def _movement_lines(movement: Movement) -> list[dict]:
             "unit_id": d.unit_id,
             "stock_quantity": d.stock_quantity,
             "unit_price": d.unit_price,
+            "product_name": d.product.name,
         }
-        for d in movement.details.all()
+        for d in movement.details.select_related("product")
     ]
 
 
-def _reverse_movement_stock(movement: Movement) -> None:
+def _apply_existing_movement_stock(movement: Movement) -> None:
     lines = _movement_lines(movement)
     if not lines:
-        return
+        raise ValueError("El movimiento debe tener al menos un producto.")
 
     if movement.type == MovementType.ENTRY:
-        if movement.warehouse_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=-1)
-        return
-
-    if movement.type == MovementType.EXIT:
         if movement.warehouse_id:
             _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=+1)
         return
 
+    if movement.type == MovementType.EXIT:
+        if movement.warehouse_id:
+            _validate_available_stock(lines, movement.warehouse_id)
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=-1)
+        return
+
     if movement.type == MovementType.TRANSFER:
         if movement.warehouse_origin_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_origin_id, delta=+1)
+            _validate_available_stock(lines, movement.warehouse_origin_id)
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_origin_id, delta=-1)
         if movement.warehouse_dest_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_dest_id, delta=-1)
+            _update_stock_bulk(lines, warehouse_id=movement.warehouse_dest_id, delta=+1)
         return
 
     if movement.type == MovementType.ADJUSTMENT:
@@ -342,143 +330,60 @@ def _reverse_movement_stock(movement: Movement) -> None:
                 defaults={"quantity": Decimal("0")},
             )
             physical_qty = Decimal(str(detail.physical_quantity or 0))
-            difference = Decimal(str(detail.quantity or 0))
-            previous_system_qty = physical_qty - difference
-            stock.quantity = previous_system_qty
+            difference = physical_qty - Decimal(str(stock.quantity))
+            detail.quantity = difference
+            detail.stock_quantity = difference
+            detail.save(update_fields=["quantity", "stock_quantity"])
+            stock.quantity = physical_qty
             stock.save(update_fields=["quantity"])
         return
 
 
-def _apply_movement_stock(movement: Movement, lines: list[dict]) -> None:
-    if movement.type == MovementType.ADJUSTMENT:
-        _create_adjustment_details_and_update_stock(movement, lines)
+def _validate_available_stock(lines: list[dict], warehouse_id) -> None:
+    warehouse = Warehouse.objects.get(pk=warehouse_id)
+    if warehouse.allow_negative_stock:
         return
 
-    lines = _normalize_uom_lines(lines)
     for line in lines:
-        MovementDetail.objects.create(
-            movement=movement,
+        stock, _ = StockByWarehouse.objects.select_for_update().get_or_create(
             product_id=line["product_id"],
-            quantity=line["quantity"],
-            unit_id=line["unit_id"], unit_code=line["unit_code"],
-            conversion_factor=line["conversion_factor"], stock_quantity=line["stock_quantity"],
-            unit_price=line.get("unit_price", Decimal("0")),
-            location_id=line.get("location_id") or None,
+            warehouse_id=warehouse_id,
+            defaults={"quantity": Decimal("0")},
         )
-
-    if movement.type == MovementType.ENTRY:
-        if movement.warehouse_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=+1)
-        return
-
-    if movement.type == MovementType.EXIT:
-        if movement.warehouse_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_id, delta=-1)
-        return
-
-    if movement.type == MovementType.TRANSFER:
-        if movement.warehouse_origin_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_origin_id, delta=-1)
-        if movement.warehouse_dest_id:
-            _update_stock_bulk(lines, warehouse_id=movement.warehouse_dest_id, delta=+1)
-        return
+        required = Decimal(str(line["stock_quantity"]))
+        if stock.quantity < required:
+            raise ValueError(
+                f"Stock insuficiente para {line['product_name']}. "
+                f"Disponible: {stock.quantity}; requerido: {required}."
+            )
 
 
 def _ensure_movement_mutable(movement: Movement) -> None:
-    """Regla ERP: solo se modifica en BORRADOR y sin bloqueo posterior activo."""
-    if movement.status in (MovementStatus.CONFIRMED, MovementStatus.CLOSED):
+    """Only drafts are mutable; applied movements require a correction."""
+    if movement.status != MovementStatus.DRAFT:
         raise ValueError(
             "El movimiento no está en borrador. Registre un nuevo movimiento correctivo para ajustar trazabilidad."
         )
 
-    if _lock_mode_enabled(movement) and _has_posterior_related_movements(movement):
-        _close_if_posterior_exists(movement)
-        raise ValueError(
-            "El movimiento ya tiene operaciones posteriores relacionadas y quedó cerrado. "
-            "Use un nuevo ajuste/movimiento correctivo en lugar de editar o eliminar."
-        )
 
-
-def _close_if_posterior_exists(movement: Movement, changed_by=None) -> None:
-    if movement.status == MovementStatus.CLOSED:
+def _mark_original_reversed(reversal: Movement, changed_by=None) -> None:
+    original = Movement.objects.select_for_update().get(pk=reversal.reversal_of_id)
+    if original.status == MovementStatus.REVERSED:
         return
-    if not _lock_mode_enabled(movement):
-        return
-    if not _has_posterior_related_movements(movement):
-        return
+    if original.status != MovementStatus.CONFIRMED:
+        raise ValueError("Solo se puede revertir un movimiento aplicado.")
 
-    before = _movement_snapshot(movement)
-    movement.status = MovementStatus.CLOSED
-    movement.closed_at = timezone.now()
-    movement.closed_by = changed_by
-    movement.save(update_fields=["status", "closed_at", "closed_by", "updated_at"])
-
+    before = _movement_snapshot(original)
+    original.status = MovementStatus.REVERSED
+    original.save(update_fields=["status", "updated_at"])
     _log_movement_audit(
-        movement,
-        MovementAuditLog.ActionType.CLOSE,
+        original,
+        MovementAuditLog.ActionType.REVERSE,
         changed_by,
         before_data=before,
-        after_data=_movement_snapshot(movement),
-        message="Cierre automático por operaciones posteriores relacionadas",
+        after_data=_movement_snapshot(original),
+        message=f"Revertido por {reversal.operation_code}",
     )
-
-
-def _close_related_confirmed_movements(movement: Movement, changed_by=None) -> None:
-    if not _lock_mode_enabled(movement):
-        return
-
-    product_ids = list(movement.details.values_list("product_id", flat=True))
-    if not product_ids:
-        return
-
-    warehouse_ids = {
-        movement.warehouse_id,
-        movement.warehouse_origin_id,
-        movement.warehouse_dest_id,
-    }
-    warehouse_ids.discard(None)
-    if not warehouse_ids:
-        return
-
-    prev_date_q = Q(date__lt=movement.date)
-    if movement.created_at:
-        prev_date_q |= Q(date=movement.date, created_at__lt=movement.created_at)
-
-    candidate_ids = list(
-        Movement.objects
-        .filter(store_id=movement.store_id, status=MovementStatus.CONFIRMED)
-        .exclude(pk=movement.pk)
-        .filter(details__product_id__in=product_ids)
-        .filter(prev_date_q)
-        .filter(
-            Q(warehouse_id__in=warehouse_ids)
-            | Q(warehouse_origin_id__in=warehouse_ids)
-            | Q(warehouse_dest_id__in=warehouse_ids)
-        )
-        .values_list("pk", flat=True)
-        .distinct()
-    )
-
-    candidates = (
-        Movement.objects
-        .select_for_update()
-        .filter(pk__in=candidate_ids)
-    )
-
-    for prev in candidates:
-        before = _movement_snapshot(prev)
-        prev.status = MovementStatus.CLOSED
-        prev.closed_at = timezone.now()
-        prev.closed_by = changed_by
-        prev.save(update_fields=["status", "closed_at", "closed_by", "updated_at"])
-        _log_movement_audit(
-            prev,
-            MovementAuditLog.ActionType.CLOSE,
-            changed_by,
-            before_data=before,
-            after_data=_movement_snapshot(prev),
-            message=f"Cierre automático por movimiento posterior {movement.id}",
-        )
 
 
 def _lock_mode_enabled(movement: Movement) -> bool:
@@ -516,6 +421,7 @@ def _has_posterior_related_movements(movement: Movement) -> bool:
         Movement.objects
         .exclude(pk=movement.pk)
         .filter(store_id=movement.store_id)
+        .filter(status__in=(MovementStatus.CONFIRMED, MovementStatus.REVERSED))
         .filter(details__product_id__in=product_ids)
         .filter(date_q)
         .filter(
@@ -531,6 +437,7 @@ def _has_posterior_related_movements(movement: Movement) -> bool:
 def _movement_snapshot(movement: Movement) -> dict:
     return {
         "id": str(movement.id),
+        "operation_code": movement.operation_code,
         "type": movement.type,
         "status": movement.status,
         "date": movement.date.isoformat() if movement.date else None,

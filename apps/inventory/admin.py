@@ -93,7 +93,8 @@ class MovementDetailInline(admin.TabularInline):
 
 @admin.register(Movement)
 class MovementAdmin(admin.ModelAdmin):
-    list_display = ("type", "date", "store", "warehouse", "number", "created_by")
-    list_filter = ("type", "store", "warehouse")
+    list_display = ("operation_code", "type", "status", "date", "store", "warehouse", "number", "created_by")
+    list_filter = ("type", "status", "store", "warehouse")
     search_fields = ("number", "reason")
+    readonly_fields = ("operation_year", "operation_number")
     inlines = [MovementDetailInline]

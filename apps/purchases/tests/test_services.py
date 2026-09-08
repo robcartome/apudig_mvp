@@ -60,6 +60,28 @@ class PurchaseDocumentServiceTest(TestCase):
         self.assertFalse(document.register_inventory_movement)
         self.assertTrue(AuditLog.objects.filter(entity="PurchaseDocument", action="CREATE").exists())
 
+    def test_global_discount_can_be_applied_after_tax(self):
+        document = self.create(global_discount_amount=Decimal("10"))
+
+        self.assertEqual(document.taxable_amount, Decimal("200.00"))
+        self.assertEqual(document.igv_total, Decimal("36.00"))
+        self.assertEqual(document.total_discount, Decimal("10.00"))
+        self.assertEqual(document.total, Decimal("226.00"))
+
+    def test_global_discount_can_be_applied_before_tax(self):
+        document = self.create(
+            global_discount_amount=Decimal("10"),
+            global_discount_before_tax=True,
+        )
+
+        self.assertEqual(document.taxable_amount, Decimal("190.00"))
+        self.assertEqual(document.igv_total, Decimal("34.20"))
+        self.assertEqual(document.total, Decimal("224.20"))
+
+    def test_global_discount_cannot_exceed_document_total(self):
+        with self.assertRaisesRegex(ValueError, "descuento general"):
+            self.create(global_discount_amount=Decimal("999"))
+
     def test_update_recalculates_and_replaces_lines(self):
         document = self.create()
         update_purchase_document_draft(document.pk, company_id=self.company.pk, store=self.store, supplier=self.supplier, document_type=self.document_type, lines=[self.line(quantity=Decimal("3"), unit_price=Decimal("10"))], series="F001", number="10", issue_date=date(2026, 9, 1))
@@ -193,8 +215,8 @@ class PurchaseDocumentServiceTest(TestCase):
         self.product.refresh_from_db()
         relation.refresh_from_db()
         historical_line.refresh_from_db()
-        self.assertEqual(self.product.price_purchase, Decimal("25.12"))
-        self.assertEqual(relation.purchase_price, Decimal("25.123456"))
+        self.assertEqual(self.product.price_purchase, Decimal("29.65"))
+        self.assertEqual(relation.purchase_price, Decimal("29.645678"))
         self.assertEqual(historical_line.unit_price, Decimal("25.123456"))
 
     def test_line_can_disable_current_price_update(self):
@@ -204,6 +226,14 @@ class PurchaseDocumentServiceTest(TestCase):
         register_purchase_document(document.pk, company_id=self.company.pk)
         self.product.refresh_from_db()
         self.assertEqual(self.product.price_purchase, Decimal("9.00"))
+
+    def test_register_uses_igv_included_unit_price_for_current_product_price(self):
+        document = self.create(lines=[self.line(unit_price=Decimal("8.474576"))])
+
+        register_purchase_document(document.pk, company_id=self.company.pk)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.price_purchase, Decimal("10.00"))
 
     def test_purchase_unit_and_currency_are_converted_to_base_pen_price(self):
         box = Unit.objects.create(code="BCS", name="Caja compras")
@@ -220,7 +250,7 @@ class PurchaseDocumentServiceTest(TestCase):
         )
         register_purchase_document(document.pk, company_id=self.company.pk)
         self.product.refresh_from_db()
-        self.assertEqual(self.product.price_purchase, Decimal("37.50"))
+        self.assertEqual(self.product.price_purchase, Decimal("44.25"))
 
     def test_price_history_compares_with_previous_registered_purchase(self):
         first = self.create(lines=[self.line(unit_price=Decimal("10"))])
@@ -230,6 +260,6 @@ class PurchaseDocumentServiceTest(TestCase):
         rows = get_purchase_price_history(self.company.pk, self.store.pk)
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["document"].pk, second.pk)
-        self.assertEqual(rows[0]["previous_price"], Decimal("10"))
-        self.assertEqual(rows[0]["variance"], Decimal("2"))
+        self.assertEqual(rows[0]["previous_price"], Decimal("11.8"))
+        self.assertEqual(rows[0]["variance"], Decimal("2.36"))
         self.assertEqual(rows[0]["variance_percent"], Decimal("20"))

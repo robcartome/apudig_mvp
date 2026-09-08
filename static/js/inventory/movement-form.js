@@ -36,6 +36,7 @@
     skuId: 'qc-sku',
     unitId: 'qc-unit',
     saveButtonId: 'qc-btn-save',
+    priceMode: movementType === 'EXIT' ? 'sale' : 'purchase',
   });
 
   function setUnitSelect(row, unitId, unitLabel) {

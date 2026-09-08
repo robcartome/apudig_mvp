@@ -36,7 +36,9 @@
         <th>Producto</th>
         <th>Categoría</th>
         <th>UM</th>
-        <th class="text-right">Stock</th>
+        <th class="text-right">Stock real</th>
+        <th class="text-right">Comprometido</th>
+        <th class="text-right">Disponible</th>
         <th class="text-right">Mínimo</th>
         <th class="text-center">Estado</th>
         <th class="text-right">P. Compra</th>
@@ -52,6 +54,8 @@
         <td>{{ row.category }}</td>
         <td>{{ row.unit }}</td>
         <td class="text-right">{{ row.quantity|floatformat:3 }}</td>
+        <td class="text-right">{{ row.committed|floatformat:3 }}</td>
+        <td class="text-right">{{ row.available|floatformat:3 }}</td>
         <td class="text-right">{{ row.min_stock|floatformat:0 }}</td>
         <td class="text-center">
           {% if row.status == "BAJO" %}
@@ -69,6 +73,8 @@
       <tr>
         <td colspan="5" class="text-right">TOTAL:</td>
         <td class="text-right">{{ total_stock|floatformat:2 }}</td>
+        <td class="text-right">{{ total_committed|floatformat:2 }}</td>
+        <td class="text-right">{{ total_available|floatformat:2 }}</td>
         <td colspan="3"></td>
         <td class="text-right">S/ {{ total_valuation|floatformat:2 }}</td>
       </tr>

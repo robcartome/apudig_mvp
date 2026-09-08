@@ -14,7 +14,15 @@
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0">
       <li class="breadcrumb-item"><a href="{% url 'inventory:movement_list' %}">Movimientos</a></li>
+      {% if is_edit %}
+      <li class="breadcrumb-item">{{ movement.get_type_display }}</li>
+      <li class="breadcrumb-item">
+        <a href="{% url 'inventory:movement_detail' movement.pk %}">{{ movement.operation_code }}</a>
+      </li>
+      <li class="breadcrumb-item active">Editar</li>
+      {% else %}
       <li class="breadcrumb-item active">{{ title }}</li>
+      {% endif %}
     </ol>
   </nav>
 </div>
@@ -31,6 +39,11 @@
           {% elif movement_type == "TRANSFER" %}<span class="badge bg-info-lt text-info me-2">Transferencia</span>
           {% else %}<span class="badge bg-yellow-lt me-2">Ajuste</span>{% endif %}
           Cabecera
+          {% if is_edit %}
+          <a href="{% url 'inventory:movement_detail' movement.pk %}"
+             class="badge bg-azure-lt text-azure ms-2"
+             title="Ver detalle del movimiento">{{ movement.operation_code }}</a>
+          {% endif %}
         </h3>
       </div>
       <div class="card-body movement-header">
@@ -146,12 +159,15 @@
         {% if is_edit %}
         <i class="ti ti-edit me-1"></i>Guardar cambios
         {% else %}
-        <i class="ti ti-device-floppy me-1"></i>Registrar movimiento
+        <i class="ti ti-device-floppy me-1"></i>Guardar borrador
         {% endif %}
       </button>
       <a href="{% url cancel_url %}" class="btn btn-outline-secondary">
         <i class="ti ti-x me-1"></i>Cancelar
       </a>
+    </div>
+    <div class="text-muted small mb-3">
+      Guardar no modifica las existencias. El stock se actualizará cuando el borrador sea aplicado desde la lista de movimientos.
     </div>
   </div>
 
@@ -339,9 +355,9 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/components/product-picker.js' %}?v=20260812-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/inventory/movement-form.js' %}?v=20260830-1"></script>
+<script src="{% static 'js/inventory/movement-form.js' %}?v=20260905-1"></script>
 {# All JS logic lives in static/js/** — nothing inline needed here #}
 {% endblock extra_js %}
 

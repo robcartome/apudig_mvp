@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load list_sorting %}
 {% block title %}Stock por almacén — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Stock por almacén</h2>{% endblock %}
 
@@ -15,6 +16,11 @@
     </div>
     <div class="col-auto d-flex gap-2">
       <form method="get" class="d-flex gap-2">
+        {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+        {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+        {% if selected_brand %}<input type="hidden" name="brand" value="{{ selected_brand }}">{% endif %}
+        <input type="hidden" name="sort" value="{{ table_sort.key }}">
+        <input type="hidden" name="dir" value="{{ table_sort.direction }}">
         <select name="warehouse" class="form-select form-select-sm" onchange="this.form.submit()">
           <option value="">Todos los almacenes</option>
           {% for wh in warehouses %}
@@ -32,12 +38,31 @@
 <div class="card mb-3 d-print-none">
   <div class="card-body py-2">
     <form method="get" id="search-form" class="row g-2 align-items-center">
-      <div class="col-md-5">
+      {% if selected_warehouse %}<input type="hidden" name="warehouse" value="{{ selected_warehouse }}">{% endif %}
+      <input type="hidden" name="sort" value="{{ table_sort.key }}">
+      <input type="hidden" name="dir" value="{{ table_sort.direction }}">
+      <div class="col-12 col-lg-5">
         <div class="input-group input-group-sm">
           <span class="input-group-text"><i class="ti ti-search"></i></span>
           <input type="text" name="q" value="{{ q }}" class="form-control"
                  placeholder="Buscar por SKU, nombre, código de barras o código de proveedor..." autofocus>
         </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-2">
+        <select name="category" class="form-select form-select-sm" aria-label="Filtrar por categoría">
+          <option value="">Todas las categorías</option>
+          {% for category in categories %}
+          <option value="{{ category.pk }}"{% if selected_category == category.pk|stringformat:'s' %} selected{% endif %}>{{ category.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-2">
+        <select name="brand" class="form-select form-select-sm" aria-label="Filtrar por marca">
+          <option value="">Todas las marcas</option>
+          {% for brand in brands %}
+          <option value="{{ brand.pk }}"{% if selected_brand == brand.pk|stringformat:'s' %} selected{% endif %}>{{ brand.name }}</option>
+          {% endfor %}
+        </select>
       </div>
       <div class="col-auto">
         <button type="submit" class="btn btn-sm btn-primary">Buscar</button>
@@ -55,18 +80,21 @@
     <table class="table table-vcenter table-hover card-table">
       <thead>
         <tr>
-          <th>Almacén</th>
-          <th>SKU</th>
-          <th>Producto</th>
-          <th>Unidad</th>
-          <th class="text-end">Cantidad</th>
+          {% sortable_header "warehouse" "Almacén" %}
+          {% sortable_header "sku" "SKU" %}
+          {% sortable_header "product" "Producto" %}
+          {% sortable_header "unit" "Unidad" %}
+          {% sortable_header "quantity" "Cantidad" "text-end" %}
         </tr>
       </thead>
       <tbody>
         {% for s in stocks %}
         <tr {% if s.quantity <= 0 %}class="table-danger"{% endif %}>
           <td class="text-muted small">{{ s.warehouse.name }}</td>
-          <td class="fw-semibold text-muted small">{{ s.product.sku }}</td>
+          <td class="fw-semibold small">
+            <a href="{% url 'inventory:product_update' s.product.pk %}"
+               title="Editar producto {{ s.product.sku }}">{{ s.product.sku }}</a>
+          </td>
           <td>{{ s.product.name }}</td>
           <td class="text-muted small">{{ s.product.unit }}</td>
           <td class="text-end fw-semibold {% if s.quantity <= 0 %}text-danger{% endif %}">

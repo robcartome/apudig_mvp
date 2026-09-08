@@ -819,7 +819,7 @@ def admin_panel(request):
         lock_enabled = request.POST.get("lock_movement_edits") == "on"
         store.lock_movement_edits = lock_enabled
         store.save(update_fields=["lock_movement_edits", "updated_at"])
-        messages.success(request, "Configuración de bloqueo de movimientos actualizada.")
+        messages.success(request, "Configuración de movimientos retroactivos actualizada.")
         return redirect("inventory:admin_panel")
 
     warehouse_count = Warehouse.objects.filter(store_id=store_id, active=True).count() if store_id else 0

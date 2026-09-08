@@ -1,0 +1,10 @@
+.table-scroll-top {
+  height: 15px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--tblr-border-color, #e6e7e9);
+}
+
+.table-scroll-top > div {
+  height: 1px;
+}

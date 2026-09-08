@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ movement }} — APUDIG{% endblock %}
-{% block page_title %}<h2 class="page-title">Movimiento: {{ movement.get_type_display }}</h2>{% endblock %}
+{% block page_title %}<h2 class="page-title">Movimiento {{ movement.operation_code }}</h2>{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0">
       <li class="breadcrumb-item"><a href="{% url 'inventory:movement_list' %}">Movimientos</a></li>
-      <li class="breadcrumb-item active">{{ movement.get_type_display }}</li>
+      <li class="breadcrumb-item active">{{ movement.operation_code }}</li>
     </ol>
   </nav>
 </div>
@@ -18,6 +18,8 @@
       <div class="card-header"><h3 class="card-title">Cabecera</h3></div>
       <div class="card-body">
         <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Código</dt>
+          <dd class="col-7 fw-semibold">{{ movement.operation_code }}</dd>
           <dt class="col-5 text-muted">Tipo</dt>
           <dd class="col-7">
             {% if movement.type == "ENTRY" %}<span class="badge bg-success-lt text-success">Entrada</span>
@@ -27,9 +29,7 @@
           </dd>
           <dt class="col-5 text-muted">Estado</dt>
           <dd class="col-7">
-            {% if movement.status == "DRAFT" %}<span class="badge bg-secondary-lt text-secondary">Borrador</span>
-            {% elif movement.status == "CONFIRMED" %}<span class="badge bg-success-lt text-success">Confirmado</span>
-            {% else %}<span class="badge bg-dark-lt text-dark">Cerrado</span>{% endif %}
+            {% include "components/status_badge.html" with status=movement.status label=movement.get_status_display %}
           </dd>
           <dt class="col-5 text-muted">Operación</dt>
           <dd class="col-7">{{ movement.get_origin_display }}</dd>
@@ -93,16 +93,10 @@
           <dt class="col-5 text-muted">Creado</dt>
           <dd class="col-7">{{ movement.created_at|date:"d/m/Y H:i" }}</dd>
           {% if movement.confirmed_at %}
-          <dt class="col-5 text-muted">Confirmado por</dt>
+          <dt class="col-5 text-muted">Aplicado por</dt>
           <dd class="col-7">{{ movement.confirmed_by|default:"Sistema" }}</dd>
-          <dt class="col-5 text-muted">Fecha confirmación</dt>
+          <dt class="col-5 text-muted">Fecha de aplicación</dt>
           <dd class="col-7">{{ movement.confirmed_at|date:"d/m/Y H:i" }}</dd>
-          {% endif %}
-          {% if movement.closed_at %}
-          <dt class="col-5 text-muted">Cerrado por</dt>
-          <dd class="col-7">{{ movement.closed_by|default:"Sistema" }}</dd>
-          <dt class="col-5 text-muted">Fecha cierre</dt>
-          <dd class="col-7">{{ movement.closed_at|date:"d/m/Y H:i" }}</dd>
           {% endif %}
         </dl>
       </div>
