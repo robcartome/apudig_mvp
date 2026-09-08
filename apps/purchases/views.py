@@ -44,7 +44,8 @@ from .landed_cost_services import (
     allocate_landed_cost, cancel_landed_cost, document_landed_cost_summary,
 )
 from .selectors import (
-    get_purchase_analytics, get_purchase_document, get_purchase_price_history,
+    get_purchase_analytics, get_purchase_document, get_purchase_price_comparison,
+    get_purchase_price_history,
     search_purchase_documents,
 )
 from .services import (
@@ -134,13 +135,20 @@ def _document_or_404(request, pk):
         raise Http404
 
 
-def _lines(formset):
-    return [
-        form.cleaned_data for form in formset
-        if form.cleaned_data
-        and not form.cleaned_data.get("DELETE")
-        and (form.cleaned_data.get("product") or form.cleaned_data.get("purchase_category"))
-    ]
+def _lines(formset, *, update_purchase_prices=None):
+    lines = []
+    for form in formset:
+        if (
+            not form.cleaned_data
+            or form.cleaned_data.get("DELETE")
+            or not (form.cleaned_data.get("product") or form.cleaned_data.get("purchase_category"))
+        ):
+            continue
+        line = form.cleaned_data.copy()
+        if update_purchase_prices is not None and line.get("product"):
+            line["update_purchase_price"] = update_purchase_prices
+        lines.append(line)
+    return lines
 
 
 def _initial_lines(document):
@@ -477,7 +485,10 @@ def purchase_document_create(request):
                 supplier=form.cleaned_data["supplier"],
                 purchase_order=form.cleaned_data.get("purchase_order"),
                 document_type=form.cleaned_data["document_type"],
-                lines=_lines(formset),
+                lines=_lines(
+                    formset,
+                    update_purchase_prices=form.cleaned_data.get("update_purchase_prices", True),
+                ),
                 created_by=request.user,
                 series=form.cleaned_data["series"],
                 number=form.cleaned_data["number"],
@@ -664,7 +675,10 @@ def purchase_document_edit(request, pk):
                 supplier=form.cleaned_data["supplier"],
                 purchase_order=form.cleaned_data.get("purchase_order"),
                 document_type=form.cleaned_data["document_type"],
-                lines=_lines(formset),
+                lines=_lines(
+                    formset,
+                    update_purchase_prices=form.cleaned_data.get("update_purchase_prices", True),
+                ),
                 updated_by=request.user,
                 series=form.cleaned_data["series"],
                 number=form.cleaned_data["number"],
@@ -826,41 +840,55 @@ def purchase_price_history(request):
     company_id, store = _active_scope(request)
     product_id = request.GET.get("product", "")
     supplier_id = request.GET.get("supplier", "")
-    date_from = request.GET.get("date_from") or None
-    date_to = request.GET.get("date_to") or None
+    date_from_raw = request.GET.get("date_from", "")
+    date_to_raw = request.GET.get("date_to", "")
+    date_from = parse_date(date_from_raw) if date_from_raw else None
+    date_to = parse_date(date_to_raw) if date_to_raw else None
     output_format = request.GET.get("format", "")
-    rows = get_purchase_price_history(
-        company_id, store.pk,
-        product_id=product_id or None,
-        supplier_id=supplier_id or None,
-        date_from=date_from,
-        date_to=date_to,
-    )
     operational_settings = CompanyOperationalSettings.objects.filter(
         company_id=company_id
     ).first()
     price_decimal_places = (
         operational_settings.price_decimal_places if operational_settings else 2
     )
+    rows = get_purchase_price_comparison(
+        company_id, store.pk,
+        product_id=product_id or None,
+        supplier_id=supplier_id or None,
+        date_from=date_from,
+        date_to=date_to,
+        price_decimal_places=price_decimal_places,
+        price_count=5,
+    )
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+    query_params.pop("format", None)
+    page_obj = Paginator(rows, 50).get_page(request.GET.get("page"))
     context = {
-        "rows": rows,
+        "rows": page_obj.object_list,
+        "page_obj": page_obj,
+        "list_filters": {"pagination_query": query_params.urlencode()},
         "products": Product.objects.filter(company_id=company_id, active=True).order_by("name"),
         "suppliers": Supplier.objects.filter(company_id=company_id, active=True).order_by("name"),
         "product_id": product_id,
         "supplier_id": supplier_id,
-        "date_from": date_from or "",
-        "date_to": date_to or "",
+        "date_from": date_from_raw,
+        "date_to": date_to_raw,
         "price_decimal_places": price_decimal_places,
     }
     if output_format == "xlsx":
         return _purchase_price_history_xlsx(rows, price_decimal_places)
     if output_format == "print":
-        return render(request, "purchases/price_history_print.html", context)
+        return render(
+            request,
+            "purchases/price_history_print.html",
+            {**context, "rows": rows, "page_obj": None},
+        )
     return render(request, "purchases/price_history.html", context)
 
 
 def _purchase_price_history_xlsx(rows, price_decimal_places):
-    """Export the filtered purchase price history to an Excel workbook."""
+    """Export the product/supplier price-change comparison to Excel."""
     import io
 
     from openpyxl import Workbook
@@ -871,41 +899,53 @@ def _purchase_price_history_xlsx(rows, price_decimal_places):
     worksheet = workbook.active
     worksheet.title = "Histórico de precios"
     headers = [
-        "Fecha", "Documento", "Producto", "Proveedor", "Unidad",
-        "Moneda", "P. facturado", "P. base PEN", "P. anterior PEN",
-        "Variación PEN", "Variación %", "P. proveedor PEN", "P. producto PEN",
+        "Código", "Producto", "Proveedor", "Último precio (fecha)",
+        "Anterior 1 (fecha)", "Anterior 2 (fecha)", "Anterior 3 (fecha)",
+        "Anterior 4 (fecha)", "Variación PEN", "Variación %",
     ]
+    worksheet.append([
+        "Precios unitarios con IGV, convertidos a PEN y a la unidad base del "
+        "producto. No se aplican descuentos globales; solo se muestran cambios de precio."
+    ])
+    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+    worksheet["A1"].font = Font(italic=True, color="334155")
+    worksheet["A1"].alignment = Alignment(wrap_text=True)
+    worksheet.append([])
     worksheet.append(headers)
     header_fill = PatternFill("solid", fgColor="1A7F64")
-    for cell in worksheet[1]:
+    for cell in worksheet[3]:
         cell.fill = header_fill
         cell.font = Font(bold=True, color="FFFFFF")
         cell.alignment = Alignment(horizontal="center")
 
     for row in rows:
+        price_cells = []
+        for event in row["prices"]:
+            if event is None:
+                price_cells.append(None)
+                continue
+            document = event["document"]
+            reference = "-".join(part for part in (document.series, document.number) if part)
+            suffix = f" · {reference}" if reference else ""
+            price_cells.append(
+                f'PEN {event["price"]:.{price_decimal_places}f} '
+                f'({document.issue_date:%d/%m/%Y}{suffix})'
+            )
         worksheet.append([
-            row["document"].issue_date,
-            f'{row["document"].series}-{row["document"].number}',
-            str(row["product"]),
+            row["product"].sku,
+            row["product"].name,
             str(row["supplier"]),
-            row["line"].unit_code,
-            row["document"].currency,
-            float(row["invoiced_price"]),
-            float(row["base_invoiced_price"]),
-            float(row["previous_price"]) if row["previous_price"] is not None else None,
-            float(row["variance"]) if row["variance"] is not None else None,
-            float(row["variance_percent"]) if row["variance_percent"] is not None else None,
-            float(row["current_supplier_price"]) if row["current_supplier_price"] is not None else None,
-            float(row["current_product_price"]),
+            *price_cells,
+            float(row["latest_variance"]) if row["latest_variance"] is not None else None,
+            float(row["latest_variance_percent"]) if row["latest_variance_percent"] is not None else None,
         ])
 
     price_format = "0" if price_decimal_places == 0 else "0." + ("0" * price_decimal_places)
-    for row_number in range(2, worksheet.max_row + 1):
-        for column_number in (7, 8, 9, 10, 12, 13):
-            worksheet.cell(row_number, column_number).number_format = price_format
-        worksheet.cell(row_number, 11).number_format = "0.00"
-    worksheet.freeze_panes = "A2"
-    worksheet.auto_filter.ref = worksheet.dimensions
+    for row_number in range(4, worksheet.max_row + 1):
+        worksheet.cell(row_number, 9).number_format = price_format
+        worksheet.cell(row_number, 10).number_format = "0.00"
+    worksheet.freeze_panes = "A4"
+    worksheet.auto_filter.ref = f"A3:{get_column_letter(len(headers))}{worksheet.max_row}"
     for column_number in range(1, worksheet.max_column + 1):
         letter = get_column_letter(column_number)
         max_length = max(len(str(cell.value or "")) for cell in worksheet[letter])

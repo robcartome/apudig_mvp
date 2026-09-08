@@ -1,9 +1,16 @@
 {% extends "base.html" %}{% load static %}
-{% block title %}Historico de precios de compra - APUDIG{% endblock %}
-{% block page_title %}<h2 class="page-title">Historico de precios de compra</h2>{% endblock %}
+{% block title %}Histórico de precios de compra - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Histórico de precios de compra</h2>{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">{% endblock %}
 {% block content %}
-<div class="page-header mb-3"><div><div class="text-muted">Compara el precio facturado con compras anteriores y precios vigentes.</div></div><div class="ms-auto d-flex gap-2"><a href="?product={{ product_id|urlencode }}&supplier={{ supplier_id|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&format=xlsx" class="btn btn-outline-success btn-sm"><i class="ti ti-file-spreadsheet me-1"></i>Exportar Excel</a><a href="?product={{ product_id|urlencode }}&supplier={{ supplier_id|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&format=print" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="ti ti-file-type-pdf me-1"></i>Exportar PDF</a></div></div>
+<div class="page-header mb-3">
+  <div><div class="text-muted">Comparativo de los últimos cinco cambios por producto y proveedor.</div></div>
+  <div class="ms-auto d-flex gap-2">
+    <a href="?product={{ product_id|urlencode }}&supplier={{ supplier_id|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&format=xlsx" class="btn btn-outline-success btn-sm"><i class="ti ti-file-spreadsheet me-1"></i>Exportar Excel</a>
+    <a href="?product={{ product_id|urlencode }}&supplier={{ supplier_id|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&format=print" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="ti ti-file-type-pdf me-1"></i>Exportar PDF</a>
+  </div>
+</div>
+<div class="alert alert-info" role="note"><i class="ti ti-info-circle me-1"></i>Se muestran precios unitarios con IGV, convertidos a PEN y a la unidad base del producto. No se aplican descuentos globales. Las compras consecutivas que mantienen el mismo precio se agrupan y no generan una nueva columna histórica.</div>
 <div class="card mb-3"><div class="card-body"><form method="get" class="row g-2 align-items-end">
   <div class="col-md-3"><label class="form-label">Producto</label><select name="product" id="price-history-product" class="form-select form-select-sm"><option value="">Todos</option>{% for product in products %}<option value="{{ product.pk }}" {% if product_id == product.pk|stringformat:'s' %}selected{% endif %}>{{ product }}</option>{% endfor %}</select></div>
   <div class="col-md-3"><label class="form-label">Proveedor</label><select name="supplier" class="form-select form-select-sm"><option value="">Todos</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}" {% if supplier_id == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier }}</option>{% endfor %}</select></div>
@@ -11,14 +18,16 @@
   <div class="col-md-2"><label class="form-label">Hasta</label><input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm"></div>
   <div class="col-auto"><button class="btn btn-primary btn-sm">Aplicar</button><a href="{% url 'purchases:price_history' %}" class="btn btn-ghost-secondary btn-sm">Limpiar</a></div>
 </form></div></div>
-<div class="card"><div class="table-responsive"><table class="table table-sm table-vcenter card-table">
-  <thead><tr><th>Fecha</th><th>Documento</th><th>Producto</th><th>Proveedor</th><th>Unidad</th><th class="text-end">P. facturado</th><th class="text-end">P. base PEN</th><th class="text-end">P. anterior</th><th class="text-end">Variacion</th><th class="text-end">P. proveedor</th><th class="text-end">P. producto</th></tr></thead>
-  <tbody>{% for row in rows %}<tr>
-    <td>{{ row.document.issue_date|date:"d/m/Y" }}</td><td><a href="{% url 'purchases:document_detail' row.document.pk %}">{{ row.document.series }}-{{ row.document.number }}</a></td><td>{{ row.product }}</td><td>{{ row.supplier }}</td><td>{{ row.line.unit_code }}</td>
-    <td class="text-end">{{ row.document.currency }} {{ row.invoiced_price|floatformat:price_decimal_places }}</td><td class="text-end">S/ {{ row.base_invoiced_price|floatformat:price_decimal_places }}</td><td class="text-end">{% if row.previous_price is not None %}S/ {{ row.previous_price|floatformat:price_decimal_places }}{% else %}-{% endif %}</td>
-    <td class="text-end {% if row.variance > 0 %}text-danger{% elif row.variance < 0 %}text-success{% endif %}">{% if row.variance is not None %}{{ row.variance|floatformat:price_decimal_places }} {% if row.variance_percent is not None %}({{ row.variance_percent|floatformat:2 }}%){% endif %}{% else %}-{% endif %}</td>
-    <td class="text-end">{% if row.current_supplier_price is not None %}S/ {{ row.current_supplier_price|floatformat:price_decimal_places }}{% else %}-{% endif %}</td><td class="text-end">S/ {{ row.current_product_price|floatformat:price_decimal_places }}</td>
-  </tr>{% empty %}<tr><td colspan="11" class="text-center text-muted py-4">No hay compras registradas para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
-</table></div></div>
+<div class="card">
+  <div class="table-responsive"><table class="table table-sm table-vcenter card-table">
+    <thead><tr><th>Código</th><th>Producto</th><th>Proveedor</th><th class="text-end">Último precio</th><th class="text-end">Anterior 1</th><th class="text-end">Anterior 2</th><th class="text-end">Anterior 3</th><th class="text-end">Anterior 4</th><th class="text-end">Variación</th></tr></thead>
+    <tbody>{% for row in rows %}<tr>
+      <td class="text-nowrap">{{ row.product.sku }}</td><td>{{ row.product.name }}</td><td>{{ row.supplier }}</td>
+      {% for price in row.prices %}<td class="text-end text-nowrap">{% if price %}<div class="fw-semibold">PEN {{ price.price|floatformat:price_decimal_places }}</div><a class="small text-muted" href="{% url 'purchases:document_detail' price.document.pk %}">{{ price.document.issue_date|date:"d/m/Y" }}{% if price.document.series or price.document.number %} · {{ price.document.series }}-{{ price.document.number }}{% endif %}</a>{% else %}—{% endif %}</td>{% endfor %}
+      <td class="text-end text-nowrap {% if row.latest_variance > 0 %}text-danger{% elif row.latest_variance < 0 %}text-success{% endif %}">{% if row.latest_variance is not None %}{{ row.latest_variance|floatformat:price_decimal_places }}{% if row.latest_variance_percent is not None %} ({{ row.latest_variance_percent|floatformat:2 }}%){% endif %}{% else %}—{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="9" class="text-center text-muted py-4">No hay cambios de precio para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if page_obj.has_other_pages %}<div class="card-footer">{% include "partials/pagination.html" %}</div>{% endif %}
+</div>
 {% endblock %}
 {% block extra_js %}<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script src="{% static 'js/plugins/select2.js' %}"></script><script>$(function(){ $('#price-history-product').select2(window.Select2Plugin.build({placeholder:'Todos los productos',allowClear:true})); });</script>{% endblock %}

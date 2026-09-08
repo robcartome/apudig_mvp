@@ -337,6 +337,12 @@ class PurchaseDocument(TimeStampedModel):
     class Meta:
         db_table = "purchase_documents"
         ordering = ["-issue_date", "-created_at"]
+        indexes = [
+            models.Index(
+                fields=("company", "store", "document_status", "issue_date", "created_at"),
+                name="purch_doc_price_scope_idx",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=("company", "supplier", "document_type", "series", "number"),
