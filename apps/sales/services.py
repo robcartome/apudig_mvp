@@ -16,7 +16,12 @@ from django.utils import timezone
 
 from apps.core.models import AuditLog
 from apps.inventory.models import MovementOrigin, ProductUnit, StockByWarehouse
-from apps.inventory.services import confirm_movement, register_entry, register_exit
+from apps.inventory.services import (
+    confirm_movement,
+    register_entry,
+    register_exit,
+    warehouse_allows_negative_stock,
+)
 from apps.partners.models import DocumentType
 
 from .models import (
@@ -694,7 +699,7 @@ def _validate_stock_for_sale(document: SalesDocument, lines: list[dict]) -> None
         raise ValueError("Debe seleccionar un almacén antes de emitir el documento.")
     if document.warehouse.store_id != document.store_id:
         raise ValueError("El almacén no pertenece a la sucursal del documento.")
-    if document.warehouse.allow_negative_stock:
+    if warehouse_allows_negative_stock(document.warehouse):
         return
 
     for line in lines:
@@ -707,7 +712,8 @@ def _validate_stock_for_sale(document: SalesDocument, lines: list[dict]) -> None
         if stock.quantity < required:
             raise ValueError(
                 f"Stock insuficiente para {stock.product}. "
-                f"Disponible: {stock.quantity}; requerido: {required}."
+                f"Disponible: {stock.quantity.normalize():f}; "
+                f"requerido: {required.normalize():f}."
             )
 
 

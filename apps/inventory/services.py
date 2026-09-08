@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.companies.models import Store
+from apps.companies.models import CompanyOperationalSettings, Store
 
 from .models import (
     Movement,
@@ -340,8 +340,8 @@ def _apply_existing_movement_stock(movement: Movement) -> None:
 
 
 def _validate_available_stock(lines: list[dict], warehouse_id) -> None:
-    warehouse = Warehouse.objects.get(pk=warehouse_id)
-    if warehouse.allow_negative_stock:
+    warehouse = Warehouse.objects.select_related("store").get(pk=warehouse_id)
+    if warehouse_allows_negative_stock(warehouse):
         return
 
     for line in lines:
@@ -354,8 +354,24 @@ def _validate_available_stock(lines: list[dict], warehouse_id) -> None:
         if stock.quantity < required:
             raise ValueError(
                 f"Stock insuficiente para {line['product_name']}. "
-                f"Disponible: {stock.quantity}; requerido: {required}."
+                f"Disponible: {_display_quantity(stock.quantity)}; "
+                f"requerido: {_display_quantity(required)}."
             )
+
+
+def warehouse_allows_negative_stock(warehouse: Warehouse) -> bool:
+    """Resolve the warehouse override and the company-wide inventory policy."""
+    if warehouse.allow_negative_stock:
+        return True
+    return CompanyOperationalSettings.objects.filter(
+        company_id=warehouse.store.company_id,
+        inventory_allow_negative_stock=True,
+    ).exists()
+
+
+def _display_quantity(value) -> str:
+    """Show meaningful quantity precision without insignificant trailing zeroes."""
+    return f"{Decimal(str(value)).normalize():f}"
 
 
 def _ensure_movement_mutable(movement: Movement) -> None:

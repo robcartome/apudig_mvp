@@ -40,5 +40,8 @@ class CompanyDocumentSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyOperationalSettings)
 class CompanyOperationalSettingsAdmin(admin.ModelAdmin):
-    list_display = ("company", "sales_price_unit_editable", "purchases_price_unit_editable")
+    list_display = (
+        "company", "inventory_allow_negative_stock",
+        "sales_price_unit_editable", "purchases_price_unit_editable",
+    )
     search_fields = ("company__name", "company__ruc")

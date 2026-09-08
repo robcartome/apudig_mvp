@@ -121,6 +121,7 @@ class CompanyOperationalSettings(TimeStampedModel):
 
     inventory_quantity_editable = models.BooleanField(default=True)
     inventory_unit_cost_editable = models.BooleanField(default=True)
+    inventory_allow_negative_stock = models.BooleanField(default=False)
     sales_value_unit_editable = models.BooleanField(default=False)
     sales_price_unit_editable = models.BooleanField(default=True)
     sales_total_editable = models.BooleanField(default=False)

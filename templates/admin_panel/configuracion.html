@@ -166,8 +166,9 @@
       <div class="col-12"><h4>General</h4><div class="row g-3"><div class="col-md-3"><label class="form-label">Decimales para precios</label>{{ operational_form.price_decimal_places }}<div class="form-hint">Se aplica a precios, valores unitarios, impuestos y totales; no modifica la precisión de cantidades.</div></div><div class="col-md-3"><label class="form-label">IGV predeterminado (%)</label>{{ operational_form.default_igv_rate }}<div class="form-hint">Se usa como valor inicial y puede cambiarse cuando corresponda.</div></div></div></div>
       <div class="col-12 col-xl-4"><h4>Inventario</h4>
         <label class="form-check mb-2">{{ operational_form.inventory_quantity_editable }}<span class="form-check-label">Permitir editar cantidad</span></label>
-        <label class="form-check">{{ operational_form.inventory_unit_cost_editable }}<span class="form-check-label">Permitir editar costo unitario</span></label>
-        <div class="form-hint mt-2">El almacén predeterminado se define actualmente en el catálogo de almacenes por sucursal.</div>
+        <label class="form-check mb-2">{{ operational_form.inventory_unit_cost_editable }}<span class="form-check-label">Permitir editar costo unitario</span></label>
+        <label class="form-check">{{ operational_form.inventory_allow_negative_stock }}<span class="form-check-label">Permitir registrar stock negativo</span></label>
+        <div class="form-hint mt-2">Desactivado por defecto. Al habilitarlo, las salidas y transferencias podrán dejar existencias negativas en los almacenes de la empresa.</div>
       </div>
       <div class="col-12 col-xl-4"><h4>Ventas</h4>
         <label class="form-check mb-2">{{ operational_form.sales_value_unit_editable }}<span class="form-check-label">Valor unitario editable</span></label>

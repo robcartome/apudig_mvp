@@ -172,6 +172,7 @@ class CompanyOperationalSettingsForm(forms.ModelForm):
             name: forms.CheckboxInput(attrs={"class": "form-check-input"})
             for name in (
                 "inventory_quantity_editable", "inventory_unit_cost_editable",
+                "inventory_allow_negative_stock",
                 "sales_value_unit_editable", "sales_price_unit_editable", "sales_total_editable",
                 "purchases_value_unit_editable", "purchases_price_unit_editable", "purchases_total_editable",
             )

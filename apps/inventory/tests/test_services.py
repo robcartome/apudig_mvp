@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from django.test import TestCase
 
-from apps.companies.models import Company, Store
+from apps.companies.models import Company, CompanyOperationalSettings, Store
 from apps.inventory.models import (
     Category, MovementDetail, MovementStatus, Product, ProductUnit,
     StockByWarehouse, Unit, Warehouse,
@@ -16,8 +16,8 @@ from apps.inventory.services import confirm_movement, register_entry, register_e
 
 class StockServiceTest(TestCase):
     def setUp(self):
-        company = Company.objects.create(name="Demo", ruc="20999999001")
-        store = Store.objects.create(company=company, name="Principal")
+        self.company = Company.objects.create(name="Demo", ruc="20999999001")
+        store = Store.objects.create(company=self.company, name="Principal")
         unit = Unit.objects.create(code="NIU", name="Unidad")
         cat = Category.objects.create(code="GEN", name="General")
         self.warehouse = Warehouse.objects.create(store=store, name="Almacén 1")
@@ -73,6 +73,35 @@ class StockServiceTest(TestCase):
         confirm_movement(exit_movement)
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, Decimal("7"))
+
+    def test_exit_rejects_negative_stock_by_default(self):
+        movement = register_exit(
+            store_id=self.store_id, warehouse_id=self.warehouse_id, date=self.now,
+            lines=[{"product_id": self.product.id, "quantity": Decimal("170"), "unit_price": 0}],
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Disponible: 0; requerido: 170.",
+        ):
+            confirm_movement(movement)
+
+    def test_company_setting_allows_negative_stock(self):
+        CompanyOperationalSettings.objects.create(
+            company=self.company,
+            inventory_allow_negative_stock=True,
+        )
+        movement = register_exit(
+            store_id=self.store_id, warehouse_id=self.warehouse_id, date=self.now,
+            lines=[{"product_id": self.product.id, "quantity": Decimal("170"), "unit_price": 0}],
+        )
+
+        confirm_movement(movement)
+
+        stock = StockByWarehouse.objects.get(
+            product=self.product, warehouse=self.warehouse
+        )
+        self.assertEqual(stock.quantity, Decimal("-170"))
 
     def test_alternate_unit_updates_stock_in_base_unit_and_keeps_snapshot(self):
         box = self._box_conversion()
