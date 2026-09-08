@@ -52,8 +52,7 @@ def _paginate(request, qs, per_page: int = 25):
 
 def _movement_reference(movement, *, link=True):
     """Safe, human-readable movement identity for flash messages."""
-    identifier = "-".join(part for part in (movement.series, movement.number) if part) or str(movement.pk)
-    label = f"{movement.get_type_display()} {identifier}"
+    label = f"{movement.get_type_display()} {movement.operation_code}"
     if not link:
         return format_html("<strong>{}</strong>", label)
     return format_html(
@@ -342,7 +341,7 @@ def movement_confirm(request, pk):
     except ValueError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, format_html("Movimiento confirmado: {}.", _movement_reference(movement)))
+        messages.success(request, format_html("Movimiento aplicado al stock: {}.", _movement_reference(movement)))
 
     return redirect("inventory:movement_list")
 
@@ -392,7 +391,7 @@ def entry_create(request):
                     supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
                     document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                 )
-                messages.success(request, format_html("Entrada registrada: {}.", _movement_reference(movement)))
+                messages.success(request, format_html("Borrador de entrada guardado: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -450,7 +449,7 @@ def exit_create(request):
                     customer_id=cd["customer"].pk if cd.get("customer") else None,
                     document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                 )
-                messages.success(request, format_html("Salida registrada: {}.", _movement_reference(movement)))
+                messages.success(request, format_html("Borrador de salida guardado: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -508,7 +507,7 @@ def transfer_create(request):
                     reference_doc=cd.get("reference_doc", ""),
                     description=cd.get("description", ""),
                 )
-                messages.success(request, format_html("Transferencia registrada: {}.", _movement_reference(movement)))
+                messages.success(request, format_html("Borrador de transferencia guardado: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -574,7 +573,7 @@ def adjustment_create(request):
                     document_type_id=None,
                     carrier_id=None,
                 )
-                messages.success(request, format_html("Ajuste registrado: {}.", _movement_reference(movement)))
+                messages.success(request, format_html("Borrador de ajuste guardado: {}.", _movement_reference(movement)))
                 return redirect("inventory:movement_list")
 
     return render(request, "inventory/movement_form.html", {
@@ -704,7 +703,7 @@ def movement_copy(request, pk):
                             supplier_id=cd["supplier"].pk if cd.get("supplier") else None,
                             document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                         )
-                        messages.success(request, format_html("Entrada copiada y registrada: {}.", _movement_reference(movement)))
+                        messages.success(request, format_html("Borrador de entrada copiado: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
                 elif source.type == MovementType.EXIT:
                     warehouse = cd.get("warehouse")
@@ -725,7 +724,7 @@ def movement_copy(request, pk):
                             customer_id=cd["customer"].pk if cd.get("customer") else None,
                             document_type_id=cd["document_type"].pk if cd.get("document_type") else None,
                         )
-                        messages.success(request, format_html("Salida copiada y registrada: {}.", _movement_reference(movement)))
+                        messages.success(request, format_html("Borrador de salida copiado: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
                 elif source.type == MovementType.TRANSFER:
                     warehouse_origin = cd.get("warehouse_origin")
@@ -746,7 +745,7 @@ def movement_copy(request, pk):
                             reference_doc=cd.get("reference_doc", ""),
                             description=cd.get("description", ""),
                         )
-                        messages.success(request, format_html("Transferencia copiada y registrada: {}.", _movement_reference(movement)))
+                        messages.success(request, format_html("Borrador de transferencia copiado: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
                 elif source.type == MovementType.ADJUSTMENT:
                     warehouse = cd.get("warehouse")
@@ -769,7 +768,7 @@ def movement_copy(request, pk):
                             document_type_id=None,
                             carrier_id=None,
                         )
-                        messages.success(request, format_html("Ajuste copiado y registrado: {}.", _movement_reference(movement)))
+                        messages.success(request, format_html("Borrador de ajuste copiado: {}.", _movement_reference(movement)))
                         return redirect("inventory:movement_list")
             except ValueError as exc:
                 messages.error(request, str(exc))

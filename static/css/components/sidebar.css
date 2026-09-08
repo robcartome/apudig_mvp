@@ -49,13 +49,26 @@
 }
 
 #sidebar .navbar-brand-image {
+  display: block;
   width: auto;
   height: 2rem;
+  max-width: none;
 }
 
-/* ── Brand variants ── */
-.sidebar-brand-full  { display: inline-block; line-height: 1; }
-.sidebar-brand-short { display: none; line-height: 1; }
+/* A single responsive asset provides both the full and collapsed brand. */
+.sidebar-brand-link {
+  display: block;
+  max-width: calc(100% - 2rem);
+}
+
+.sidebar-brand-full  { display: block; line-height: 0; }
+.sidebar-brand-short { display: none; line-height: 0; }
+
+.sidebar-brand-mark {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+}
 
 /* ── Section sub-labels (Almacen / Productos) ── */
 .sidebar-section-label {
@@ -217,8 +230,10 @@
     /* flex: 1 on .main-layout expands automatically — no margin hack needed */
   }
 
+  #sidebar.sidebar-collapsed .navbar-brand-autodark { padding-left: .75rem; }
+  #sidebar.sidebar-collapsed .sidebar-brand-link { max-width: 2rem; }
   #sidebar.sidebar-collapsed .sidebar-brand-full { display: none; }
-  #sidebar.sidebar-collapsed .sidebar-brand-short { display: inline; }
+  #sidebar.sidebar-collapsed .sidebar-brand-short { display: block; }
   #sidebar.sidebar-collapsed #sidebar-toggle-btn  { display: none !important; }
   #sidebar.sidebar-collapsed .sidebar-expand-btn  { display: flex !important; }
 

@@ -39,6 +39,7 @@
       <thead class="table-light">
         <tr>
           <th>Fecha</th>
+          <th>Código</th>
           <th>Tipo</th>
           <th>Almacén</th>
           <th>Operación</th>
@@ -53,6 +54,14 @@
         {% for obj in page_obj %}
         <tr>
           <td class="text-muted">{{ obj.date|date:"d/m/Y, H:i" }}</td>
+
+          <td class="fw-semibold text-nowrap">
+            {% if obj.is_locked_for_changes %}
+            <a href="{% url 'inventory:movement_detail' obj.pk %}" title="Ver detalle">{{ obj.operation_code }}</a>
+            {% else %}
+            <a href="{% url 'inventory:movement_edit' obj.pk %}" title="Editar borrador">{{ obj.operation_code }}</a>
+            {% endif %}
+          </td>
 
           <td>
             {% if obj.type == "ENTRY" %}<span class="badge bg-teal-lt">Entrada</span>
@@ -104,13 +113,17 @@
               <a href="{% url 'inventory:movement_copy' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Copiar movimiento">
                 <i class="ti ti-copy"></i>
               </a>
-              {% if obj.status == "DRAFT" and not obj.is_locked_for_changes %}
-              <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Confirmar este movimiento? Luego no será editable.');">
+              {% if obj.status == "DRAFT" and obj.can_confirm %}
+              <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Aplicar este movimiento al stock? Luego no será editable.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-success" title="Confirmar movimiento">
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Aplicar movimiento al stock">
                   <i class="ti ti-check"></i>
                 </button>
               </form>
+              {% elif obj.status == "DRAFT" %}
+              <button type="button" class="btn btn-sm btn-outline-warning" disabled title="{{ obj.confirmation_block_reason }}">
+                <i class="ti ti-clock-exclamation"></i>
+              </button>
               {% endif %}
               {% if obj.is_locked_for_changes %}
               <button type="button" class="btn btn-sm btn-outline-secondary" title="{{ obj.lock_reason|default:'Movimiento bloqueado' }}">
@@ -132,7 +145,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="text-center text-muted py-4">
+          <td colspan="9" class="text-center text-muted py-4">
             No hay movimientos{% if query %} que coincidan con "{{ query }}"{% endif %}.
           </td>
         </tr>
@@ -193,6 +206,13 @@
             </div>
             <div class="row g-3 small">
               <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Código de operación</div>
+                <div class="fw-semibold">
+                  <a href="{% url 'inventory:movement_detail' obj.pk %}">{{ obj.operation_code }}</a>
+                </div>
+              </div>
+
+              <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Estado</div>
                 <div class="fw-semibold">
                   {% include "components/status_badge.html" with status=obj.status label=obj.get_status_display %}
@@ -227,7 +247,7 @@
 
               {% if obj.confirmed_at %}
               <div class="col-12 col-md-6 col-lg-4">
-                <div class="text-muted">Confirmado por</div>
+                <div class="text-muted">Aplicado por</div>
                 <div class="fw-semibold">{{ obj.confirmed_by|default:"Sistema" }} — {{ obj.confirmed_at|date:"d/m/Y H:i" }}</div>
               </div>
               {% endif %}

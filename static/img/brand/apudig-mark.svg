@@ -1,0 +1,51 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="32"
+  height="32"
+  viewBox="0 0 64 64"
+  role="img"
+  aria-label="ApuDig"
+>
+  <rect width="64" height="64" rx="16" fill="#066fd1" />
+  <path
+    d="M14 29 L32 15 L50 29"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M18 28 V50 H46 V28"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <text
+    x="28"
+    y="44"
+    text-anchor="middle"
+    font-family="Inter, Arial, Helvetica, sans-serif"
+    font-size="14"
+    font-weight="700"
+    fill="#ffffff"
+  >AD</text>
+  <circle
+    cx="48"
+    cy="48"
+    r="10"
+    fill="#22c55e"
+    stroke="#066fd1"
+    stroke-width="3"
+  />
+  <path
+    d="M43.5 48 L47 51.5 L53 44.5"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

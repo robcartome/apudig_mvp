@@ -216,13 +216,24 @@ def search_movements(
 ):
     qs = get_movements_for_store(store_id, movement_type=movement_type)
     if query:
-        qs = qs.filter(
+        movement_query = (
             Q(number__icontains=query)
             | Q(reason__icontains=query)
             | Q(reference_doc__icontains=query)
             | Q(supplier__name__icontains=query)
             | Q(customer__legal_name__icontains=query)
         )
+        operation_code = query.strip().upper().replace("-", "")
+        operation_number = operation_code.removeprefix("MOV")
+        if operation_number.isdigit():
+            if operation_code.startswith("MOV") and len(operation_number) > 4:
+                movement_query |= Q(
+                    operation_year=int(operation_number[:4]),
+                    operation_number=int(operation_number[4:]),
+                )
+            else:
+                movement_query |= Q(operation_number=int(operation_number))
+        qs = qs.filter(movement_query)
     if status:
         qs = qs.filter(status=status)
     if date_from:
@@ -440,7 +451,7 @@ def get_kardex_report(
     # --- Movements within the period ---
     movements_qs = (
         Movement.objects
-        .filter(store_id=store_id, status__in=["CONFIRMED", "CLOSED"])
+        .filter(store_id=store_id, status__in=["CONFIRMED", "REVERSED"])
         .select_related("warehouse", "warehouse_origin", "warehouse_dest", "supplier", "customer", "document_type")
         .prefetch_related("details__product__unit", "details__product__category")
         .order_by("date", "created_at")
@@ -654,7 +665,7 @@ def get_movement_traceability_report(
             "product__unit",
             "product__category",
         )
-        .filter(movement__store_id=store_id, movement__status__in=["CONFIRMED", "CLOSED"])
+        .filter(movement__store_id=store_id, movement__status__in=["CONFIRMED", "REVERSED"])
         .order_by("-movement__date", "-movement__created_at", "-id")
     )
 
@@ -748,7 +759,7 @@ def get_movement_traceability_report(
             "movement_id": str(mv.pk),
             "movement_detail_id": str(d.pk),
             "operation_id": str(mv.pk),
-            "operation_code": mv.number or str(mv.pk)[:8],
+            "operation_code": mv.operation_code,
             "date": mv.date,
             "type": movement_type_code,
             "type_label": mv.get_type_display(),
