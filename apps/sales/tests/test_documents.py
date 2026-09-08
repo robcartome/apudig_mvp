@@ -375,6 +375,28 @@ class SalesDocumentServiceTest(TestCase):
         )
         self.assertEqual(stock.quantity, Decimal("-2"))
 
+    def test_issue_allows_negative_stock_when_company_enables_it(self):
+        CompanyOperationalSettings.objects.create(
+            company=self.company,
+            inventory_allow_negative_stock=True,
+        )
+        document = create_sales_document_draft(
+            store_id=str(self.store.pk), customer=self.customer,
+            document_type=DocumentType.objects.get_or_create(
+                code="01", defaults={"name": "01", "category": "INTERNAL"}
+            )[0],
+            series=self.fac_series, lines=[_make_line(self.product, qty="2")],
+            issue_date=timezone.now().date(), warehouse=self.warehouse,
+            register_inventory_movement=True,
+        )
+
+        issue_sales_document(document.pk)
+
+        stock = StockByWarehouse.objects.get(
+            product=self.product, warehouse=self.warehouse
+        )
+        self.assertEqual(stock.quantity, Decimal("-2"))
+
     def test_non_inventory_product_does_not_create_movement(self):
         self.product.tracks_inventory = False
         self.product.save(update_fields=["tracks_inventory"])
