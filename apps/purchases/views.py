@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -229,49 +228,32 @@ def purchase_document_list(request):
     common_filters = read_list_filters(request)
     query = common_filters["q"]
     status = common_filters["status"]
-    today = timezone.localdate()
-    month_start = today.replace(day=1)
-    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    month_end = next_month - timedelta(days=1)
-    date_from_text = request.GET.get("date_from", month_start.isoformat())
-    date_to_text = request.GET.get("date_to", month_end.isoformat())
-    created_from_text = request.GET.get("created_from", "")
-    created_to_text = request.GET.get("created_to", "")
-    number = request.GET.get("number", "").strip()
-    series = request.GET.get("series", "").strip()
+    date_from_text = common_filters["date_from"]
+    date_to_text = common_filters["date_to"]
+    created_from_text = common_filters["created_from"]
+    created_to_text = common_filters["created_to"]
+    number = common_filters["number"]
+    series = common_filters["series"]
     supplier = common_filters["party"]
     payment_status = request.GET.get("payment_status", "")
-    total_min_text = request.GET.get("total_min", "").strip()
-    total_max_text = request.GET.get("total_max", "").strip()
-
-    def decimal_or_none(value):
-        try:
-            parsed = Decimal(value) if value else None
-            return parsed if parsed is None or parsed.is_finite() else None
-        except (ArithmeticError, ValueError):
-            return None
-
-    def date_or_none(value):
-        try:
-            return parse_date(value) if value else None
-        except ValueError:
-            return None
+    total_min_text = common_filters["total_min"]
+    total_max_text = common_filters["total_max"]
 
     qs = search_purchase_documents(
         company_id,
         store.pk,
         query or None,
         status or None,
-        date_from=date_or_none(date_from_text),
-        date_to=date_or_none(date_to_text),
-        created_from=date_or_none(created_from_text),
-        created_to=date_or_none(created_to_text),
+        date_from=common_filters["date_from_value"],
+        date_to=common_filters["date_to_value"],
+        created_from=common_filters["created_from_value"],
+        created_to=common_filters["created_to_value"],
         number=number or None,
         series=series or None,
         supplier=supplier or None,
         payment_status=payment_status or None,
-        total_min=decimal_or_none(total_min_text),
-        total_max=decimal_or_none(total_max_text),
+        total_min=common_filters["total_min_value"],
+        total_max=common_filters["total_max_value"],
     )
     qs, table_sort = sort_queryset(
         request, qs, PURCHASE_DOCUMENT_SORTS, default=("issue_date", "desc")

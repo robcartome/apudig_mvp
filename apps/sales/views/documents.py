@@ -12,7 +12,6 @@ Rutas:
   document_credit    GET+POST /ventas/comprobantes/<uuid:pk>/nota-credito/
   document_pdf       GET      /ventas/comprobantes/<uuid:pk>/pdf/
 """
-from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -23,7 +22,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.sales.forms import (
@@ -237,46 +235,29 @@ def document_list(request):
     q = filters["q"]
     status = filters["status"]
     document_type = request.GET.get("document_type", "")
-    today = timezone.localdate()
-    month_start = today.replace(day=1)
-    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    month_end = next_month - timedelta(days=1)
-    date_from_text = request.GET.get("date_from", month_start.isoformat())
-    date_to_text = request.GET.get("date_to", month_end.isoformat())
-    created_from_text = request.GET.get("created_from", "")
-    created_to_text = request.GET.get("created_to", "")
-    number = request.GET.get("number", "").strip()
-    series = request.GET.get("series", "").strip()
+    date_from_text = filters["date_from"]
+    date_to_text = filters["date_to"]
+    created_from_text = filters["created_from"]
+    created_to_text = filters["created_to"]
+    number = filters["number"]
+    series = filters["series"]
     customer = filters["party"]
-    total_min_text = request.GET.get("total_min", "").strip()
-    total_max_text = request.GET.get("total_max", "").strip()
-
-    def decimal_or_none(value):
-        try:
-            parsed = Decimal(value) if value else None
-            return parsed if parsed is None or parsed.is_finite() else None
-        except (ArithmeticError, ValueError):
-            return None
-
-    def date_or_none(value):
-        try:
-            return parse_date(value) if value else None
-        except ValueError:
-            return None
+    total_min_text = filters["total_min"]
+    total_max_text = filters["total_max"]
 
     qs = search_sales_documents(
         store_id,
         query=q or None,
         status=status or None,
-        date_from=date_or_none(date_from_text),
-        date_to=date_or_none(date_to_text),
-        created_from=date_or_none(created_from_text),
-        created_to=date_or_none(created_to_text),
+        date_from=filters["date_from_value"],
+        date_to=filters["date_to_value"],
+        created_from=filters["created_from_value"],
+        created_to=filters["created_to_value"],
         number=number or None,
         series=series or None,
         customer=customer or None,
-        total_min=decimal_or_none(total_min_text),
-        total_max=decimal_or_none(total_max_text),
+        total_min=filters["total_min_value"],
+        total_max=filters["total_max_value"],
     )
     if document_type:
         qs = qs.filter(document_type__code=document_type)
