@@ -24,7 +24,7 @@
       <form method="post" action="{% url 'sales:document_issue' sales_document.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-success btn-sm"
-                onclick="return confirm('¿Emitir este documento? Se asignará el número correlativo.')">
+                onclick="return confirm('¿Emitir el documento {{ sales_document.series_code }}-{{ sales_document.number }}?')">
           <i class="ti ti-send me-1"></i>Emitir
         </button>
       </form>
@@ -166,7 +166,8 @@
           <th>Descripción</th>
           <th>Unidad</th>
           <th class="text-end">Cant.</th>
-          <th class="text-end">P. Unit.</th>
+          <th class="text-end">Valor Unit.</th>
+          <th class="text-end">Precio Unit.</th>
           <th class="text-end">Dcto.</th>
           <th class="text-end">Subtotal</th>
           <th class="text-end">IGV</th>
@@ -185,6 +186,7 @@
           <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
           <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
           <td class="text-end">{{ line.unit_price|floatformat:4 }}</td>
+          <td class="text-end">{{ line.price_unit|floatformat:4 }}</td>
           <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>
           <td class="text-end">{{ line.subtotal|floatformat:2 }}</td>
           <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>
@@ -194,39 +196,39 @@
       </tbody>
       <tfoot class="table-light">
         <tr>
-          <td colspan="7" class="text-end text-muted">Subtotal gravado</td>
+          <td colspan="8" class="text-end text-muted">Subtotal gravado</td>
           <td colspan="3" class="text-end">{{ sales_document.taxable_amount|floatformat:2 }}</td>
         </tr>
         {% if sales_document.exempt_amount %}
         <tr>
-          <td colspan="7" class="text-end text-muted">Subtotal exonerado</td>
+          <td colspan="8" class="text-end text-muted">Subtotal exonerado</td>
           <td colspan="3" class="text-end">{{ sales_document.exempt_amount|floatformat:2 }}</td>
         </tr>
         {% endif %}
         {% if sales_document.unaffected_amount %}
         <tr>
-          <td colspan="7" class="text-end text-muted">Subtotal inafecto</td>
+          <td colspan="8" class="text-end text-muted">Subtotal inafecto</td>
           <td colspan="3" class="text-end">{{ sales_document.unaffected_amount|floatformat:2 }}</td>
         </tr>
         {% endif %}
         {% if sales_document.export_amount %}
-        <tr><td colspan="7" class="text-end text-muted">Subtotal exportación</td><td colspan="3" class="text-end">{{ sales_document.export_amount|floatformat:2 }}</td></tr>
+        <tr><td colspan="8" class="text-end text-muted">Subtotal exportación</td><td colspan="3" class="text-end">{{ sales_document.export_amount|floatformat:2 }}</td></tr>
         {% endif %}
         {% if sales_document.free_amount %}
-        <tr><td colspan="7" class="text-end text-muted">Operaciones gratuitas</td><td colspan="3" class="text-end">{{ sales_document.free_amount|floatformat:2 }}</td></tr>
+        <tr><td colspan="8" class="text-end text-muted">Operaciones gratuitas</td><td colspan="3" class="text-end">{{ sales_document.free_amount|floatformat:2 }}</td></tr>
         {% endif %}
         <tr>
-          <td colspan="7" class="text-end text-muted">IGV (18%)</td>
+          <td colspan="8" class="text-end text-muted">IGV (18%)</td>
           <td colspan="3" class="text-end">{{ sales_document.igv_total|floatformat:2 }}</td>
         </tr>
-        {% if sales_document.total_discount %}
+        {% if sales_document.global_discount_amount %}
         <tr>
-          <td colspan="7" class="text-end text-muted">Descuentos</td>
-          <td colspan="3" class="text-end text-danger">- {{ sales_document.total_discount|floatformat:2 }}</td>
+          <td colspan="8" class="text-end text-muted">Descuento general{% if sales_document.global_discount_before_tax %} antes del IGV{% endif %}</td>
+          <td colspan="3" class="text-end text-danger">- {{ sales_document.global_discount_amount|floatformat:2 }}</td>
         </tr>
         {% endif %}
         <tr class="fw-bold">
-          <td colspan="7" class="text-end">TOTAL {{ sales_document.currency }}</td>
+          <td colspan="8" class="text-end">TOTAL {{ sales_document.currency }}</td>
           <td colspan="3" class="text-end fs-5">{{ sales_document.total|floatformat:2 }}</td>
         </tr>
       </tfoot>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load formatters %}
+{% load formatters list_sorting %}
 
 {% block title %}Movimientos — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Movimientos</h2>{% endblock %}
@@ -32,31 +32,20 @@
   </div>
 </div>
 
+{% include "components/list_filters.html" %}
 <div class="card">
-  <div class="card-header d-flex align-items-center gap-3 flex-wrap py-3">
-    {% include "partials/search_bar.html" with placeholder="Buscar por fecha, documento o operación..." %}
-    <form method="get" class="ms-auto d-flex gap-2 align-items-center">
-      {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
-      <select name="type" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:180px">
-        <option value="">Todos los tipos</option>
-        {% for code, label in type_choices %}
-        <option value="{{ code }}" {% if movement_type == code %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </form>
-  </div>
-
   <div class="table-responsive">
     <table class="table table-vcenter table-hover card-table mb-0">
       <thead class="table-light">
         <tr>
-          <th>Fecha</th>
-          <th>Tipo</th>
-          <th>Estado</th>
-          <th>Almacén</th>
-          <th>Operación</th>
-          <th>Socio de Negocio</th>
-          <th>Documento</th>
+          {% sortable_header "date" "Fecha" %}
+          {% sortable_header "code" "Código" %}
+          {% sortable_header "type" "Tipo" %}
+          {% sortable_header "warehouse" "Almacén" %}
+          {% sortable_header "operation" "Operación" %}
+          {% sortable_header "partner" "Socio de Negocio" %}
+          {% sortable_header "document" "Documento" %}
+          {% sortable_header "status" "Estado" %}
           <th class="text-center" style="width:240px">Acciones</th>
         </tr>
       </thead>
@@ -66,15 +55,19 @@
         <tr>
           <td class="text-muted">{{ obj.date|date:"d/m/Y, H:i" }}</td>
 
+          <td class="fw-semibold text-nowrap">
+            {% if obj.is_locked_for_changes %}
+            <a href="{% url 'inventory:movement_detail' obj.pk %}" title="Ver detalle">{{ obj.operation_code }}</a>
+            {% else %}
+            <a href="{% url 'inventory:movement_edit' obj.pk %}" title="Editar borrador">{{ obj.operation_code }}</a>
+            {% endif %}
+          </td>
+
           <td>
             {% if obj.type == "ENTRY" %}<span class="badge bg-teal-lt">Entrada</span>
             {% elif obj.type == "EXIT" %}<span class="badge bg-danger-lt">Salida</span>
             {% elif obj.type == "TRANSFER" %}<span class="badge bg-info-lt">Transferencia</span>
             {% else %}<span class="badge bg-yellow-lt">Ajuste</span>{% endif %}
-          </td>
-
-          <td>
-            {% include "components/status_badge.html" with status=obj.status label=obj.get_status_display %}
           </td>
 
           <td class="text-muted">
@@ -102,6 +95,10 @@
             {% endif %}
           </td>
 
+          <td>
+            {% include "components/status_badge.html" with status=obj.status label=obj.get_status_display %}
+          </td>
+
           <td class="text-center">
             <div class="d-inline-flex gap-1">
               <button
@@ -116,13 +113,17 @@
               <a href="{% url 'inventory:movement_copy' obj.pk %}" class="btn btn-sm btn-outline-secondary" title="Copiar movimiento">
                 <i class="ti ti-copy"></i>
               </a>
-              {% if obj.status == "DRAFT" and not obj.is_locked_for_changes %}
-              <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Confirmar este movimiento? Luego no será editable.');">
+              {% if obj.status == "DRAFT" and obj.can_confirm %}
+              <form method="post" action="{% url 'inventory:movement_confirm' obj.pk %}" onsubmit="return confirm('¿Aplicar este movimiento al stock? Luego no será editable.');">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-success" title="Confirmar movimiento">
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Aplicar movimiento al stock">
                   <i class="ti ti-check"></i>
                 </button>
               </form>
+              {% elif obj.status == "DRAFT" %}
+              <button type="button" class="btn btn-sm btn-outline-warning" disabled title="{{ obj.confirmation_block_reason }}">
+                <i class="ti ti-clock-exclamation"></i>
+              </button>
               {% endif %}
               {% if obj.is_locked_for_changes %}
               <button type="button" class="btn btn-sm btn-outline-secondary" title="{{ obj.lock_reason|default:'Movimiento bloqueado' }}">
@@ -144,7 +145,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="text-center text-muted py-4">
+          <td colspan="9" class="text-center text-muted py-4">
             No hay movimientos{% if query %} que coincidan con "{{ query }}"{% endif %}.
           </td>
         </tr>
@@ -164,13 +165,13 @@
     <div>
       <div class="btn-group">
         {% if page_obj.has_previous %}
-        <a class="btn btn-outline-secondary btn-sm" href="?{% if query %}q={{ query }}&{% endif %}{% if movement_type %}type={{ movement_type }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        <a class="btn btn-outline-secondary btn-sm" href="?{{ list_filters.pagination_query }}{% if list_filters.pagination_query %}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
         {% else %}
         <button class="btn btn-outline-secondary btn-sm" disabled>Anterior</button>
         {% endif %}
 
         {% if page_obj.has_next %}
-        <a class="btn btn-primary btn-sm" href="?{% if query %}q={{ query }}&{% endif %}{% if movement_type %}type={{ movement_type }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        <a class="btn btn-primary btn-sm" href="?{{ list_filters.pagination_query }}{% if list_filters.pagination_query %}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
         {% else %}
         <button class="btn btn-primary btn-sm" disabled>Siguiente</button>
         {% endif %}
@@ -204,6 +205,13 @@
               </a>
             </div>
             <div class="row g-3 small">
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="text-muted">Código de operación</div>
+                <div class="fw-semibold">
+                  <a href="{% url 'inventory:movement_detail' obj.pk %}">{{ obj.operation_code }}</a>
+                </div>
+              </div>
+
               <div class="col-12 col-md-6 col-lg-4">
                 <div class="text-muted">Estado</div>
                 <div class="fw-semibold">
@@ -239,7 +247,7 @@
 
               {% if obj.confirmed_at %}
               <div class="col-12 col-md-6 col-lg-4">
-                <div class="text-muted">Confirmado por</div>
+                <div class="text-muted">Aplicado por</div>
                 <div class="fw-semibold">{{ obj.confirmed_by|default:"Sistema" }} — {{ obj.confirmed_at|date:"d/m/Y H:i" }}</div>
               </div>
               {% endif %}

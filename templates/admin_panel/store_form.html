@@ -68,14 +68,14 @@
             </div>
           </div>
 
-          {# Bloquear edición de movimientos #}
+          {# Control de movimientos retroactivos #}
           <div class="mb-4">
             <div class="d-flex align-items-center gap-2">
               {% with f=form.lock_movement_edits %}
               <input type="checkbox" name="{{ f.html_name }}" id="id_lock_movement"
                      class="form-check-input" {% if f.value %}checked{% endif %}
                      style="width:1.2rem;height:1.2rem;">
-              <label for="id_lock_movement" class="mb-0 text-muted small">Bloquear edición de movimientos</label>
+              <label for="id_lock_movement" class="mb-0 text-muted small">Controlar movimientos retroactivos</label>
               {% endwith %}
             </div>
           </div>

@@ -45,7 +45,10 @@
       <tbody class="small">
         {% for obj in page_obj %}
         <tr>
-          <td class="text-muted">{{ obj.sku }}</td>
+          <td class="fw-semibold">
+            <a href="{% url 'inventory:product_update' obj.pk %}"
+               title="Editar producto {{ obj.sku }}">{{ obj.sku }}</a>
+          </td>
           <td>
             <div class="fw-semibold">{{ obj.name }}</div>
             {% if obj.barcode %}<small class="text-muted">{{ obj.barcode }}</small>{% endif %}

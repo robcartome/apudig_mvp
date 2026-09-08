@@ -64,6 +64,8 @@ def stock_report_detail(request):
 
     # Aggregate totals
     total_stock = sum(r["quantity"] for r in rows)
+    total_committed = sum(r["committed"] for r in rows)
+    total_available = sum(r["available"] for r in rows)
     total_valuation = sum(r["valuation"] for r in rows)
 
     if fmt == "excel":
@@ -76,6 +78,8 @@ def stock_report_detail(request):
             "selected_warehouse_name": selected_warehouse_name,
             "q": search_query,
             "total_stock": total_stock,
+            "total_committed": total_committed,
+            "total_available": total_available,
             "total_valuation": total_valuation,
         })
 
@@ -85,6 +89,8 @@ def stock_report_detail(request):
         "selected_warehouse": selected_warehouse,
         "q": search_query,
         "total_stock": total_stock,
+        "total_committed": total_committed,
+        "total_available": total_available,
         "total_valuation": total_valuation,
         "total": len(rows),
         "should_run": should_run,
@@ -102,7 +108,11 @@ def _stock_report_excel(rows, selected_warehouse, warehouses):
     header_fill = PatternFill("solid", fgColor="1A7F64")
     header_font = Font(bold=True, color="FFFFFF")
 
-    headers = ["Almacén", "SKU", "Producto", "Categoría", "UM", "Stock", "Mínimo", "Estado", "P. Compra (S/)", "Valorización (S/)"]
+    headers = [
+        "Almacén", "SKU", "Producto", "Categoría", "UM", "Stock real",
+        "Comprometido", "Disponible", "Mínimo", "Estado", "P. Compra (S/)",
+        "Valorización (S/)",
+    ]
     ws.append(headers)
     for col_idx, _ in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_idx)
@@ -113,7 +123,8 @@ def _stock_report_excel(rows, selected_warehouse, warehouses):
     for row in rows:
         ws.append([
             row["warehouse"], row["sku"], row["product"], row["category"], row["unit"],
-            float(row["quantity"]), float(row["min_stock"]), row["status"],
+            float(row["quantity"]), float(row["committed"]), float(row["available"]),
+            float(row["min_stock"]), row["status"],
             float(row["price_purchase"]), float(row["valuation"]),
         ])
 

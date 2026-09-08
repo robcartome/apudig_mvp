@@ -16,6 +16,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from apps.sales.models import SalesQuotation
 from apps.sales.selectors import get_quotation_detail, search_quotations
+from apps.core.list_filters import read_list_filters
 
 
 def _require_auth(request):
@@ -53,10 +54,15 @@ def quotation_xlsx(request):
 
     company_id = getattr(request, "active_company_id", None) or request.session.get("active_company_id")
     store_id = getattr(request, "active_store_id", None) or request.session.get("active_store_id")
-    query = request.GET.get("q", "").strip()
-    status = request.GET.get("status", "").strip()
-
-    qs = search_quotations(store_id, query=query or None, status=status or None)
+    filters = read_list_filters(request)
+    qs = search_quotations(
+        store_id, query=filters["q"] or None, status=filters["status"] or None,
+        date_from=filters["date_from_value"], date_to=filters["date_to_value"],
+        created_from=filters["created_from_value"], created_to=filters["created_to_value"],
+        number=filters["number"] or None, series=filters["series"] or None,
+        customer=filters["party"] or None, total_min=filters["total_min_value"],
+        total_max=filters["total_max_value"],
+    )
 
     wb = Workbook()
     ws = wb.active

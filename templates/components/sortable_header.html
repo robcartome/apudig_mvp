@@ -1,0 +1,14 @@
+<th scope="col" class="sortable-header {{ css_class }}" aria-sort="{{ aria_sort }}">
+  <a href="?{{ query_string }}"
+     class="d-inline-flex align-items-center gap-1{% if is_active %} active{% endif %}"
+     title="Ordenar por {{ label }}">
+    <span>{{ label }}</span>
+    {% if is_active and direction == "asc" %}
+    <i class="ti ti-chevron-up" aria-hidden="true"></i>
+    {% elif is_active %}
+    <i class="ti ti-chevron-down" aria-hidden="true"></i>
+    {% else %}
+    <i class="ti ti-arrows-sort text-muted" aria-hidden="true"></i>
+    {% endif %}
+  </a>
+</th>

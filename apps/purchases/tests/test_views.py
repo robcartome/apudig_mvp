@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.companies.models import Company, CompanyOperationalSettings, Store
 from apps.inventory.models import Product, ProductUnit, Unit, Warehouse
@@ -105,6 +106,11 @@ class PurchaseDocumentViewTest(TestCase):
         document = PurchaseDocument.objects.get()
 
         response = self.client.get(reverse("purchases:document_list"))
+        today = timezone.localdate()
+        self.assertEqual(
+            response.context["date_from"], today.replace(day=1).isoformat()
+        )
+        self.assertEqual(response.context["date_to"][:7], today.strftime("%Y-%m"))
         self.assertContains(response, "Fecha de creación")
         self.assertContains(response, "Fecha de emisión")
         self.assertContains(response, "Fecha de vencimiento")
@@ -115,6 +121,7 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertContains(response, reverse("purchases:document_edit", args=[document.pk]))
         self.assertContains(response, reverse("purchases:document_register", args=[document.pk]))
         self.assertContains(response, reverse("purchases:document_delete", args=[document.pk]))
+        self.assertContains(response, "se actualizará el precio de compra")
         self.assertNotContains(response, reverse("purchases:payment_create", args=[document.pk]))
         self.assertNotContains(response, reverse("purchases:document_cancel", args=[document.pk]))
 
@@ -122,6 +129,36 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.supplier.name)
         self.assertContains(response, self.product.name)
+
+    def test_list_applies_document_filters_uses_80_rows_and_totals(self):
+        self.client.post(reverse("purchases:document_create"), self.payload())
+        document = PurchaseDocument.objects.get()
+        created_date = timezone.localtime(document.created_at).date().isoformat()
+
+        response = self.client.get(reverse("purchases:document_list"), {
+            "date_from": "2026-09-01",
+            "date_to": "2026-09-30",
+            "series": "F001",
+            "number": "99",
+            "supplier": "20622222222",
+            "created_from": created_date,
+            "created_to": created_date,
+            "payment_status": "UNPAID",
+            "total_min": "1",
+            "total_max": "999",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page_obj"].paginator.per_page, 80)
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertTrue(response.context["advanced_filters_active"])
+        self.assertEqual(
+            response.context["filtered_totals"],
+            [{"currency": "PEN", "amount": document.total}],
+        )
+        self.assertContains(response, "Total filtrado (no incluye cancelados)")
+        self.assertContains(response, "js-table-scroll-top")
+        self.assertContains(response, 'id="purchaseAdvancedFilters"', html=False)
 
     def test_anonymous_list_redirects_to_login(self):
         self.client.logout()
@@ -147,6 +184,9 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertContains(response, 'class="form-control form-control-sm text-end quantity-input"', html=False)
         self.assertContains(response, 'inputmode="decimal"', html=False)
         self.assertContains(response, 'id="summary-total"', html=False)
+        self.assertContains(response, 'name="global_discount_amount"', html=False)
+        self.assertContains(response, 'name="global_discount_before_tax"', html=False)
+        self.assertContains(response, "Descuento general")
 
     def test_purchase_form_uses_company_price_decimals_and_default_igv(self):
         CompanyOperationalSettings.objects.update_or_create(
@@ -158,7 +198,22 @@ class PurchaseDocumentViewTest(TestCase):
 
         self.assertContains(response, 'data-price-decimals="3"', html=False)
         self.assertContains(response, 'data-igv-rate="15.50"', html=False)
+        self.assertContains(response, 'class="form-control form-control-sm text-end value-unit-display"', html=False)
         self.assertEqual(response.context["formset"].forms[0].fields["igv_rate"].initial, Decimal("15.50"))
+
+    def test_purchase_value_unit_editability_uses_company_setting(self):
+        settings, _ = CompanyOperationalSettings.objects.update_or_create(
+            company=self.company,
+            defaults={"purchases_value_unit_editable": False},
+        )
+        response = self.client.get(reverse("purchases:document_create"))
+        self.assertContains(response, 'data-edit-value="false"', html=False)
+        self.assertContains(response, 'readonly tabindex="-1"', html=False)
+
+        settings.purchases_value_unit_editable = True
+        settings.save(update_fields=["purchases_value_unit_editable"])
+        response = self.client.get(reverse("purchases:document_create"))
+        self.assertContains(response, 'data-edit-value="true"', html=False)
 
     def test_purchase_form_only_lists_active_store_warehouses_and_saves_selected_one(self):
         response = self.client.get(reverse("purchases:document_create"))
@@ -201,6 +256,40 @@ class PurchaseDocumentViewTest(TestCase):
         response = self.client.get(reverse("purchases:price_history"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Historico de precios de compra")
+        self.assertContains(response, 'id="price-history-product"', html=False)
+        self.assertContains(response, "Exportar Excel")
+        self.assertContains(response, "Exportar PDF")
+
+    def test_price_history_uses_configured_price_decimals(self):
+        CompanyOperationalSettings.objects.update_or_create(
+            company=self.company,
+            defaults={"price_decimal_places": 3},
+        )
+        self.client.post(reverse("purchases:document_create"), self.payload())
+        document = PurchaseDocument.objects.get()
+        self.client.post(reverse("purchases:document_register", args=[document.pk]))
+
+        response = self.client.get(reverse("purchases:price_history"))
+
+        self.assertEqual(response.context["price_decimal_places"], 3)
+        self.assertContains(response, "PEN 10.000")
+
+    def test_price_history_exports_xlsx_and_print_view(self):
+        excel_response = self.client.get(
+            reverse("purchases:price_history"), {"format": "xlsx"}
+        )
+        self.assertEqual(excel_response.status_code, 200)
+        self.assertEqual(
+            excel_response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertTrue(excel_response.content.startswith(b"PK"))
+
+        print_response = self.client.get(
+            reverse("purchases:price_history"), {"format": "print"}
+        )
+        self.assertEqual(print_response.status_code, 200)
+        self.assertContains(print_response, "window.print()")
 
     def test_create_expense_line_with_purchase_category(self):
         category = PurchaseCategory.objects.create(

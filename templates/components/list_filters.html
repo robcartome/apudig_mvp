@@ -1,0 +1,40 @@
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small mb-1">Búsqueda rápida</label>
+        <div class="input-group input-group-sm">
+          <input name="q" value="{{ list_filters.q }}" class="form-control" placeholder="{{ filter_search_placeholder|default:'Buscar…' }}">
+          <button class="btn btn-outline-secondary" type="submit" title="Buscar"><i class="ti ti-search"></i></button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small mb-1">{{ filter_date_label|default:"Fechas de emisión" }}</label>
+        <div class="input-group input-group-sm">
+          <input type="date" name="date_from" value="{{ list_filters.date_from }}" class="form-control" title="Desde">
+          <span class="input-group-text">a</span>
+          <input type="date" name="date_to" value="{{ list_filters.date_to }}" class="form-control" title="Hasta">
+        </div>
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse"
+                data-bs-target="#{{ filter_collapse_id }}" aria-expanded="{% if list_filters.advanced_filters_active %}true{% else %}false{% endif %}">
+          <i class="ti ti-filter me-1"></i>
+          <span class="js-filter-toggle-label">{% if list_filters.advanced_filters_active %}Ocultar filtros{% else %}Mostrar filtros{% endif %}</span>
+          <i class="ti {% if list_filters.advanced_filters_active %}ti-chevron-up{% else %}ti-chevron-down{% endif %} ms-1 js-filter-toggle-chevron"></i>
+        </button>
+      </div>
+      <div class="col-12 collapse js-advanced-filters{% if list_filters.advanced_filters_active %} show{% endif %}" id="{{ filter_collapse_id }}">
+        <div class="rounded border bg-light-subtle p-3 mt-1">
+          <div class="row g-2 align-items-end">
+            {% include filter_advanced_template %}
+            <div class="col-auto">
+              <button class="btn btn-primary btn-sm" type="submit"><i class="ti ti-search me-1"></i>Aplicar filtros</button>
+              <a href="{{ filter_reset_url }}" class="btn btn-ghost-secondary btn-sm">Limpiar</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>

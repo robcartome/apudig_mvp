@@ -2,8 +2,9 @@ import uuid
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models
-from django.db.models import Q
+from django.db import models, transaction
+from django.db.models import Max, Q
+from django.utils import timezone
 
 from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
@@ -342,8 +343,8 @@ class MovementType(models.TextChoices):
 
 class MovementStatus(models.TextChoices):
     DRAFT = "DRAFT", "Borrador"
-    CONFIRMED = "CONFIRMED", "Confirmado"
-    CLOSED = "CLOSED", "Cerrado"
+    CONFIRMED = "CONFIRMED", "Aplicado"
+    REVERSED = "REVERSED", "Revertido"
 
 
 class MovementOrigin(models.TextChoices):
@@ -361,6 +362,8 @@ class Movement(TimeStampedModel):
     ORIGIN_CHOICES = MovementOrigin.choices
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    operation_year = models.PositiveSmallIntegerField(editable=False)
+    operation_number = models.PositiveBigIntegerField(null=True, blank=True, editable=False)
     type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
     origin = models.CharField(
         max_length=30,
@@ -442,9 +445,42 @@ class Movement(TimeStampedModel):
     class Meta:
         db_table = "movements"
         ordering = ["-date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("store", "operation_year", "operation_number"),
+                name="uniq_store_year_movement_operation_number",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.type} {self.number} ({self.date:%Y-%m-%d})"
+        return f"{self.operation_code} - {self.get_type_display()} ({self.date:%Y-%m-%d})"
+
+    def save(self, *args, **kwargs):
+        """Assign an immutable annual operation sequence inside each store."""
+        if self.operation_year is None:
+            self.operation_year = self.date.year if self.date else timezone.localdate().year
+
+        if self.operation_number is None and self.store_id:
+            from apps.companies.models import Store
+
+            database = kwargs.get("using") or "default"
+            with transaction.atomic(using=database):
+                Store._base_manager.using(database).select_for_update().get(pk=self.store_id)
+                last_number = (
+                    Movement._base_manager.using(database)
+                    .filter(store_id=self.store_id, operation_year=self.operation_year)
+                    .aggregate(value=Max("operation_number"))["value"]
+                    or 0
+                )
+                self.operation_number = last_number + 1
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+    @property
+    def operation_code(self) -> str:
+        if self.operation_year is None or self.operation_number is None:
+            return f"MOV-{str(self.pk).split('-')[0].upper()}"
+        return f"MOV{self.operation_year:04d}{self.operation_number:05d}"
 
     @property
     def related_purchase_documents(self):
@@ -468,7 +504,7 @@ class Movement(TimeStampedModel):
 
     @property
     def has_posterior_related_movements(self) -> bool:
-        """Determina si existen movimientos posteriores relacionados."""
+        """Return whether a later applied movement affects the same stock."""
         if hasattr(self, "_has_posterior_related_movements_cache"):
             return self._has_posterior_related_movements_cache
 
@@ -495,6 +531,7 @@ class Movement(TimeStampedModel):
             Movement.objects
             .exclude(pk=self.pk)
             .filter(store_id=self.store_id)
+            .filter(status__in=(MovementStatus.CONFIRMED, MovementStatus.REVERSED))
             .filter(details__product_id__in=product_ids)
             .filter(date_q)
             .filter(
@@ -509,21 +546,32 @@ class Movement(TimeStampedModel):
 
     @property
     def lock_reason(self) -> str:
-        if self.status == MovementStatus.CLOSED:
-            return "Movimiento cerrado. Solo se permite corrección con nuevo movimiento."
         if self.status == MovementStatus.CONFIRMED:
-            return "Movimiento confirmado. Para cambiarlo debe registrar un movimiento correctivo."
-        if self.lock_mode_enabled and self.has_posterior_related_movements:
-            return "No editable: existen movimientos posteriores relacionados en el mismo producto/almacén."
+            return "Movimiento aplicado. Para cambiarlo debe registrar un movimiento correctivo."
+        if self.status == MovementStatus.REVERSED:
+            return "Movimiento revertido. Se conserva como parte de la trazabilidad."
         return ""
 
     @property
     def is_locked_for_changes(self) -> bool:
-        if self.status in (MovementStatus.CONFIRMED, MovementStatus.CLOSED):
-            return True
-        if not self.lock_mode_enabled:
+        return self.status != MovementStatus.DRAFT
+
+    @property
+    def can_confirm(self) -> bool:
+        if self.status != MovementStatus.DRAFT:
             return False
-        return self.has_posterior_related_movements
+        return not (self.lock_mode_enabled and self.has_posterior_related_movements)
+
+    @property
+    def confirmation_block_reason(self) -> str:
+        if self.status != MovementStatus.DRAFT:
+            return self.lock_reason
+        if self.lock_mode_enabled and self.has_posterior_related_movements:
+            return (
+                "No se puede aplicar con esta fecha porque existen movimientos aplicados "
+                "posteriores para el mismo producto y almacén."
+            )
+        return ""
 
 
 class MovementDetail(models.Model):
@@ -562,7 +610,8 @@ class MovementAuditLog(models.Model):
         CREATE = "CREATE", "Creación"
         UPDATE = "UPDATE", "Actualización"
         CONFIRM = "CONFIRM", "Confirmación"
-        CLOSE = "CLOSE", "Cierre"
+        CLOSE = "CLOSE", "Cierre legado"
+        REVERSE = "REVERSE", "Reversión"
         DELETE = "DELETE", "Eliminación"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

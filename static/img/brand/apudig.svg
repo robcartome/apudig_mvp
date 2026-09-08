@@ -1,0 +1,54 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="150"
+  height="40"
+  viewBox="0 0 300 80"
+  role="img"
+  aria-label="ApuDig"
+>
+  <g transform="translate(4 8)">
+    <rect x="0" y="0" width="64" height="64" rx="16" fill="#066fd1" />
+    <path
+      d="M15 28 L32 16 L49 28"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M19 27 V48 H45 V27"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <rect x="27" y="35" width="10" height="13" rx="2" fill="#ffffff" />
+    <circle cx="47" cy="47" r="11" fill="#22c55e" stroke="#066fd1" stroke-width="3" />
+    <path
+      d="M42 47 L46 51 L53 43"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+  <text
+    x="82"
+    y="53"
+    font-family="Inter, Arial, Helvetica, sans-serif"
+    font-size="48"
+    font-weight="700"
+    fill="#1f2937"
+  >Apu</text>
+  <text
+    x="173"
+    y="53"
+    font-family="Inter, Arial, Helvetica, sans-serif"
+    font-size="48"
+    font-weight="700"
+    fill="#066fd1"
+  >Dig</text>
+</svg>

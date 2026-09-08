@@ -84,6 +84,7 @@
     getWarehouse: () => warehouse?.value || '',
     getSupplier: () => supplier?.value || '',
     priceDecimals,
+    priceMode: 'purchase',
   });
 
   function setUnits(row, product) {
@@ -129,11 +130,8 @@
       quantity.maxLength = 15;
       quantity.classList.add('form-control-sm', 'text-end', 'quantity-input');
     }
-    const valueInput = row.querySelector('input[name*="-unit_price"]');
-    if (valueInput) {
-      valueInput.classList.add('text-end', 'value-unit-input');
-      valueInput.readOnly = !editValue;
-    }
+    const valueDisplay = row.querySelector('.value-unit-display');
+    if (valueDisplay) valueDisplay.readOnly = !editValue;
     const priceInput = row.querySelector('.price-unit-input');
     if (priceInput) priceInput.readOnly = !editPrice;
     row.querySelectorAll('.line-price-unit, .line-subtotal, .line-igv, .line-total').forEach(cell => {
@@ -142,7 +140,7 @@
   }
 
   function applyCompanyNumberSettings(row, isNew = false) {
-    row.querySelectorAll('.price-unit-input, .value-unit-input, .line-total-input').forEach(input => {
+    row.querySelectorAll('.price-unit-input, .value-unit-display, .line-total-input').forEach(input => {
       input.step = priceStep;
     });
     if (isNew) {
@@ -158,6 +156,7 @@
 
   function updateSummary() {
     const totals = { discount: 0, taxable: 0, exempt: 0, unaffected: 0, igv: 0, total: 0 };
+    const calculatedRows = [];
     body.querySelectorAll('.line-row:not([hidden])').forEach(row => {
       const quantity = parseAmount(row.querySelector('input[name*="-quantity"]')?.value);
       const valueUnit = parseAmount(row.querySelector('input[name*="-unit_price"]')?.value);
@@ -166,6 +165,7 @@
       const rate = parseAmount(row.querySelector('input[name*="-igv_rate"]')?.value);
       const subtotal = Math.max(0, quantity * valueUnit - discount);
       const igv = taxType === '10' ? subtotal * rate / 100 : 0;
+      calculatedRows.push({subtotal, taxType, rate});
       totals.discount += discount;
       if (taxType === '10') totals.taxable += subtotal;
       else if (taxType === '20') totals.exempt += subtotal;
@@ -173,6 +173,30 @@
       totals.igv += igv;
       totals.total += subtotal + igv;
     });
+    const globalDiscount = Math.max(
+      parseAmount(document.getElementById('id_global_discount_amount')?.value),
+      0,
+    );
+    if (document.getElementById('id_global_discount_before_tax')?.checked && globalDiscount > 0) {
+      const eligibleBase = calculatedRows.reduce((sum, line) => sum + line.subtotal, 0);
+      if (eligibleBase > 0) {
+        const appliedDiscount = Math.min(globalDiscount, eligibleBase);
+        calculatedRows.forEach(line => {
+          const discountPart = appliedDiscount * line.subtotal / eligibleBase;
+          if (line.taxType === '10') {
+            totals.taxable -= discountPart;
+            totals.igv -= discountPart * line.rate / 100;
+          } else if (line.taxType === '20') totals.exempt -= discountPart;
+          else totals.unaffected -= discountPart;
+        });
+        totals.total = totals.taxable + totals.exempt + totals.unaffected + totals.igv;
+      }
+    } else {
+      totals.total = Math.max(totals.total - globalDiscount, 0);
+    }
+    const lineDiscountElement = document.getElementById('summary-line-discount');
+    if (lineDiscountElement) lineDiscountElement.textContent = formatAmount(totals.discount);
+    totals.discount += globalDiscount;
     Object.entries(totals).forEach(([key, value]) => {
       const element = document.getElementById(`summary-${key}`);
       if (element) element.textContent = formatAmount(value);
@@ -182,6 +206,7 @@
   function updateLineTotals(row, source) {
     const quantity = parseAmount(row.querySelector('input[name*="-quantity"]')?.value);
     const valueInput = row.querySelector('input[name*="-unit_price"]');
+    const valueDisplay = row.querySelector('.value-unit-display');
     const priceInput = row.querySelector('.price-unit-input');
     const totalInput = row.querySelector('.line-total-input');
     const discount = parseAmount(row.querySelector('input[name*="-discount_amount"]')?.value);
@@ -189,7 +214,10 @@
     const rate = parseAmount(row.querySelector('input[name*="-igv_rate"]')?.value);
     const taxFactor = taxType === '10' ? 1 + rate / 100 : 1;
     let valueUnit = parseAmount(valueInput?.value);
-    if (source === 'price' && priceInput) {
+    if (source === 'value' && valueDisplay) {
+      valueUnit = parseAmount(valueDisplay.value);
+      if (valueInput) valueInput.value = valueUnit.toFixed(6);
+    } else if (source === 'price' && priceInput) {
       valueUnit = parseAmount(priceInput.value) / taxFactor;
       // El valor unitario se guarda sin IGV. Conservamos precisión de cálculo
       // para que el total provenga del Precio Unit. visible (p. ej. 1.69 × 10).
@@ -201,6 +229,7 @@
     const subtotal = Math.max(0, quantity * valueUnit - discount);
     const igv = taxType === '10' ? subtotal * rate / 100 : 0;
     const priceUnit = valueUnit * taxFactor;
+    if (valueDisplay && source !== 'value') valueDisplay.value = valueUnit.toFixed(priceDecimals);
     const values = {
       '.line-subtotal': subtotal,
       '.line-igv': igv,
@@ -224,7 +253,7 @@
       prepareRowInputs(row);
       return row;
     }
-    row.innerHTML = `<td class="line-num text-muted">${index + 1}<input type="hidden" name="lines-${index}-DELETE" value=""></td><td><input type="hidden" name="lines-${index}-product"><select class="product-select w-100"></select><input type="hidden" name="lines-${index}-description"><input type="hidden" name="lines-${index}-memo"></td><td><input type="hidden" name="lines-${index}-unit"><select class="form-select form-select-sm product-unit-select"><option value="">-</option></select><div class="unit-equivalence text-muted small"></div></td><td><div class="input-group input-group-sm"><input type="number" class="form-control form-control-sm" name="lines-${index}-quantity" step="0.0001" min="0.0001"><button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver existencias por almacén" disabled><i class="ti ti-building-warehouse"></i></button></div></td><td><select class="form-select form-select-sm" name="lines-${index}-tax_type"><option value="10">Gravado IGV</option><option value="20">Exonerado</option><option value="30">Inafecto</option><option value="40">Importación</option></select><input type="hidden" name="lines-${index}-igv_rate" value="18"><input type="hidden" name="lines-${index}-discount_amount" value="0"></td><td><input type="number" class="form-control form-control-sm value-unit-input" name="lines-${index}-unit_price" step="0.000001" min="0"></td><td><input type="text" class="form-control form-control-sm text-end price-unit-input" inputmode="decimal" value="0.00"></td><td class="text-end line-subtotal">0.00</td><td class="text-end line-igv">0.00</td><td>${editTotal ? '<input type="text" class="form-control form-control-sm text-end fw-semibold line-total-input" inputmode="decimal" value="0.00">' : '<span class="d-block text-end fw-semibold line-total">0.00</span>'}</td><td class="d-none"><input type="checkbox" name="lines-${index}-update_purchase_price" checked></td><td><div class="d-flex gap-1"><button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Memo de línea"><i class="ti ti-note"></i></button><button type="button" class="btn btn-sm btn-outline-danger remove-line"><i class="ti ti-x"></i></button></div></td>`;
+    row.innerHTML = `<td class="line-num text-muted">${index + 1}<input type="hidden" name="lines-${index}-DELETE" value=""></td><td><input type="hidden" name="lines-${index}-product"><select class="product-select w-100"></select><input type="hidden" name="lines-${index}-description"><input type="hidden" name="lines-${index}-memo"></td><td><input type="hidden" name="lines-${index}-unit"><select class="form-select form-select-sm product-unit-select"><option value="">-</option></select><div class="unit-equivalence text-muted small"></div></td><td><div class="input-group input-group-sm"><input type="number" class="form-control form-control-sm" name="lines-${index}-quantity" step="0.0001" min="0.0001"><button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver existencias por almacén" disabled><i class="ti ti-building-warehouse"></i></button></div></td><td><select class="form-select form-select-sm" name="lines-${index}-tax_type"><option value="10">Gravado IGV</option><option value="20">Exonerado</option><option value="30">Inafecto</option><option value="40">Importación</option></select><input type="hidden" name="lines-${index}-igv_rate" value="18"><input type="hidden" name="lines-${index}-discount_amount" value="0"></td><td><input type="hidden" name="lines-${index}-unit_price"><input type="text" class="form-control form-control-sm text-end value-unit-display" inputmode="decimal" value="0.00"></td><td><input type="text" class="form-control form-control-sm text-end price-unit-input" inputmode="decimal" value="0.00"></td><td class="text-end line-subtotal">0.00</td><td class="text-end line-igv">0.00</td><td>${editTotal ? '<input type="text" class="form-control form-control-sm text-end fw-semibold line-total-input" inputmode="decimal" value="0.00">' : '<span class="d-block text-end fw-semibold line-total">0.00</span>'}</td><td class="d-none"><input type="checkbox" name="lines-${index}-update_purchase_price" checked></td><td><div class="d-flex gap-1"><button type="button" class="btn btn-sm btn-outline-secondary memo-btn" title="Memo de línea"><i class="ti ti-note"></i></button><button type="button" class="btn btn-sm btn-outline-danger remove-line"><i class="ti ti-x"></i></button></div></td>`;
     applyCompanyNumberSettings(row, true);
     prepareRowInputs(row);
     return row;
@@ -280,8 +309,11 @@
     }
     if (event.target.matches('.price-unit-input')) updateLineTotals(row, 'price');
     else if (event.target.matches('.line-total-input')) updateLineTotals(row, 'total');
-    else if (event.target.matches('input[name*="-unit_price"], input[name*="-discount_amount"], input[name*="-igv_rate"]')) updateLineTotals(row, 'value');
+    else if (event.target.matches('.value-unit-display')) updateLineTotals(row, 'value');
+    else if (event.target.matches('input[name*="-discount_amount"], input[name*="-igv_rate"]')) updateLineTotals(row);
   });
+  document.getElementById('id_global_discount_amount')?.addEventListener('input', updateSummary);
+  document.getElementById('id_global_discount_before_tax')?.addEventListener('change', updateSummary);
   body.addEventListener('click', event => {
     const memoButton = event.target.closest('.memo-btn');
     if (memoButton) {

@@ -14,7 +14,11 @@ from .models import (
 )
 
 
-def search_purchase_documents(company_id, store_id=None, query=None, status=None):
+def search_purchase_documents(
+    company_id, store_id=None, query=None, status=None, *, date_from=None,
+    date_to=None, created_from=None, created_to=None, number=None, series=None,
+    supplier=None, payment_status=None, total_min=None, total_max=None,
+):
     qs = PurchaseDocument.objects.for_company(company_id).select_related(
         "store", "supplier", "document_type", "payment_method"
     ).prefetch_related("lines__product", "lines__receipt_matches").annotate(
@@ -47,6 +51,29 @@ def search_purchase_documents(company_id, store_id=None, query=None, status=None
         )
     if status:
         qs = qs.filter(document_status=status)
+    if date_from:
+        qs = qs.filter(issue_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(issue_date__lte=date_to)
+    if created_from:
+        qs = qs.filter(created_at__date__gte=created_from)
+    if created_to:
+        qs = qs.filter(created_at__date__lte=created_to)
+    if number:
+        qs = qs.filter(number__icontains=number)
+    if series:
+        qs = qs.filter(series__icontains=series)
+    if supplier:
+        qs = qs.filter(
+            Q(supplier_name__icontains=supplier)
+            | Q(supplier_document_number__icontains=supplier)
+        )
+    if payment_status:
+        qs = qs.filter(payment_status=payment_status)
+    if total_min is not None:
+        qs = qs.filter(total__gte=total_min)
+    if total_max is not None:
+        qs = qs.filter(total__lte=total_max)
     return qs.order_by("-issue_date", "-created_at")
 
 
@@ -104,7 +131,7 @@ def get_purchase_price_history(
     for line in lines:
         key = (line.product_id, line.purchase_document.supplier_id)
         currency_factor = line.purchase_document.exchange_rate if line.purchase_document.currency != "PEN" else 1
-        base_invoiced_price = line.unit_price * currency_factor / line.conversion_factor
+        base_invoiced_price = line.price_unit * currency_factor / line.conversion_factor
         previous = previous_by_product_supplier.get(key)
         variance = base_invoiced_price - previous if previous is not None else None
         variance_percent = variance * 100 / previous if variance is not None and previous else None
@@ -113,7 +140,7 @@ def get_purchase_price_history(
             "document": line.purchase_document,
             "product": line.product,
             "supplier": line.purchase_document.supplier,
-            "invoiced_price": line.unit_price,
+            "invoiced_price": line.price_unit,
             "base_invoiced_price": base_invoiced_price,
             "previous_price": previous,
             "variance": variance,

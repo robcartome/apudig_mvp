@@ -83,7 +83,7 @@ def _calculate_line(line):
     return {"subtotal": _money(subtotal), "igv_amount": _money(igv), "total": _money(subtotal + igv)}
 
 
-def _totals(lines, calculated):
+def _totals(lines, calculated, global_discount_amount=0, global_discount_before_tax=False):
     totals = {
         "taxable_amount": Decimal("0"),
         "exempt_amount": Decimal("0"),
@@ -99,8 +99,43 @@ def _totals(lines, calculated):
         totals[bucket] += calc["subtotal"]
         totals["igv_total"] += calc["igv_amount"]
         totals["total_discount"] += Decimal(str(raw.get("discount_amount") or 0))
+    global_discount = _money(global_discount_amount or 0)
+    if global_discount < 0:
+        raise ValueError("El descuento general no puede ser negativo.")
+    if global_discount_before_tax and global_discount:
+        eligible = [
+            (raw, calc) for raw, calc in zip(lines, calculated)
+            if calc["subtotal"] > 0
+        ]
+        eligible_base = sum((calc["subtotal"] for _, calc in eligible), Decimal("0"))
+        if global_discount > eligible_base:
+            raise ValueError("El descuento general no puede superar la base neta del documento.")
+        remaining_discount = global_discount
+        remaining_base = eligible_base
+        for index, (raw, calc) in enumerate(eligible):
+            discount_part = (
+                remaining_discount
+                if index == len(eligible) - 1
+                else min(
+                    _money(remaining_discount * calc["subtotal"] / remaining_base),
+                    remaining_discount,
+                )
+            )
+            remaining_discount -= discount_part
+            remaining_base -= calc["subtotal"]
+            bucket = buckets[raw.get("tax_type", "10")]
+            totals[bucket] -= discount_part
+            if raw.get("tax_type", "10") == "10":
+                rate = Decimal(str(raw.get("igv_rate") or 0))
+                adjusted_igv = _money((calc["subtotal"] - discount_part) * rate / Decimal("100"))
+                totals["igv_total"] += adjusted_igv - calc["igv_amount"]
     totals["subtotal"] = totals["taxable_amount"] + totals["exempt_amount"] + totals["unaffected_amount"]
     totals["total"] = totals["subtotal"] + totals["igv_total"]
+    if not global_discount_before_tax:
+        if global_discount > totals["total"]:
+            raise ValueError("El descuento general no puede superar el total del documento.")
+        totals["total"] -= global_discount
+    totals["total_discount"] += global_discount
     return {key: _money(value) for key, value in totals.items()}
 
 
@@ -284,7 +319,7 @@ def _update_current_purchase_prices(document):
     currency_factor = document.exchange_rate if document.currency != "PEN" else Decimal("1")
     for line in lines:
         base_price = (
-            Decimal(str(line.unit_price))
+            Decimal(str(line.price_unit))
             * Decimal(str(currency_factor))
             / Decimal(str(line.conversion_factor))
         )
@@ -308,7 +343,12 @@ def create_purchase_document_draft(*, company_id, store, supplier, document_type
     _validate_purchase_order(company_id, store, supplier, kwargs.get("purchase_order"))
     normalized = [_normalize_line(line, company_id) for line in lines]
     calculated = [_calculate_line(line) for line in normalized]
-    totals = _totals(normalized, calculated)
+    totals = _totals(
+        normalized,
+        calculated,
+        kwargs.get("global_discount_amount", 0),
+        kwargs.get("global_discount_before_tax", False),
+    )
     document = PurchaseDocument.objects.create(
         company_id=company_id,
         store=store,
@@ -339,7 +379,12 @@ def update_purchase_document_draft(document_id, *, company_id, store, supplier, 
     _validate_purchase_order(company_id, store, supplier, kwargs.get("purchase_order"))
     normalized = [_normalize_line(line, company_id) for line in lines]
     calculated = [_calculate_line(line) for line in normalized]
-    totals = _totals(normalized, calculated)
+    totals = _totals(
+        normalized,
+        calculated,
+        kwargs.get("global_discount_amount", 0),
+        kwargs.get("global_discount_before_tax", False),
+    )
     document.store = store
     document.supplier = supplier
     document.document_type = document_type

@@ -17,7 +17,11 @@
         color: #495057;
     }
 
-    #lines-table .value-unit-input,
+    {% if not operational_settings.purchases_value_unit_editable %}
+    #lines-table .value-unit-display { pointer-events: none; background: #f8f9fa; }
+    {% endif %}
+
+    #lines-table .value-unit-display,
     #lines-table .price-unit-input,
     #lines-table .line-total-input,
     #lines-table .quantity-input-group {
@@ -203,7 +207,10 @@
                                         class="ti ti-building-warehouse"></i></button></div>
                         </td>
                         <td>{{ lf.tax_type }}{{ lf.igv_rate.as_hidden }}{{ lf.discount_amount.as_hidden }}</td>
-                        <td>{{ lf.unit_price }}</td>
+                        <td>{{ lf.unit_price }}<input type="text"
+                                class="form-control form-control-sm text-end value-unit-display"
+                                inputmode="decimal" autocomplete="off" value="0.00"
+                                {% if not operational_settings.purchases_value_unit_editable %}readonly tabindex="-1"{% endif %}></td>
                         <td>
                             <input type="text" class="form-control form-control-sm text-end price-unit-input"
                                 inputmode="decimal" autocomplete="off" value="0.00" {% if not operational_settings.purchases_price_unit_editable %}readonly{% endif %}>
@@ -237,7 +244,18 @@
                             <table class="table table-sm mb-0 ms-auto" style="width:auto; min-width:280px">
                                 <tbody>
                                     <tr>
-                                        <td class="text-muted">Descuento (-)</td>
+                                        <td class="text-muted">Descuentos por ítem (-)</td>
+                                        <td class="text-end fw-semibold" id="summary-line-discount">0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted"><label for="{{ form.global_discount_amount.id_for_label }}" class="mb-0">Descuento general (-)</label></td>
+                                        <td style="min-width:140px">{{ form.global_discount_amount }}{% for error in form.global_discount_amount.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2"><label class="form-check mb-0">{{ form.global_discount_before_tax }}<span class="form-check-label">Aplicar antes del IGV</span></label><div class="form-hint">Desmarcado: el importe se resta directamente del total final.</div></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Total descuento (-)</td>
                                         <td class="text-end fw-semibold" id="summary-discount">0.00</td>
                                     </tr>
                                     <tr>
@@ -389,6 +407,6 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/api.js' %}"></script>
 <script src="{% static 'js/components/partner-picker.js' %}"></script>
-<script src="{% static 'js/components/product-picker.js' %}"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}"></script>
-<script src="{% static 'js/purchases/document-form.js' %}"></script>{% endblock %}
+<script src="{% static 'js/purchases/document-form.js' %}?v=20260905-2"></script>{% endblock %}

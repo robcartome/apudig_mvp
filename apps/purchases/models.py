@@ -313,6 +313,8 @@ class PurchaseDocument(TimeStampedModel):
     unaffected_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     igv_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total_discount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    global_discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    global_discount_before_tax = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     register_inventory_movement = models.BooleanField(default=False)
     warehouse = models.ForeignKey(
@@ -344,6 +346,10 @@ class PurchaseDocument(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(exchange_rate__gt=0),
                 name="purchase_document_exchange_rate_gt_zero",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(global_discount_amount__gte=0),
+                name="purchase_document_global_discount_gte_zero",
             ),
         ]
 
@@ -502,6 +508,18 @@ class PurchaseDocumentLine(models.Model):
     def __str__(self):
         concept = self.product or self.purchase_category
         return f"{self.position}. {concept} x {self.quantity}"
+
+    @property
+    def price_unit(self):
+        """Precio comercial unitario, incluido IGV si la línea es gravada.
+
+        ``unit_price`` conserva el valor neto que se requiere para calcular
+        impuestos e inventario. Este valor es el precio que ve el comprador y
+        el que se usa como referencia de compra del producto.
+        """
+        if self.tax_type != PurchaseTaxType.TAXED:
+            return self.unit_price
+        return self.unit_price * (Decimal("1") + self.igv_rate / Decimal("100"))
 
 
 class PurchaseDocumentReceiptMatch(models.Model):

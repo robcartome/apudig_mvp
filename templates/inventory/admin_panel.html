@@ -28,8 +28,8 @@
               <div class="card-body">
                 <div class="d-flex align-items-start justify-content-between gap-3">
                   <div>
-                    <div class="fw-semibold mb-1">Bloqueo de movimientos posteriores</div>
-                    <div class="text-muted small">Si está activo, no se permite editar/eliminar movimientos con operaciones posteriores relacionadas.</div>
+                    <div class="fw-semibold mb-1">Control de movimientos retroactivos</div>
+                    <div class="text-muted small">Si está activo, no permite aplicar un borrador con fecha anterior a operaciones ya aplicadas del mismo producto y almacén.</div>
                     {% if active_store %}
                     <div class="text-muted small mt-2">Sucursal activa: <strong>{{ active_store.name }}</strong></div>
                     {% endif %}

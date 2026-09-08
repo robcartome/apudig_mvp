@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load list_sorting %}
 {% block title %}Órdenes de Venta — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Órdenes de Venta</h2>{% endblock %}
 
@@ -21,40 +22,19 @@
   </div>
 </div>
 
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-5">
-        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-               placeholder="Buscar por cliente, RUC o serie…">
-      </div>
-      <div class="col-md-3">
-        <select name="status" class="form-select form-select-sm">
-          <option value="">Todos los estados</option>
-          {% for code, label in status_choices %}
-          <option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
-        <a href="{% url 'sales:order_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
-      </div>
-    </form>
-  </div>
-</div>
+{% include "components/list_filters.html" %}
 
 <div class="card">
   <div class="table-responsive">
     <table class="table table-vcenter table-hover card-table">
       <thead>
         <tr>
-          <th>N° Orden</th>
-          <th>Cliente</th>
-          <th>Tipo Documento</th>
-          <th>Emisión</th>
-          <th>Estado</th>
-          <th class="text-end">Total</th>
+          {% sortable_header "number" "N° Orden" %}
+          {% sortable_header "customer" "Cliente" %}
+          {% sortable_header "document_type" "Tipo Documento" %}
+          {% sortable_header "issue_date" "Emisión" %}
+          {% sortable_header "status" "Estado" %}
+          {% sortable_header "total" "Total" "text-end" %}
           <th></th>
         </tr>
       </thead>
@@ -104,10 +84,10 @@
     </p>
     <ul class="pagination m-0 ms-auto">
       {% if page_obj.has_previous %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}">ant</a></li>
+      <li class="page-item"><a class="page-link" href="?{{ list_filters.pagination_query }}{% if list_filters.pagination_query %}&{% endif %}page={{ page_obj.previous_page_number }}">ant</a></li>
       {% endif %}
       {% if page_obj.has_next %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}">sig</a></li>
+      <li class="page-item"><a class="page-link" href="?{{ list_filters.pagination_query }}{% if list_filters.pagination_query %}&{% endif %}page={{ page_obj.next_page_number }}">sig</a></li>
       {% endif %}
     </ul>
   </div>

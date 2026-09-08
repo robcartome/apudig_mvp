@@ -29,6 +29,17 @@ from apps.sales.services import (
     create_sale_order,
     update_sale_order,
 )
+from apps.core.list_filters import read_list_filters, sort_queryset
+
+
+SALE_ORDER_SORTS = {
+    "number": ("series_code", "number"),
+    "customer": "customer_legal_name",
+    "document_type": "document_type__name",
+    "issue_date": ("issue_date", "created_at"),
+    "status": "status",
+    "total": "total",
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -70,18 +81,33 @@ def order_list(request):
         return redirect_resp
 
     _, store_id = _get_ids(request)
-    q = request.GET.get("q", "").strip()
-    status = request.GET.get("status", "")
-
-    orders = search_orders(store_id, query=q or None, status=status or None)
-    paginator = Paginator(orders, 25)
+    filters = read_list_filters(request)
+    orders = search_orders(
+        store_id, query=filters["q"] or None, status=filters["status"] or None,
+        date_from=filters["date_from_value"], date_to=filters["date_to_value"],
+        created_from=filters["created_from_value"], created_to=filters["created_to_value"],
+        number=filters["number"] or None, series=filters["series"] or None,
+        customer=filters["party"] or None, total_min=filters["total_min_value"],
+        total_max=filters["total_max_value"],
+    )
+    orders, table_sort = sort_queryset(
+        request, orders, SALE_ORDER_SORTS, default=("issue_date", "desc")
+    )
+    paginator = Paginator(orders, 80)
     page = paginator.get_page(request.GET.get("page"))
 
     return render(request, "sales/order_list.html", {
         "page_obj": page,
-        "q": q,
-        "status": status,
+        "table_sort": table_sort,
+        "q": filters["q"],
+        "status": filters["status"],
         "status_choices": SALE_ORDER_STATUS_CHOICES,
+        "list_filters": filters,
+        "filter_search_placeholder": "Cliente, documento, serie o número",
+        "filter_date_label": "Fechas de emisión",
+        "filter_collapse_id": "salesOrderAdvancedFilters",
+        "filter_advanced_template": "sales/partials/commercial_list_filters.html",
+        "filter_reset_url": reverse("sales:order_list"),
     })
 
 
