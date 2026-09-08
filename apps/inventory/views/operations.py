@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils import timezone
+from apps.core.list_filters import read_list_filters
 
 from ..forms import MovementDetailEditFormSet, MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
 from ..models import Movement, MovementType, Unit
@@ -108,16 +109,37 @@ def movement_list(request):
     if r:
         return r
     store_id = _get_store_id(request)
-    query = request.GET.get("q", "")
+    filters = read_list_filters(request)
+    query = filters["q"]
     movement_type = request.GET.get("type", "")
-    qs = search_movements(store_id, query, movement_type or None) if store_id else Movement.objects.none()
-    page_obj = _paginate(request, qs)
+    warehouse = request.GET.get("warehouse", "")
+    filters["advanced_filters_active"] = (
+        filters["advanced_filters_active"] or bool(movement_type or warehouse)
+    )
+    qs = search_movements(
+        store_id, query, movement_type or None,
+        status=filters["status"] or None,
+        date_from=filters["date_from_value"], date_to=filters["date_to_value"],
+        created_from=filters["created_from_value"], created_to=filters["created_to_value"],
+        series=filters["series"] or None, number=filters["number"] or None,
+        party=filters["party"] or None, warehouse=warehouse or None,
+    ) if store_id else Movement.objects.none()
+    page_obj = Paginator(qs, 80).get_page(request.GET.get("page"))
 
     return render(request, "inventory/movement_list.html", {
         "page_obj": page_obj,
         "query": query,
         "movement_type": movement_type,
         "type_choices": Movement.MOVEMENT_TYPES,
+        "status_choices": Movement.STATUS_CHOICES,
+        "warehouse": warehouse,
+        "warehouses": get_warehouses_for_store(store_id, active_only=True) if store_id else [],
+        "list_filters": filters,
+        "filter_search_placeholder": "Documento, operación, cliente o proveedor",
+        "filter_date_label": "Fechas del movimiento",
+        "filter_collapse_id": "movementAdvancedFilters",
+        "filter_advanced_template": "inventory/partials/movement_list_filters.html",
+        "filter_reset_url": reverse("inventory:movement_list"),
     })
 
 

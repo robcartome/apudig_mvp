@@ -17,7 +17,11 @@ def get_quotations_for_store(store_id: str, status: str | None = None):
     return qs
 
 
-def search_quotations(store_id: str, query: str | None = None, status: str | None = None):
+def search_quotations(
+    store_id: str, query: str | None = None, status: str | None = None, *,
+    date_from=None, date_to=None, created_from=None, created_to=None,
+    number=None, series=None, customer=None, total_min=None, total_max=None,
+):
     """
     Búsqueda de cotizaciones por texto (nombre cliente, nº cotización) y/o estado.
     """
@@ -33,8 +37,14 @@ def search_quotations(store_id: str, query: str | None = None, status: str | Non
             Q(customer_legal_name__icontains=query)
             | Q(customer_document_number__icontains=query)
             | Q(series_code__icontains=query)
+            | Q(number__icontains=query)
         )
-    return qs
+    return _filter_commercial_queryset(
+        qs, date_from=date_from, date_to=date_to,
+        created_from=created_from, created_to=created_to,
+        number=number, series=series, party=customer,
+        total_min=total_min, total_max=total_max,
+    )
 
 
 def get_quotation_detail(pk):
@@ -58,7 +68,11 @@ def get_sale_orders_for_store(store_id: str, status: str | None = None):
     return qs
 
 
-def search_orders(store_id: str, query: str | None = None, status: str | None = None):
+def search_orders(
+    store_id: str, query: str | None = None, status: str | None = None, *,
+    date_from=None, date_to=None, created_from=None, created_to=None,
+    number=None, series=None, customer=None, total_min=None, total_max=None,
+):
     qs = (
         SaleOrder.objects.for_store(store_id)
         .select_related("customer", "document_type", "series")
@@ -73,6 +87,39 @@ def search_orders(store_id: str, query: str | None = None, status: str | None = 
             | Q(series_code__icontains=query)
             | Q(number__icontains=query)
         )
+    return _filter_commercial_queryset(
+        qs, date_from=date_from, date_to=date_to,
+        created_from=created_from, created_to=created_to,
+        number=number, series=series, party=customer,
+        total_min=total_min, total_max=total_max,
+    )
+
+
+def _filter_commercial_queryset(
+    qs, *, date_from=None, date_to=None, created_from=None, created_to=None,
+    number=None, series=None, party=None, total_min=None, total_max=None,
+):
+    if date_from:
+        qs = qs.filter(issue_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(issue_date__lte=date_to)
+    if created_from:
+        qs = qs.filter(created_at__date__gte=created_from)
+    if created_to:
+        qs = qs.filter(created_at__date__lte=created_to)
+    if number:
+        qs = qs.filter(number__icontains=number)
+    if series:
+        qs = qs.filter(series_code__icontains=series)
+    if party:
+        qs = qs.filter(
+            Q(customer_legal_name__icontains=party)
+            | Q(customer_document_number__icontains=party)
+        )
+    if total_min is not None:
+        qs = qs.filter(total__gte=total_min)
+    if total_max is not None:
+        qs = qs.filter(total__lte=total_max)
     return qs
 
 

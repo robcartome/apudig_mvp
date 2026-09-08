@@ -15,6 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.companies.models import CompanyOperationalSettings, Store
 from apps.core.models import AuditLog
+from apps.core.list_filters import read_list_filters
 from apps.inventory.models import Category, Movement, MovementStatus, MovementType, Product, Unit
 from apps.partners.models import Supplier
 from apps.sales.models import MeansOfPayment
@@ -200,8 +201,9 @@ def purchase_document_list(request):
     if denied:
         return denied
     company_id, store = _active_scope(request)
-    query = request.GET.get("q", "").strip()
-    status = request.GET.get("status", "")
+    common_filters = read_list_filters(request)
+    query = common_filters["q"]
+    status = common_filters["status"]
     today = timezone.localdate()
     month_start = today.replace(day=1)
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -212,7 +214,7 @@ def purchase_document_list(request):
     created_to_text = request.GET.get("created_to", "")
     number = request.GET.get("number", "").strip()
     series = request.GET.get("series", "").strip()
-    supplier = request.GET.get("supplier", "").strip()
+    supplier = common_filters["party"]
     payment_status = request.GET.get("payment_status", "")
     total_min_text = request.GET.get("total_min", "").strip()
     total_max_text = request.GET.get("total_max", "").strip()
@@ -278,6 +280,19 @@ def purchase_document_list(request):
             created_from_text, created_to_text, number, series, supplier,
             payment_status, total_min_text, total_max_text, status,
         )),
+        "list_filters": {
+            **common_filters,
+            "party": supplier,
+            "advanced_filters_active": any((
+                created_from_text, created_to_text, number, series, supplier,
+                payment_status, total_min_text, total_max_text, status,
+            )),
+        },
+        "filter_search_placeholder": "Proveedor, RUC, serie o número",
+        "filter_date_label": "Fechas de emisión",
+        "filter_collapse_id": "purchaseAdvancedFilters",
+        "filter_advanced_template": "purchases/partials/document_list_filters.html",
+        "filter_reset_url": reverse("purchases:document_list"),
         "payment_means": MeansOfPayment.objects.filter(
             company_id=company_id, active=True
         ).order_by("name"),
@@ -959,16 +974,45 @@ def purchase_order_list(request):
     if denied:
         return denied
     company_id, store = _active_scope(request)
-    query = request.GET.get("q", "").strip()
-    status = request.GET.get("status", "")
+    filters = read_list_filters(request)
     orders = PurchaseOrder.objects.filter(company_id=company_id, store_id=store.pk).select_related("supplier")
-    if query:
-        orders = orders.filter(order_number__icontains=query) | orders.filter(supplier__name__icontains=query)
-    if status:
-        orders = orders.filter(status=status)
+    if filters["q"]:
+        orders = orders.filter(
+            Q(order_number__icontains=filters["q"])
+            | Q(supplier__name__icontains=filters["q"])
+            | Q(supplier__document_number__icontains=filters["q"])
+        )
+    if filters["status"]:
+        orders = orders.filter(status=filters["status"])
+    if filters["date_from_value"]:
+        orders = orders.filter(order_date__gte=filters["date_from_value"])
+    if filters["date_to_value"]:
+        orders = orders.filter(order_date__lte=filters["date_to_value"])
+    if filters["created_from_value"]:
+        orders = orders.filter(created_at__date__gte=filters["created_from_value"])
+    if filters["created_to_value"]:
+        orders = orders.filter(created_at__date__lte=filters["created_to_value"])
+    if filters["number"]:
+        orders = orders.filter(order_number__icontains=filters["number"])
+    if filters["party"]:
+        orders = orders.filter(
+            Q(supplier__name__icontains=filters["party"])
+            | Q(supplier__document_number__icontains=filters["party"])
+        )
+    if filters["total_min_value"] is not None:
+        orders = orders.filter(total__gte=filters["total_min_value"])
+    if filters["total_max_value"] is not None:
+        orders = orders.filter(total__lte=filters["total_max_value"])
     return render(request, "purchases/order_list.html", {
-        "page_obj": Paginator(orders.order_by("-order_date", "-created_at"), 25).get_page(request.GET.get("page")),
-        "q": query, "status": status, "status_choices": PurchaseOrderStatus.choices,
+        "page_obj": Paginator(orders.order_by("-order_date", "-created_at"), 80).get_page(request.GET.get("page")),
+        "q": filters["q"], "status": filters["status"],
+        "status_choices": PurchaseOrderStatus.choices,
+        "list_filters": filters,
+        "filter_search_placeholder": "Número, proveedor o RUC",
+        "filter_date_label": "Fechas de orden",
+        "filter_collapse_id": "purchaseOrderAdvancedFilters",
+        "filter_advanced_template": "purchases/partials/order_list_filters.html",
+        "filter_reset_url": reverse("purchases:order_list"),
         **_permission_context(request),
     })
 

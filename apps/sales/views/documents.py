@@ -17,7 +17,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -50,9 +50,10 @@ from apps.sales.services import (
     update_sales_document_draft,
     void_sales_document,
 )
-from apps.inventory.models import PriceList, Warehouse
+from apps.inventory.models import PriceList, Product, Warehouse
 from apps.partners.models import DocumentType
 from apps.core.models import AuditLog
+from apps.core.list_filters import read_list_filters
 from apps.companies.models import CompanyOperationalSettings
 from apps.users.permissions import user_has_company_permission
 
@@ -109,6 +110,7 @@ def _lines_from_formset(formset) -> list[dict]:
 def _document_form_context(company_id, header_form, line_formset, title, document=None):
     operational_settings = CompanyOperationalSettings.objects.filter(company_id=company_id).first()
     settings = operational_settings or CompanyOperationalSettings(company_id=company_id)
+    _restore_posted_line_metadata(line_formset, company_id)
     for form in line_formset.forms:
         form.fields["igv_rate"].initial = settings.default_igv_rate
     return {
@@ -123,6 +125,61 @@ def _document_form_context(company_id, header_form, line_formset, title, documen
         ).order_by("name") if company_id else PriceList.objects.none(),
         "operational_settings": settings,
     }
+
+
+def _restore_posted_line_metadata(line_formset, company_id):
+    """Restore display-only product data after an invalid document POST."""
+    if not line_formset.is_bound:
+        return
+
+    product_ids = {
+        str(form["product"].value())
+        for form in line_formset.forms
+        if form["product"].value()
+    }
+    products = {
+        str(product.pk): product
+        for product in Product.objects.filter(
+            Q(company_id=company_id) | Q(company__isnull=True),
+            pk__in=product_ids,
+        )
+        .select_related("unit")
+        .prefetch_related("unit_conversions__unit")
+    }
+    for form in line_formset.forms:
+        product = products.get(str(form["product"].value()))
+        if not product:
+            continue
+
+        unit_id = str(form["unit"].value() or product.unit_id)
+        unit_code = product.unit.code
+        for conversion in product.unit_conversions.all():
+            if str(conversion.unit_id) == unit_id:
+                unit_code = conversion.unit.code
+                break
+
+        form.initial.update({
+            "product": str(product.pk),
+            "product_name": product.name,
+            "product_unit_id": unit_id,
+            "product_unit": unit_code,
+            "base_unit_id": str(product.unit_id),
+            "base_unit_code": product.unit.code,
+            "product_units": product.unit_conversions.all(),
+        })
+
+        try:
+            unit_price = Decimal(str(form["unit_price"].value() or "0"))
+            tax_type = str(form["tax_type"].value() or "10")
+            igv_rate = Decimal(str(form["igv_rate"].value() or "0"))
+            multiplier = (
+                Decimal("1") + igv_rate / Decimal("100")
+                if tax_type == "10"
+                else Decimal("1")
+            )
+            form.initial["price_with_igv"] = unit_price * multiplier
+        except (ArithmeticError, ValueError):
+            pass
 
 
 def _document_service_fields(cleaned_data):
@@ -140,13 +197,14 @@ def _document_service_fields(cleaned_data):
         "global_discount_before_tax": cleaned_data.get("global_discount_before_tax", False),
         "notes": cleaned_data.get("notes", ""),
         "internal_reference": cleaned_data.get("internal_reference", ""),
-        "number": cleaned_data.get("number", "") if cleaned_data.get("manual_number") else "",
+        "number": cleaned_data.get("number") if cleaned_data.get("manual_number") else None,
     }
 
 
 def _document_reference(document, *, link=True):
     """Safe document identifier for interactive flash messages."""
-    identifier = f"{document.series_code}-{document.number}"
+    series = document.series_code or getattr(document.series, "series", "")
+    identifier = f"{series}-{document.number}" if document.number else f"{series} (correlativo pendiente)"
     if not link:
         return format_html("<strong>{}</strong>", identifier)
     return format_html(
@@ -164,8 +222,9 @@ def document_list(request):
         return redirect_resp
 
     _, store_id = _get_ids(request)
-    q = request.GET.get("q", "").strip()
-    status = request.GET.get("status", "")
+    filters = read_list_filters(request)
+    q = filters["q"]
+    status = filters["status"]
     document_type = request.GET.get("document_type", "")
     today = timezone.localdate()
     month_start = today.replace(day=1)
@@ -177,7 +236,7 @@ def document_list(request):
     created_to_text = request.GET.get("created_to", "")
     number = request.GET.get("number", "").strip()
     series = request.GET.get("series", "").strip()
-    customer = request.GET.get("customer", "").strip()
+    customer = filters["party"]
     total_min_text = request.GET.get("total_min", "").strip()
     total_max_text = request.GET.get("total_max", "").strip()
 
@@ -243,6 +302,19 @@ def document_list(request):
             created_from_text, created_to_text, number, series, customer,
             total_min_text, total_max_text, status, document_type,
         )),
+        "list_filters": {
+            **filters,
+            "party": customer,
+            "advanced_filters_active": any((
+                created_from_text, created_to_text, number, series, customer,
+                total_min_text, total_max_text, status, document_type,
+            )),
+        },
+        "filter_search_placeholder": "Cliente, documento, serie o número",
+        "filter_date_label": "Fechas de emisión",
+        "filter_collapse_id": "salesAdvancedFilters",
+        "filter_advanced_template": "sales/partials/document_list_filters.html",
+        "filter_reset_url": reverse("sales:document_list"),
         "status_choices": SALES_DOCUMENT_STATUS_CHOICES,
         "document_types": DocumentType.objects.filter(
             active=True, category__in=("SALES", "BILLING")
@@ -578,7 +650,7 @@ def document_issue(request, pk):
     if redirect_resp:
         return redirect_resp
     if request.method != "POST":
-        return redirect("sales:document_detail", pk=pk)
+        return redirect("sales:document_list")
     _, store_id = _get_ids(request)
     get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
     try:
@@ -586,7 +658,7 @@ def document_issue(request, pk):
         messages.success(request, format_html("Documento emitido: {}.", _document_reference(v)))
     except (SalesDocument.DoesNotExist, ValueError) as exc:
         messages.error(request, str(exc))
-    return redirect("sales:document_detail", pk=pk)
+    return redirect("sales:document_list")
 
 
 def document_void(request, pk):

@@ -63,6 +63,26 @@ def _reserve_quotation_number(series, requested_number=None, exclude_pk=None):
         locked_series.save(update_fields=["current_number"])
     return locked_series, number
 
+
+def _reserve_sales_document_number(series, requested_number=None, exclude_pk=None):
+    """Reserve a sales document number when its draft is created or re-seriesed."""
+    if series is None or not series.active:
+        raise ValueError("Debe seleccionar una serie documental activa.")
+    locked_series = DocumentSeries.objects.select_for_update().get(pk=series.pk)
+    number = int(requested_number) if requested_number else locked_series.current_number + 1
+    number_str = f"{number:08d}"
+    duplicate = SalesDocument.objects.filter(series=locked_series, number=number_str)
+    if exclude_pk:
+        duplicate = duplicate.exclude(pk=exclude_pk)
+    if duplicate.exists():
+        raise ValueError(
+            f"Ya existe el comprobante {locked_series.series}-{number_str}."
+        )
+    if number > locked_series.current_number:
+        locked_series.current_number = number
+        locked_series.save(update_fields=["current_number"])
+    return locked_series, number_str
+
 @transaction.atomic
 def create_document_series(
     company_id: str,
@@ -763,7 +783,7 @@ def create_sales_document_draft(
     **kwargs,
 ) -> SalesDocument:
     """
-    Crea un comprobante en estado DRAFT sin asignar número (se reserva en issue_sales_document).
+    Crea un comprobante en estado DRAFT y reserva inmediatamente su correlativo.
     lines: misma estructura que create_quotation.
     """
     document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
@@ -775,7 +795,8 @@ def create_sales_document_draft(
         kwargs.get("global_discount_amount", 0),
         kwargs.get("global_discount_before_tax", False),
     )
-    requested_number = kwargs.pop("number", "")
+    requested_number = kwargs.pop("number", None)
+    series, number = _reserve_sales_document_number(series, requested_number)
 
     sales_document = SalesDocument.objects.create(
         store_id=store_id,
@@ -789,7 +810,7 @@ def create_sales_document_draft(
         customer_ubigeo=getattr(customer, "ubigeo", ""),
         series=series,
         series_code=series.series,
-        number=requested_number,
+        number=number,
         sale_order=sale_order,
         created_by=created_by,
         **{k: v for k, v in {**totals, **kwargs}.items()},
@@ -801,7 +822,7 @@ def create_sales_document_draft(
 
 @transaction.atomic
 def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
-    """Copia un documento como borrador, sin correlativo ni relaciones de origen."""
+    """Copia un documento como borrador con un correlativo nuevo."""
     source = (
         SalesDocument.objects.select_for_update()
         .select_related("customer", "document_type", "series")
@@ -963,7 +984,16 @@ def update_sales_document_draft(
         kwargs.get("global_discount_amount", 0),
         kwargs.get("global_discount_before_tax", False),
     )
-    requested_number = kwargs.pop("number", "")
+    requested_number = kwargs.pop("number", None)
+
+    if series.pk != document.series_id:
+        series, reserved_number = _reserve_sales_document_number(series)
+        document.number = reserved_number
+    elif requested_number:
+        series, reserved_number = _reserve_sales_document_number(
+            series, requested_number, exclude_pk=document.pk
+        )
+        document.number = reserved_number
 
     document.customer = customer
     document.customer_document_type = customer.document_type
@@ -973,7 +1003,6 @@ def update_sales_document_draft(
     document.customer_ubigeo = getattr(customer, "ubigeo", "")
     document.series = series
     document.series_code = series.series
-    document.number = requested_number
     for field, value in {**kwargs, **totals}.items():
         setattr(document, field, value)
     document.save()
@@ -985,7 +1014,7 @@ def update_sales_document_draft(
 @transaction.atomic
 def issue_sales_document(sales_document_id, issued_by=None) -> SalesDocument:
     """
-    Emite el comprobante: asigna número correlativo con bloqueo pesimista.
+    Emite el comprobante usando el correlativo reservado en el borrador.
     Valida unicidad (series + number). Cambia status a ISSUED.
     Si tiene sale_order → la marca INVOICED.
     """

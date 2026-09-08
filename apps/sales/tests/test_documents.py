@@ -20,7 +20,10 @@ from apps.inventory.models import (
     Unit,
     Warehouse,
 )
-from apps.inventory.selectors import get_movement_traceability_report
+from apps.inventory.selectors import (
+    get_movement_traceability_report,
+    get_stock_report_enhanced,
+)
 from apps.partners.models import Customer, DocumentType
 from apps.sales.models import (
     DocumentSeries,
@@ -140,9 +143,9 @@ class SalesDocumentServiceTest(TestCase):
 
         self.assertEqual(document.lines.get().price_unit, Decimal("118.00"))
 
-    def test_draft_has_no_number(self):
+    def test_draft_reserves_number(self):
         v = self._create_draft()
-        self.assertEqual(v.number, "")
+        self.assertEqual(v.number, "00000001")
 
     def test_line_memo_is_persisted_on_create_and_update(self):
         line = _make_line(self.product)
@@ -220,6 +223,7 @@ class SalesDocumentServiceTest(TestCase):
 
     def test_issue_assigns_number(self):
         v = self._create_draft()
+        self.assertEqual(v.number, "00000001")
         issued = issue_sales_document(v.pk)
         self.assertEqual(issued.status, "ISSUED")
         self.assertEqual(issued.number, "00000001")
@@ -274,6 +278,31 @@ class SalesDocumentServiceTest(TestCase):
         self.assertEqual(entry["origin"], MovementOrigin.SALE)
         self.assertEqual(entry["sales_document_id"], str(document.pk))
 
+    def test_draft_commits_stock_without_changing_physical_stock(self):
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("10")
+        )
+        document = self._create_draft(
+            lines=[_make_line(self.product, qty="2")],
+            warehouse=self.warehouse,
+            register_inventory_movement=True,
+        )
+
+        row = get_stock_report_enhanced(
+            str(self.store.pk), str(self.warehouse.pk)
+        )[0]
+        self.assertEqual(row["quantity"], Decimal("10"))
+        self.assertEqual(row["committed"], Decimal("2"))
+        self.assertEqual(row["available"], Decimal("8"))
+
+        issue_sales_document(document.pk)
+        row = get_stock_report_enhanced(
+            str(self.store.pk), str(self.warehouse.pk)
+        )[0]
+        self.assertEqual(row["quantity"], Decimal("8"))
+        self.assertEqual(row["committed"], Decimal("0"))
+        self.assertEqual(row["available"], Decimal("8"))
+
     def test_alternate_unit_keeps_commercial_quantity_and_moves_base_stock(self):
         box = Unit.objects.create(code="BX", name="Caja")
         ProductUnit.objects.create(
@@ -318,8 +347,8 @@ class SalesDocumentServiceTest(TestCase):
         document.refresh_from_db()
         self.fac_series.refresh_from_db()
         self.assertEqual(document.status, "DRAFT")
-        self.assertEqual(document.number, "")
-        self.assertEqual(self.fac_series.current_number, 0)
+        self.assertEqual(document.number, "00000001")
+        self.assertEqual(self.fac_series.current_number, 1)
         self.assertFalse(Movement.objects.exists())
 
     def test_issue_requires_warehouse_when_stock_control_is_enabled(self):
@@ -406,7 +435,7 @@ class SalesDocumentServiceTest(TestCase):
         with self.assertRaisesRegex(ValueError, "serie documental no estÃ¡ activa"):
             issue_sales_document(document.pk)
         self.fac_series.refresh_from_db()
-        self.assertEqual(self.fac_series.current_number, 0)
+        self.assertEqual(self.fac_series.current_number, 1)
 
     def test_issue_marks_order_invoiced(self):
         doc_type, _ = DocumentType.objects.get_or_create(
@@ -628,6 +657,9 @@ class SalesDocumentViewsTest(TestCase):
         self.assertContains(
             response, reverse("sales:document_issue", kwargs={"pk": document.pk})
         )
+        self.assertContains(
+            response, reverse("sales:document_pdf", kwargs={"pk": document.pk})
+        )
 
     def test_preview_contains_full_detail_link(self):
         self._login()
@@ -643,7 +675,7 @@ class SalesDocumentViewsTest(TestCase):
             response, reverse("sales:document_detail", kwargs={"pk": document.pk})
         )
 
-    def test_copy_creates_independent_draft_without_number(self):
+    def test_copy_creates_independent_draft_with_new_number(self):
         self._login()
         self._grant_permission("manage")
         source = self._create_draft()
@@ -662,7 +694,7 @@ class SalesDocumentViewsTest(TestCase):
             fetch_redirect_response=False,
         )
         self.assertEqual(copied.status, "DRAFT")
-        self.assertEqual(copied.number, "")
+        self.assertEqual(copied.number, "00000002")
         self.assertEqual(copied.lines.count(), source.lines.count())
         self.assertEqual(copied.lines.get().memo, "Memo que debe copiarse")
         self.assertIsNone(copied.source_quotation_id)
@@ -761,6 +793,10 @@ class SalesDocumentViewsTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Revisa la información:")
         self.assertContains(response, "Cantidad:")
+        self.assertContains(response, self.product.name)
+        line_form = response.context["line_formset"].forms[0]
+        self.assertEqual(line_form.initial["product_name"], self.product.name)
+        self.assertEqual(line_form.initial["product"], str(self.product.pk))
 
     def test_series_options_are_filtered_by_document_type(self):
         self._login()
@@ -891,7 +927,11 @@ class SalesDocumentViewsTest(TestCase):
         issue_response = self.client.post(
             reverse("sales:document_issue", kwargs={"pk": document.pk})
         )
-        self.assertEqual(issue_response.status_code, 302)
+        self.assertRedirects(
+            issue_response,
+            reverse("sales:document_list"),
+            fetch_redirect_response=False,
+        )
         document.refresh_from_db()
         self.assertEqual(document.status, "ISSUED")
         self.assertEqual(

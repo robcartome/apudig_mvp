@@ -96,7 +96,7 @@
                    href="{% url 'sales:order_list' %}">Pedidos de Venta</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link {% if 'sales_document' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+                <a class="nav-link {% if request.resolver_match.namespace == 'sales' and 'document' in request.resolver_match.url_name|default:'' %}active{% endif %}"
                    href="{% url 'sales:document_list' %}">Documentos de venta</a>
               </li>
             </ul>

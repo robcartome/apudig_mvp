@@ -17,7 +17,7 @@
       <a href="{% url 'sales:quotation_create' %}" class="btn btn-primary btn-sm">
         <i class="ti ti-plus me-1"></i>Nueva cotización
       </a>
-      <a href="{% url 'sales:quotation_xlsx' %}?q={{ query|urlencode }}&status={{ status|urlencode }}"
+      <a href="{% url 'sales:quotation_xlsx' %}?{{ list_filters.pagination_query }}"
          class="btn btn-outline-success btn-sm ms-1">
         <i class="ti ti-file-spreadsheet me-1"></i>Excel
       </a>
@@ -25,28 +25,7 @@
   </div>
 </div>
 
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-5">
-        <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm"
-               placeholder="Buscar por cliente, RUC o serie…">
-      </div>
-      <div class="col-md-3">
-        <select name="status" class="form-select form-select-sm">
-          <option value="">Todos los estados</option>
-          {% for code, label in status_choices %}
-          <option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Filtrar</button>
-        <a href="{% url 'sales:quotation_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a>
-      </div>
-    </form>
-  </div>
-</div>
+{% include "components/list_filters.html" %}
 
 <div class="card">
   <div class="table-responsive">

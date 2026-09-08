@@ -16,26 +16,7 @@
       href="{% url 'purchases:document_create' %}" class="btn btn-primary btn-sm"><i class="ti ti-plus me-1"></i>Nuevo
       comprobante</a>{% endif %}</div>
 </div>
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-md-4"><label class="form-label small mb-1">Búsqueda rápida</label><div class="input-group input-group-sm"><input name="q" value="{{ q }}" class="form-control" placeholder="Proveedor, RUC, serie o número"><button class="btn btn-outline-secondary" type="submit" title="Buscar"><i class="ti ti-search"></i></button></div></div>
-      <div class="col-md-4"><label class="form-label small mb-1">Fechas de emisión</label><div class="input-group input-group-sm"><input type="date" name="date_from" value="{{ date_from }}" class="form-control" title="Desde"><span class="input-group-text">a</span><input type="date" name="date_to" value="{{ date_to }}" class="form-control" title="Hasta"></div></div>
-      <div class="col-md-auto"><button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#purchaseAdvancedFilters" aria-expanded="{% if advanced_filters_active %}true{% else %}false{% endif %}" aria-controls="purchaseAdvancedFilters"><i class="ti ti-filter me-1"></i><span class="js-filter-toggle-label">{% if advanced_filters_active %}Ocultar filtros{% else %}Mostrar filtros{% endif %}</span><i class="ti {% if advanced_filters_active %}ti-chevron-up{% else %}ti-chevron-down{% endif %} ms-1 js-filter-toggle-chevron"></i></button></div>
-      <div class="col-12 collapse js-advanced-filters{% if advanced_filters_active %} show{% endif %}" id="purchaseAdvancedFilters"><div class="rounded border bg-light-subtle p-3 mt-1"><div class="row g-2 align-items-end">
-        <div class="col-sm-6 col-lg-3"><label class="form-label small mb-1">Fechas de creación</label><div class="input-group input-group-sm"><input type="date" name="created_from" value="{{ created_from }}" class="form-control" title="Desde"><span class="input-group-text">a</span><input type="date" name="created_to" value="{{ created_to }}" class="form-control" title="Hasta"></div></div>
-        <div class="col-sm-3 col-lg-1"><label class="form-label small mb-1">Serie</label><input name="series" value="{{ series }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Número</label><input name="number" value="{{ number }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-6 col-lg-2"><label class="form-label small mb-1">Proveedor / RUC</label><input name="supplier" value="{{ supplier }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Total desde</label><input type="number" min="0" step="0.01" name="total_min" value="{{ total_min }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Total hasta</label><input type="number" min="0" step="0.01" name="total_max" value="{{ total_max }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Estado</label><select name="status" class="form-select form-select-sm"><option value="">Todos</option>{% for code,label in status_choices %}<option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-        <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Estado de pago</label><select name="payment_status" class="form-select form-select-sm"><option value="">Todos</option>{% for code,label in payment_status_choices %}<option value="{{ code }}" {% if payment_status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-        <div class="col-auto"><button class="btn btn-primary btn-sm" type="submit"><i class="ti ti-search me-1"></i>Aplicar filtros</button><a href="{% url 'purchases:document_list' %}" class="btn btn-ghost-secondary btn-sm">Limpiar</a></div>
-      </div></div></div>
-    </form>
-  </div>
-</div>
+{% include "components/list_filters.html" %}
 <div class="card">
   <div class="table-scroll-top js-table-scroll-top" data-scroll-target="#purchase-documents-table-scroll" aria-label="Desplazamiento horizontal superior"><div></div></div>
   <div class="table-responsive" id="purchase-documents-table-scroll">
@@ -170,7 +151,6 @@
 
 {% block extra_js %}
 <script src="{% static 'js/components/table-scroll-sync.js' %}"></script>
-<script src="{% static 'js/components/filter-toggle.js' %}"></script>
 <script>
   (function () {
     const paymentModalEl = document.getElementById('quickPaymentModal');

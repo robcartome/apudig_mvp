@@ -22,26 +22,7 @@
   </div>
 </div>
 
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-md-4"><label class="form-label small mb-1">Búsqueda rápida</label><div class="input-group input-group-sm"><input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Cliente, documento, serie o número"><button class="btn btn-outline-secondary" type="submit" title="Buscar"><i class="ti ti-search"></i></button></div></div>
-      <div class="col-md-4"><label class="form-label small mb-1">Fechas de emisión</label><div class="input-group input-group-sm"><input type="date" name="date_from" value="{{ date_from }}" class="form-control" title="Desde"><span class="input-group-text">a</span><input type="date" name="date_to" value="{{ date_to }}" class="form-control" title="Hasta"></div></div>
-      <div class="col-md-auto"><button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#salesAdvancedFilters" aria-expanded="{% if advanced_filters_active %}true{% else %}false{% endif %}" aria-controls="salesAdvancedFilters"><i class="ti ti-filter me-1"></i><span class="js-filter-toggle-label">{% if advanced_filters_active %}Ocultar filtros{% else %}Mostrar filtros{% endif %}</span><i class="ti {% if advanced_filters_active %}ti-chevron-up{% else %}ti-chevron-down{% endif %} ms-1 js-filter-toggle-chevron"></i></button></div>
-      <div class="col-12 collapse js-advanced-filters{% if advanced_filters_active %} show{% endif %}" id="salesAdvancedFilters"><div class="rounded border bg-light-subtle p-3 mt-1"><div class="row g-2 align-items-end">
-        <div class="col-sm-6 col-lg-3"><label class="form-label small mb-1">Fechas de creación</label><div class="input-group input-group-sm"><input type="date" name="created_from" value="{{ created_from }}" class="form-control" title="Desde"><span class="input-group-text">a</span><input type="date" name="created_to" value="{{ created_to }}" class="form-control" title="Hasta"></div></div>
-        <div class="col-sm-3 col-lg-1"><label class="form-label small mb-1">Serie</label><input name="series" value="{{ series }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Número</label><input name="number" value="{{ number }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-6 col-lg-2"><label class="form-label small mb-1">Cliente / documento</label><input name="customer" value="{{ customer }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Total desde</label><input type="number" min="0" step="0.01" name="total_min" value="{{ total_min }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-3 col-lg-2"><label class="form-label small mb-1">Total hasta</label><input type="number" min="0" step="0.01" name="total_max" value="{{ total_max }}" class="form-control form-control-sm"></div>
-        <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Tipo</label><select name="document_type" class="form-select form-select-sm"><option value="">Todos</option>{% for type in document_types %}<option value="{{ type.code }}" {% if document_type == type.code %}selected{% endif %}>{{ type.name }}</option>{% endfor %}</select></div>
-        <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Estado</label><select name="status" class="form-select form-select-sm"><option value="">Todos</option>{% for code,label in status_choices %}<option value="{{ code }}" {% if status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-        <div class="col-auto"><button class="btn btn-primary btn-sm" type="submit"><i class="ti ti-search me-1"></i>Aplicar filtros</button><a href="{% url 'sales:document_list' %}" class="btn btn-sm btn-ghost-secondary">Limpiar</a></div>
-      </div></div></div>
-    </form>
-  </div>
-</div>
+{% include "components/list_filters.html" %}
 
 <div class="card">
   <div class="table-scroll-top js-table-scroll-top" data-scroll-target="#sales-documents-table-scroll" aria-label="Desplazamiento horizontal superior"><div></div></div>
@@ -79,6 +60,10 @@
                class="btn btn-sm btn-outline-secondary js-document-preview" title="Ver detalle">
               <i class="ti ti-eye"></i>
             </a>
+            <a href="{% url 'sales:document_pdf' v.pk %}" target="_blank"
+               class="btn btn-sm btn-outline-secondary" title="Ver PDF / imprimir">
+              <i class="ti ti-file-type-pdf"></i>
+            </a>
             {% if v.status == "DRAFT" and can_manage_sales_documents %}
             <a href="{% url 'sales:document_edit' v.pk %}" class="btn btn-sm btn-outline-primary" title="Editar documento">
               <i class="ti ti-edit"></i>
@@ -94,7 +79,7 @@
             {% endif %}
             {% if v.status == "DRAFT" and can_authorize_sales_documents %}
             <form method="post" action="{% url 'sales:document_issue' v.pk %}" class="d-inline"
-                  onsubmit="return confirm('¿Aprobar y emitir este documento? Se asignará su correlativo.')">
+                  onsubmit="return confirm('¿Aprobar y emitir el documento {{ v.series_code }}-{{ v.number }}?')">
               {% csrf_token %}
               <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar y emitir">
                 <i class="ti ti-circle-check"></i>
@@ -156,7 +141,6 @@
 
 {% block extra_js %}
 <script src="{% static 'js/components/table-scroll-sync.js' %}"></script>
-<script src="{% static 'js/components/filter-toggle.js' %}"></script>
 <script>
   (function () {
     'use strict';

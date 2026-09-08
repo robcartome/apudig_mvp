@@ -31,6 +31,7 @@ from apps.sales.services import (
     update_quotation,
 )
 from apps.inventory.models import PriceList, Warehouse
+from apps.core.list_filters import read_list_filters
 from apps.users.permissions import user_has_company_permission
 
 DEFAULT_IGV_RATE = 18
@@ -106,18 +107,29 @@ def quotation_list(request):
         return redirect_resp
 
     _, store_id = _get_ids(request)
-    query = request.GET.get("q", "").strip()
-    status = request.GET.get("status", "")
-
-    qs = search_quotations(store_id, query=query or None, status=status or None)
-    paginator = Paginator(qs, 25)
+    filters = read_list_filters(request)
+    qs = search_quotations(
+        store_id, query=filters["q"] or None, status=filters["status"] or None,
+        date_from=filters["date_from_value"], date_to=filters["date_to_value"],
+        created_from=filters["created_from_value"], created_to=filters["created_to_value"],
+        number=filters["number"] or None, series=filters["series"] or None,
+        customer=filters["party"] or None, total_min=filters["total_min_value"],
+        total_max=filters["total_max_value"],
+    )
+    paginator = Paginator(qs, 80)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(request, "sales/quotation_list.html", {
         "page_obj": page_obj,
-        "query": query,
-        "status": status,
+        "query": filters["q"],
+        "status": filters["status"],
         "status_choices": QUOTATION_STATUS_CHOICES,
+        "list_filters": filters,
+        "filter_search_placeholder": "Cliente, documento, serie o número",
+        "filter_date_label": "Fechas de emisión",
+        "filter_collapse_id": "quotationAdvancedFilters",
+        "filter_advanced_template": "sales/partials/commercial_list_filters.html",
+        "filter_reset_url": reverse("sales:quotation_list"),
     })
 
 

@@ -24,7 +24,7 @@
       <form method="post" action="{% url 'sales:document_issue' sales_document.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-success btn-sm"
-                onclick="return confirm('¿Emitir este documento? Se asignará el número correlativo.')">
+                onclick="return confirm('¿Emitir el documento {{ sales_document.series_code }}-{{ sales_document.number }}?')">
           <i class="ti ti-send me-1"></i>Emitir
         </button>
       </form>

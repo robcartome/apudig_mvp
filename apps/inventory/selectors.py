@@ -209,13 +209,46 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
     return qs.order_by("-date")
 
 
-def search_movements(store_id: str, query: str, movement_type: str | None = None):
+def search_movements(
+    store_id: str, query: str, movement_type: str | None = None, *,
+    status=None, date_from=None, date_to=None, created_from=None, created_to=None,
+    series=None, number=None, party=None, warehouse=None,
+):
     qs = get_movements_for_store(store_id, movement_type=movement_type)
     if query:
         qs = qs.filter(
             Q(number__icontains=query)
             | Q(reason__icontains=query)
             | Q(reference_doc__icontains=query)
+            | Q(supplier__name__icontains=query)
+            | Q(customer__legal_name__icontains=query)
+        )
+    if status:
+        qs = qs.filter(status=status)
+    if date_from:
+        qs = qs.filter(date__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__date__lte=date_to)
+    if created_from:
+        qs = qs.filter(created_at__date__gte=created_from)
+    if created_to:
+        qs = qs.filter(created_at__date__lte=created_to)
+    if series:
+        qs = qs.filter(series__icontains=series)
+    if number:
+        qs = qs.filter(number__icontains=number)
+    if party:
+        qs = qs.filter(
+            Q(supplier__name__icontains=party)
+            | Q(supplier__document_number__icontains=party)
+            | Q(customer__legal_name__icontains=party)
+            | Q(customer__document_number__icontains=party)
+        )
+    if warehouse:
+        qs = qs.filter(
+            Q(warehouse_id=warehouse)
+            | Q(warehouse_origin_id=warehouse)
+            | Q(warehouse_dest_id=warehouse)
         )
     return qs
 
@@ -249,6 +282,8 @@ def get_stock_for_product(product_id, store_id: str):
 
 def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str = ""):
     """Stock con min_stock y estado, filtrable por almacén y búsqueda."""
+    from apps.sales.models import SalesDocumentLine
+
     qs = (
         StockByWarehouse.objects
         .select_related("product__unit", "product__category", "warehouse")
@@ -270,9 +305,29 @@ def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str 
         for cfg in StoreProductConfig.objects.filter(store_id=store_id).values("product_id", "min_stock"):
             config_map[str(cfg["product_id"])] = cfg["min_stock"]
 
+    commitments = SalesDocumentLine.objects.filter(
+        sales_document__store_id=store_id,
+        sales_document__status="DRAFT",
+        sales_document__register_inventory_movement=True,
+        sales_document__warehouse__isnull=False,
+        product__tracks_inventory=True,
+    )
+    if warehouse_id:
+        commitments = commitments.filter(sales_document__warehouse_id=warehouse_id)
+    committed_map = {
+        (str(item["sales_document__warehouse_id"]), str(item["product_id"])): item["total"]
+        for item in commitments.values(
+            "sales_document__warehouse_id", "product_id"
+        ).annotate(total=Sum("stock_quantity"))
+    }
+
     rows = []
     for s in qs:
         min_stock = config_map.get(str(s.product_id), 0)
+        committed = committed_map.get(
+            (str(s.warehouse_id), str(s.product_id)), Decimal("0")
+        )
+        available = s.quantity - committed
         valuation = s.quantity * s.product.price_purchase
         rows.append({
             "warehouse": s.warehouse.name,
@@ -281,8 +336,10 @@ def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str 
             "category": s.product.category.name if s.product.category else "-",
             "unit": s.product.unit.code if s.product.unit else "-",
             "quantity": s.quantity,
+            "committed": committed,
+            "available": available,
             "min_stock": min_stock,
-            "status": "BAJO" if s.quantity <= min_stock else "NORMAL",
+            "status": "BAJO" if available <= min_stock else "NORMAL",
             "price_purchase": s.product.price_purchase,
             "valuation": valuation,
         })
