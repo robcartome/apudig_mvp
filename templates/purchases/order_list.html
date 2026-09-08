@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load list_sorting %}
 {% block title %}Órdenes de compra - APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Órdenes de compra</h2>{% endblock %}
 {% block content %}
@@ -8,7 +9,17 @@
 </div>
 {% include "components/list_filters.html" %}
 <div class="card"><div class="table-responsive"><table class="table table-vcenter table-hover card-table">
-  <thead><tr><th>Orden</th><th>Proveedor</th><th>Fecha</th><th>Entrega esperada</th><th>Estado</th><th class="text-end">Total</th><th></th></tr></thead>
+  <thead>
+    <tr>
+      {% sortable_header "number" "Orden" %}
+      {% sortable_header "supplier" "Proveedor" %}
+      {% sortable_header "date" "Fecha" %}
+      {% sortable_header "expected_date" "Entrega esperada" %}
+      {% sortable_header "status" "Estado" %}
+      {% sortable_header "total" "Total" "text-end" %}
+      <th></th>
+    </tr>
+  </thead>
   <tbody>{% for order in page_obj %}<tr><td><a class="fw-semibold" href="{% url 'purchases:order_detail' order.pk %}">{{ order.order_number }}</a></td><td>{{ order.supplier }}</td><td>{{ order.order_date|date:"d/m/Y" }}</td><td>{{ order.expected_date|date:"d/m/Y"|default:"—" }}</td><td><span class="badge bg-secondary-lt">{{ order.get_status_display }}</span></td><td class="text-end">{{ order.currency }} {{ order.total|floatformat:2 }}</td><td class="text-end"><a href="{% url 'purchases:order_detail' order.pk %}" class="btn btn-sm btn-outline-secondary"><i class="ti ti-eye"></i></a></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-4">No hay órdenes de compra.</td></tr>{% endfor %}</tbody>
 </table></div>{% if page_obj.has_other_pages %}<div class="card-footer">{% include "partials/pagination.html" %}</div>{% endif %}</div>
 {% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load formatters %}
+{% load formatters list_sorting %}
 
 {% block title %}Movimientos — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Movimientos</h2>{% endblock %}
@@ -38,14 +38,14 @@
     <table class="table table-vcenter table-hover card-table mb-0">
       <thead class="table-light">
         <tr>
-          <th>Fecha</th>
-          <th>Código</th>
-          <th>Tipo</th>
-          <th>Almacén</th>
-          <th>Operación</th>
-          <th>Socio de Negocio</th>
-          <th>Documento</th>
-          <th>Estado</th>
+          {% sortable_header "date" "Fecha" %}
+          {% sortable_header "code" "Código" %}
+          {% sortable_header "type" "Tipo" %}
+          {% sortable_header "warehouse" "Almacén" %}
+          {% sortable_header "operation" "Operación" %}
+          {% sortable_header "partner" "Socio de Negocio" %}
+          {% sortable_header "document" "Documento" %}
+          {% sortable_header "status" "Estado" %}
           <th class="text-center" style="width:240px">Acciones</th>
         </tr>
       </thead>

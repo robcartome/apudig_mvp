@@ -192,6 +192,85 @@ class MovementViewsTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Producto Test")
 
+    def test_stock_report_orders_by_quantity_and_preserves_filters(self):
+        second_product = Product.objects.create(
+            company=self.company,
+            name="Producto Segundo", sku="TEST-02", unit=self.unit,
+            price_purchase=Decimal("5"), price_sale=Decimal("8"),
+        )
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("2")
+        )
+        StockByWarehouse.objects.create(
+            product=second_product, warehouse=self.warehouse, quantity=Decimal("9")
+        )
+
+        response = self.client.get(
+            reverse("inventory:stock_report"),
+            {
+                "warehouse": str(self.warehouse.pk),
+                "q": "TEST",
+                "sort": "quantity",
+                "dir": "desc",
+            },
+        )
+
+        self.assertEqual(
+            [stock.product_id for stock in response.context["stocks"]],
+            [second_product.pk, self.product.pk],
+        )
+        self.assertContains(response, "sort=quantity")
+        self.assertContains(response, "dir=asc")
+        self.assertContains(response, f"warehouse={self.warehouse.pk}")
+        self.assertContains(response, "q=TEST")
+
+    def test_stock_report_filters_by_category_and_brand_and_links_sku(self):
+        from apps.inventory.models import Brand, Category
+
+        category = Category.objects.create(
+            company=self.company, code="TOOLS", name="Herramientas"
+        )
+        brand = Brand.objects.create(company=self.company, name="Marca Uno")
+        self.product.category = category
+        self.product.brand = brand
+        self.product.save(update_fields=("category", "brand"))
+        other_product = Product.objects.create(
+            company=self.company,
+            name="Producto Excluido", sku="OTHER-01", unit=self.unit,
+            price_purchase=Decimal("5"), price_sale=Decimal("8"),
+        )
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("3")
+        )
+        StockByWarehouse.objects.create(
+            product=other_product, warehouse=self.warehouse, quantity=Decimal("4")
+        )
+
+        response = self.client.get(reverse("inventory:stock_report"), {
+            "category": str(category.pk),
+            "brand": str(brand.pk),
+        })
+
+        self.assertEqual([stock.product_id for stock in response.context["stocks"]], [self.product.pk])
+        self.assertContains(response, "Herramientas")
+        self.assertContains(response, "Marca Uno")
+        self.assertContains(
+            response,
+            f'<a href="{reverse("inventory:product_update", args=[self.product.pk])}" '
+            f'title="Editar producto {self.product.sku}">{self.product.sku}</a>',
+            html=True,
+        )
+
+    def test_product_list_sku_links_to_product_edit(self):
+        response = self.client.get(reverse("inventory:product_list"))
+
+        self.assertContains(
+            response,
+            f'<a href="{reverse("inventory:product_update", args=[self.product.pk])}" '
+            f'title="Editar producto {self.product.sku}">{self.product.sku}</a>',
+            html=True,
+        )
+
     # ── Movement detail ───────────────────────────────────────────────────────
 
     def test_movement_detail_ok(self):
@@ -277,6 +356,23 @@ class MovementViewsTest(TestCase):
 
         self.assertContains(response, movement.operation_code)
         self.assertEqual(response.context["page_obj"].paginator.count, 1)
+
+    def test_movement_list_orders_by_code_descending(self):
+        self._post_movement(reverse("inventory:entry_create"))
+        first = Movement.objects.get(type="ENTRY")
+        self._post_movement(reverse("inventory:entry_create"))
+        second = Movement.objects.order_by("-operation_number").first()
+
+        response = self.client.get(
+            reverse("inventory:movement_list"),
+            {"sort": "code", "dir": "desc"},
+        )
+
+        self.assertEqual(list(response.context["page_obj"]), [second, first])
+        self.assertEqual(
+            response.context["table_sort"],
+            {"key": "code", "direction": "desc"},
+        )
 
     def test_movement_edit_shows_operation_code_in_breadcrumb_and_header(self):
         self._post_movement(reverse("inventory:entry_create"))

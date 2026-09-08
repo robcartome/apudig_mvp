@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load list_sorting %}
 {% block title %}Cotizaciones — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Cotizaciones</h2>{% endblock %}
 
@@ -32,15 +33,15 @@
     <table class="table table-vcenter table-hover card-table">
       <thead>
         <tr>
-          <th>Fecha emisión</th>
-          <th>Serie</th>
-          <th>Número</th>
-          <th>Cliente</th>
-          <th>Forma de pago</th>
-          <th>Válido hasta</th>
-          <th>Moneda</th>
-          <th class="text-end">Total</th>
-          <th class="text-center">Estado</th>
+          {% sortable_header "issue_date" "Fecha emisión" %}
+          {% sortable_header "series" "Serie" %}
+          {% sortable_header "number" "Número" %}
+          {% sortable_header "customer" "Cliente" %}
+          {% sortable_header "payment_method" "Forma de pago" %}
+          {% sortable_header "valid_until" "Válido hasta" %}
+          {% sortable_header "currency" "Moneda" %}
+          {% sortable_header "total" "Total" "text-end" %}
+          {% sortable_header "status" "Estado" "text-center" %}
           <th class="text-center">PDF o Excel</th>
           <th class="text-center">Operaciones</th>
         </tr>

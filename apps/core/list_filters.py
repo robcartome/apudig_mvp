@@ -5,6 +5,42 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 
+SORT_DIRECTIONS = {"asc", "desc"}
+
+
+def sort_queryset(request, queryset, allowed_sorts, *, default):
+    """Apply validated, deterministic server-side ordering to a queryset.
+
+    ``allowed_sorts`` maps public query-string keys to ORM field names. Values
+    may be a field name or a tuple of fields for compound ordering. Raw field
+    names received from the browser are never passed to ``order_by``.
+    """
+    default_key, default_direction = default
+    requested_key = request.GET.get("sort", "")
+    sort_key = requested_key if requested_key in allowed_sorts else default_key
+    requested_direction = request.GET.get("dir", "")
+    direction = (
+        requested_direction
+        if requested_direction in SORT_DIRECTIONS
+        else default_direction
+    )
+
+    fields = allowed_sorts[sort_key]
+    if isinstance(fields, str):
+        fields = (fields,)
+    prefix = "-" if direction == "desc" else ""
+    ordering = [f"{prefix}{field.lstrip('-')}" for field in fields]
+
+    # A stable tie-breaker prevents rows moving between paginated pages.
+    if not any(field.lstrip("-") == "pk" for field in ordering):
+        ordering.append(f"{prefix}pk")
+
+    return queryset.order_by(*ordering), {
+        "key": sort_key,
+        "direction": direction,
+    }
+
+
 def read_list_filters(request, *, default_current_month=True):
     """Parse common list filters while preserving their original form values."""
     today = timezone.localdate()

@@ -3,15 +3,16 @@ inventory/views/operations.py — Vistas de movimientos de stock y consulta de s
 """
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import CharField, Q, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils import timezone
-from apps.core.list_filters import read_list_filters
+from apps.core.list_filters import read_list_filters, sort_queryset
 
 from ..forms import MovementDetailEditFormSet, MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
-from ..models import Movement, MovementType, Unit
+from ..models import Brand, Category, Movement, MovementType, Unit
 from ..selectors import (
     get_movement_detail,
     get_movements_for_store,
@@ -22,6 +23,26 @@ from ..selectors import (
 )
 from ..services import confirm_movement, register_adjustment, register_entry, register_exit, register_transfer
 from ..services import delete_movement, update_movement
+
+
+MOVEMENT_SORTS = {
+    "date": ("date", "created_at"),
+    "code": ("operation_year", "operation_number"),
+    "type": "type",
+    "warehouse": "_sort_warehouse",
+    "operation": "reason",
+    "partner": "_sort_partner",
+    "document": ("_sort_document", "series", "number"),
+    "status": "status",
+}
+
+STOCK_SORTS = {
+    "warehouse": "warehouse__name",
+    "sku": "product__sku",
+    "product": "product__name",
+    "unit": ("product__unit__code", "product__unit__name"),
+    "quantity": "quantity",
+}
 
 
 def _require_auth(request):
@@ -82,11 +103,28 @@ def stock_report(request):
         return r
     store_id = _get_store_id(request)
     warehouses = get_warehouses_for_store(store_id, active_only=True) if store_id else []
+    company_id = _get_company_id(request)
+    categories = list(
+        Category.objects.filter(company_id=company_id).order_by("name")
+    ) if company_id else []
+    brands = list(
+        Brand.objects.filter(company_id=company_id).order_by("name")
+    ) if company_id else []
     selected_warehouse = request.GET.get("warehouse", "")
+    selected_category = request.GET.get("category", "")
+    selected_brand = request.GET.get("brand", "")
+    if selected_category not in {str(category.pk) for category in categories}:
+        selected_category = ""
+    if selected_brand not in {str(brand.pk) for brand in brands}:
+        selected_brand = ""
     search_query = request.GET.get("q", "").strip()
-    stocks = get_stock_by_warehouse(store_id) if store_id else []
+    stocks = get_stock_by_warehouse(store_id)
     if selected_warehouse:
         stocks = stocks.filter(warehouse_id=selected_warehouse)
+    if selected_category:
+        stocks = stocks.filter(product__category_id=selected_category)
+    if selected_brand:
+        stocks = stocks.filter(product__brand_id=selected_brand)
     if search_query:
         matching_product_ids = search_products(
             search_query,
@@ -94,11 +132,19 @@ def stock_report(request):
             active_only=False,
         ).values("pk")
         stocks = stocks.filter(product_id__in=matching_product_ids)
+    stocks, table_sort = sort_queryset(
+        request, stocks, STOCK_SORTS, default=("warehouse", "asc")
+    )
 
     return render(request, "inventory/stock_report.html", {
         "stocks": stocks,
+        "table_sort": table_sort,
         "warehouses": warehouses,
+        "categories": categories,
+        "brands": brands,
         "selected_warehouse": selected_warehouse,
+        "selected_category": selected_category,
+        "selected_brand": selected_brand,
         "q": search_query,
         "total": stocks.count(),
     })
@@ -123,10 +169,28 @@ def movement_list(request):
         series=filters["series"] or None, number=filters["number"] or None,
         party=filters["party"] or None, warehouse=warehouse or None,
     ) if store_id else Movement.objects.none()
+    qs = qs.annotate(
+        _sort_warehouse=Coalesce(
+            "warehouse__name", "warehouse_origin__name", Value(""),
+            output_field=CharField(),
+        ),
+        _sort_partner=Coalesce(
+            "supplier__name", "customer__legal_name", Value("OTROS"),
+            output_field=CharField(),
+        ),
+        _sort_document=Coalesce(
+            "document_type__name", "document_type__code", Value("OTROS"),
+            output_field=CharField(),
+        ),
+    )
+    qs, table_sort = sort_queryset(
+        request, qs, MOVEMENT_SORTS, default=("date", "desc")
+    )
     page_obj = Paginator(qs, 80).get_page(request.GET.get("page"))
 
     return render(request, "inventory/movement_list.html", {
         "page_obj": page_obj,
+        "table_sort": table_sort,
         "query": query,
         "movement_type": movement_type,
         "type_choices": Movement.MOVEMENT_TYPES,

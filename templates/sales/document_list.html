@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load static %}
+{% extends "base.html" %}{% load static list_sorting %}
 {% block title %}Documentos de venta — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Documentos de venta</h2>{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/components/table-scroll-sync.css' %}">{% endblock %}
@@ -30,13 +30,13 @@
     <table class="table table-vcenter table-hover card-table mb-0 text-nowrap">
       <thead class="table-light">
         <tr>
-          <th>Fecha de creación</th>
-          <th>Fecha de emisión</th>
-          <th>Serie</th>
-          <th>Número</th>
-          <th>Cliente</th>
-          <th class="text-end">Total</th>
-          <th>Estado</th>
+          {% sortable_header "created" "Fecha de creación" %}
+          {% sortable_header "issue_date" "Fecha de emisión" %}
+          {% sortable_header "series" "Serie" %}
+          {% sortable_header "number" "Número" %}
+          {% sortable_header "customer" "Cliente" %}
+          {% sortable_header "total" "Total" "text-end" %}
+          {% sortable_header "status" "Estado" %}
           <th class="text-center">Operaciones</th>
         </tr>
       </thead>

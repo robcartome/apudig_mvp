@@ -53,9 +53,20 @@ from apps.sales.services import (
 from apps.inventory.models import PriceList, Product, Warehouse
 from apps.partners.models import DocumentType
 from apps.core.models import AuditLog
-from apps.core.list_filters import read_list_filters
+from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.companies.models import CompanyOperationalSettings
 from apps.users.permissions import user_has_company_permission
+
+
+SALES_DOCUMENT_SORTS = {
+    "created": "created_at",
+    "issue_date": ("issue_date", "created_at"),
+    "series": ("series_code", "number"),
+    "number": ("number", "series_code"),
+    "customer": "customer_legal_name",
+    "total": "total",
+    "status": "status",
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -269,6 +280,9 @@ def document_list(request):
     )
     if document_type:
         qs = qs.filter(document_type__code=document_type)
+    qs, table_sort = sort_queryset(
+        request, qs, SALES_DOCUMENT_SORTS, default=("issue_date", "desc")
+    )
 
     filtered_totals = list(
         SalesDocument.objects.filter(pk__in=qs.order_by().values("pk"))
@@ -284,6 +298,7 @@ def document_list(request):
 
     context = {
         "page_obj": page,
+        "table_sort": table_sort,
         "q": q,
         "status": status,
         "document_type": document_type,

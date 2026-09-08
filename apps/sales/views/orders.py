@@ -29,7 +29,17 @@ from apps.sales.services import (
     create_sale_order,
     update_sale_order,
 )
-from apps.core.list_filters import read_list_filters
+from apps.core.list_filters import read_list_filters, sort_queryset
+
+
+SALE_ORDER_SORTS = {
+    "number": ("series_code", "number"),
+    "customer": "customer_legal_name",
+    "document_type": "document_type__name",
+    "issue_date": ("issue_date", "created_at"),
+    "status": "status",
+    "total": "total",
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,11 +90,15 @@ def order_list(request):
         customer=filters["party"] or None, total_min=filters["total_min_value"],
         total_max=filters["total_max_value"],
     )
+    orders, table_sort = sort_queryset(
+        request, orders, SALE_ORDER_SORTS, default=("issue_date", "desc")
+    )
     paginator = Paginator(orders, 80)
     page = paginator.get_page(request.GET.get("page"))
 
     return render(request, "sales/order_list.html", {
         "page_obj": page,
+        "table_sort": table_sort,
         "q": filters["q"],
         "status": filters["status"],
         "status_choices": SALE_ORDER_STATUS_CHOICES,

@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.companies.models import CompanyOperationalSettings, Store
 from apps.core.models import AuditLog
-from apps.core.list_filters import read_list_filters
+from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.inventory.models import Category, Movement, MovementStatus, MovementType, Product, Unit
 from apps.partners.models import Supplier
 from apps.sales.models import MeansOfPayment
@@ -56,6 +56,31 @@ from .services import (
     reconcile_purchase_document_receipts,
     update_purchase_document_draft,
 )
+
+
+PURCHASE_DOCUMENT_SORTS = {
+    "created": "created_at",
+    "issue_date": ("issue_date", "created_at"),
+    "due_date": "due_date",
+    "series": ("series", "number"),
+    "number": ("number", "series"),
+    "supplier": "supplier_name",
+    "total": "total",
+    "payment_method": "payment_method__name",
+    "payment_status": "payment_status",
+    "last_payment": "last_payment_date",
+    "balance": "payment_balance",
+    "status": "document_status",
+}
+
+PURCHASE_ORDER_SORTS = {
+    "number": "order_number",
+    "supplier": "supplier__name",
+    "date": ("order_date", "created_at"),
+    "expected_date": "expected_date",
+    "status": "status",
+    "total": "total",
+}
 
 
 def _ids(request):
@@ -248,6 +273,9 @@ def purchase_document_list(request):
         total_min=decimal_or_none(total_min_text),
         total_max=decimal_or_none(total_max_text),
     )
+    qs, table_sort = sort_queryset(
+        request, qs, PURCHASE_DOCUMENT_SORTS, default=("issue_date", "desc")
+    )
     filtered_totals = list(
         PurchaseDocument.objects.filter(pk__in=qs.order_by().values("pk"))
         .exclude(document_status=PurchaseDocumentStatus.CANCELLED)
@@ -260,6 +288,7 @@ def purchase_document_list(request):
     query_params.pop("page", None)
     return render(request, "purchases/document_list.html", {
         "page_obj": page,
+        "table_sort": table_sort,
         "q": query,
         "status": status,
         "date_from": date_from_text,
@@ -1003,8 +1032,12 @@ def purchase_order_list(request):
         orders = orders.filter(total__gte=filters["total_min_value"])
     if filters["total_max_value"] is not None:
         orders = orders.filter(total__lte=filters["total_max_value"])
+    orders, table_sort = sort_queryset(
+        request, orders, PURCHASE_ORDER_SORTS, default=("date", "desc")
+    )
     return render(request, "purchases/order_list.html", {
-        "page_obj": Paginator(orders.order_by("-order_date", "-created_at"), 80).get_page(request.GET.get("page")),
+        "page_obj": Paginator(orders, 80).get_page(request.GET.get("page")),
+        "table_sort": table_sort,
         "q": filters["q"], "status": filters["status"],
         "status_choices": PurchaseOrderStatus.choices,
         "list_filters": filters,

@@ -31,10 +31,22 @@ from apps.sales.services import (
     update_quotation,
 )
 from apps.inventory.models import PriceList, Warehouse
-from apps.core.list_filters import read_list_filters
+from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.users.permissions import user_has_company_permission
 
 DEFAULT_IGV_RATE = 18
+
+QUOTATION_SORTS = {
+    "issue_date": ("issue_date", "created_at"),
+    "series": ("series_code", "number"),
+    "number": ("number", "series_code"),
+    "customer": "customer_legal_name",
+    "payment_method": "payment_method__name",
+    "valid_until": "valid_until",
+    "currency": "currency",
+    "total": "total",
+    "status": "status",
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -116,11 +128,15 @@ def quotation_list(request):
         customer=filters["party"] or None, total_min=filters["total_min_value"],
         total_max=filters["total_max_value"],
     )
+    qs, table_sort = sort_queryset(
+        request, qs, QUOTATION_SORTS, default=("issue_date", "desc")
+    )
     paginator = Paginator(qs, 80)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(request, "sales/quotation_list.html", {
         "page_obj": page_obj,
+        "table_sort": table_sort,
         "query": filters["q"],
         "status": filters["status"],
         "status_choices": QUOTATION_STATUS_CHOICES,
