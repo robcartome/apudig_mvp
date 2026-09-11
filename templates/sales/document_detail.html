@@ -80,7 +80,7 @@
             {% else %}<span class="badge bg-muted-lt">{{ sales_document.status }}</span>{% endif %}
           </dd>
           <dt class="col-5 text-muted">Fecha emisión</dt>
-          <dd class="col-7">{{ sales_document.issue_date|date:"d/m/Y" }}</dd>
+          <dd class="col-7">{{ sales_document.issue_date|date:"d/m/Y H:i" }}</dd>
           <dt class="col-5 text-muted">Moneda</dt>
           <dd class="col-7">{{ sales_document.currency }}</dd>
           {% if sales_document.currency != "PEN" %}
@@ -92,18 +92,10 @@
           {% if sales_document.seller %}<dt class="col-5 text-muted">Vendedor</dt><dd class="col-7">{{ sales_document.seller }}</dd>{% endif %}
           {% if sales_document.price_list %}<dt class="col-5 text-muted">Lista de precios</dt><dd class="col-7">{{ sales_document.price_list }}</dd>{% endif %}
           {% if sales_document.warehouse %}<dt class="col-5 text-muted">Almacén</dt><dd class="col-7">{{ sales_document.warehouse }}</dd>{% endif %}
-          {% if sales_document.inventory_movement %}
-          <dt class="col-5 text-muted">Movimiento de stock</dt>
-          <dd class="col-7">
-            <a href="{% url 'inventory:movement_detail' sales_document.inventory_movement.pk %}">
-              {{ sales_document.inventory_movement.get_type_display }} · {{ sales_document.inventory_movement.get_status_display }}
-            </a>
-          </dd>
-          {% if sales_document.inventory_movement.reversal %}
-          <dt class="col-5 text-muted">Reversión de stock</dt>
-          <dd class="col-7"><a href="{% url 'inventory:movement_detail' sales_document.inventory_movement.reversal.pk %}">Ver movimiento de reversión</a></dd>
-          {% endif %}
-          {% endif %}
+          {% for movement in sales_document.inventory_movements.all %}
+          <dt class="col-5 text-muted">{% if movement.origin == 'SALE_REVERSAL' %}Reversión de stock{% else %}Movimiento de stock{% endif %}</dt>
+          <dd class="col-7"><a href="{% url 'inventory:movement_detail' movement.pk %}">{{ movement.operation_code }} · {{ movement.get_type_display }} · {{ movement.get_status_display }}</a></dd>
+          {% endfor %}
           {% if sales_document.internal_reference %}<dt class="col-5 text-muted">Referencia interna</dt><dd class="col-7">{{ sales_document.internal_reference }}</dd>{% endif %}
           {% if sales_document.sale_order %}
           <dt class="col-5 text-muted">Orden vinculada</dt>

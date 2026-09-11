@@ -175,9 +175,9 @@ def search_sales_documents(
             | Q(number__icontains=query)
         )
     if date_from:
-        qs = qs.filter(issue_date__gte=date_from)
+        qs = qs.filter(issue_date__date__gte=date_from)
     if date_to:
-        qs = qs.filter(issue_date__lte=date_to)
+        qs = qs.filter(issue_date__date__lte=date_to)
     if created_from:
         qs = qs.filter(created_at__date__gte=created_from)
     if created_to:
@@ -206,9 +206,12 @@ def get_document_detail(pk, store_id=None):
             "customer", "series", "document_type", "store", "created_by",
             "sale_order", "reference_document", "source_quotation",
             "payment_method", "means_of_payment", "seller", "price_list",
-            "warehouse", "inventory_movement",
+            "warehouse",
         )
-        .prefetch_related("lines__product__unit", "lines__unit")
+        .prefetch_related(
+            "lines__product__unit", "lines__unit",
+            "inventory_movements__warehouse", "inventory_movements__document_type",
+        )
     )
     if store_id is not None:
         queryset = queryset.filter(store_id=store_id)

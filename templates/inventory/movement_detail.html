@@ -71,10 +71,10 @@
           {% endif %}
           {% if movement.sales_document %}
           <dt class="col-5 text-muted">Documento de venta</dt>
-          <dd class="col-7"><a href="{% url 'sales:document_detail' movement.sales_document.pk %}">{{ movement.series }}-{{ movement.number }}</a></dd>
+          <dd class="col-7"><a href="{% url 'sales:document_detail' movement.sales_document.pk %}">{{ movement.sales_document.document_type.name }} {{ movement.sales_document.series_code }}-{{ movement.sales_document.number }}</a></dd>
           {% elif movement.reversal_of.sales_document %}
           <dt class="col-5 text-muted">Documento de venta</dt>
-          <dd class="col-7"><a href="{% url 'sales:document_detail' movement.reversal_of.sales_document.pk %}">{{ movement.series }}-{{ movement.number }}</a></dd>
+          <dd class="col-7"><a href="{% url 'sales:document_detail' movement.reversal_of.sales_document.pk %}">{{ movement.reversal_of.sales_document.document_type.name }} {{ movement.reversal_of.sales_document.series_code }}-{{ movement.reversal_of.sales_document.number }}</a></dd>
           {% endif %}
           {% for purchase_document in related_purchase_documents %}
           <dt class="col-5 text-muted">Documento de compra</dt>

@@ -1,48 +1,116 @@
-<div class="row g-3 mb-3">
-  <div class="col-12 col-md-8">
-    <div class="fw-semibold fs-4">{{ sales_document.series_code }}-{{ sales_document.number|default:"(borrador)" }}</div>
-    <div class="text-muted small">{{ sales_document.document_type.name }} · {{ sales_document.get_status_display }}</div>
-    <div class="text-muted small">Emisión: {{ sales_document.issue_date|date:"d/m/Y" }}</div>
-  </div>
-  <div class="col-12 col-md-4 text-md-end">
-    <div class="text-muted small">Cliente</div>
-    <div class="fw-semibold">{{ sales_document.customer_legal_name }}</div>
-    <div class="text-muted small">{{ sales_document.customer_document_number }}</div>
+<div class="card border-0 bg-light mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex justify-content-between gap-3 flex-wrap">
+      <div>
+        <div class="text-muted small">Documento de venta</div>
+        <div class="fs-3 fw-bold">
+          {{ sales_document.document_type.name }}
+          {{ sales_document.series_code|default:"—" }}-{{ sales_document.number|default:"(borrador)" }}
+        </div>
+        {% include "components/status_badge.html" with status=sales_document.status label=sales_document.get_status_display %}
+      </div>
+      <div class="text-md-end">
+        <div class="text-muted small">Total</div>
+        <div class="fs-2 fw-bold">{{ sales_document.currency }} {{ sales_document.total|floatformat:2 }}</div>
+      </div>
+    </div>
   </div>
 </div>
 
-<div class="table-responsive">
-  <table class="table table-sm table-vcenter align-middle mb-0">
-    <thead class="table-light">
-      <tr><th>#</th><th>Producto</th><th>Unidad</th><th class="text-end">Cant.</th><th class="text-end">Valor unit.</th><th class="text-end">Precio unit.</th><th class="text-end">IGV</th><th class="text-end">Total</th></tr>
-    </thead>
-    <tbody>
-      {% for line in sales_document.lines.all %}
-      <tr>
-        <td class="text-muted">{{ forloop.counter }}</td>
-        <td>
-          <div class="fw-semibold">{{ line.product.name }}</div>
-          <div class="text-muted small">{{ line.description }}</div>
-          {% if line.memo %}<div class="text-muted small"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
-        </td>
-        <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
-        <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
-        <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
-        <td class="text-end">{{ line.price_unit|floatformat:2 }}</td>
-        <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>
-        <td class="text-end fw-semibold">{{ line.total|floatformat:2 }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot class="table-light fw-semibold">
-      {% if sales_document.global_discount_amount %}<tr><td colspan="7" class="text-end text-muted">Descuento general{% if sales_document.global_discount_before_tax %} antes del IGV{% endif %}:</td><td class="text-end text-danger">- {{ sales_document.currency }} {{ sales_document.global_discount_amount|floatformat:2 }}</td></tr>{% endif %}
-      <tr><td colspan="7" class="text-end">TOTAL:</td><td class="text-end">{{ sales_document.currency }} {{ sales_document.total|floatformat:2 }}</td></tr>
-    </tfoot>
-  </table>
+<div class="row g-3 mb-3 small">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted mb-1">Cliente</div>
+        <div class="fw-semibold">{{ sales_document.customer_legal_name }}</div>
+        <div>{{ sales_document.customer_document_number|default:"—" }}</div>
+        <div class="text-muted">{{ sales_document.customer_address|default:"" }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-6 text-muted">Emisión</dt>
+          <dd class="col-6">{{ sales_document.issue_date|date:"d/m/Y H:i" }}</dd>
+          <dt class="col-6 text-muted">Creación</dt>
+          <dd class="col-6">{{ sales_document.created_at|date:"d/m/Y H:i" }}</dd>
+          <dt class="col-6 text-muted">Forma de pago</dt>
+          <dd class="col-6">{{ sales_document.payment_method|default:"—" }}</dd>
+          <dt class="col-6 text-muted">Medio de pago</dt>
+          <dd class="col-6">{{ sales_document.means_of_payment|default:"—" }}</dd>
+          <dt class="col-6 text-muted">Vendedor</dt>
+          <dd class="col-6">{{ sales_document.seller|default:"—" }}</dd>
+          <dt class="col-6 text-muted">Almacén</dt>
+          <dd class="col-6">{{ sales_document.warehouse|default:"—" }}</dd>
+          <dt class="col-6 text-muted">Inventario</dt>
+          <dd class="col-6">{% if sales_document.register_inventory_movement %}Salida al emitir{% else %}Sin afectación automática{% endif %}</dd>
+          {% if sales_document.internal_reference %}
+          <dt class="col-6 text-muted">Referencia interna</dt>
+          <dd class="col-6">{{ sales_document.internal_reference }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
 </div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title">Ítems del documento</h3></div>
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter card-table mb-0">
+      <thead>
+        <tr><th>#</th><th>Producto</th><th>Unidad</th><th class="text-end">Cantidad</th><th class="text-end">Valor unit.</th><th class="text-end">Precio unit.</th><th class="text-end">IGV</th><th class="text-end">Total</th></tr>
+      </thead>
+      <tbody>
+        {% for line in sales_document.lines.all %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td>
+            <div class="fw-semibold">{{ line.product.name }}</div>
+            <div class="text-muted small">{{ line.description }}</div>
+            {% if line.memo %}<div class="text-muted small"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
+          </td>
+          <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
+          <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
+          <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
+          <td class="text-end">{{ line.price_unit|floatformat:2 }}</td>
+          <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>
+          <td class="text-end fw-semibold">{{ line.total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-semibold">
+        {% if sales_document.global_discount_amount %}<tr><td colspan="7" class="text-end text-muted">Descuento general{% if sales_document.global_discount_before_tax %} antes del IGV{% endif %}</td><td class="text-end text-danger">- {{ sales_document.currency }} {{ sales_document.global_discount_amount|floatformat:2 }}</td></tr>{% endif %}
+        <tr><td colspan="7" class="text-end">TOTAL</td><td class="text-end">{{ sales_document.currency }} {{ sales_document.total|floatformat:2 }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+{% if sales_document.inventory_movements.exists %}
+<div class="card mt-3">
+  <div class="card-header"><h3 class="card-title">Movimientos de inventario relacionados</h3></div>
+  <div class="list-group list-group-flush">
+    {% for movement in sales_document.inventory_movements.all %}
+    <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{% url 'inventory:movement_detail' movement.pk %}">
+      <span>
+        <i class="ti {% if movement.type == 'EXIT' %}ti-package-export{% else %}ti-package-import{% endif %} me-2"></i>
+        <strong>{{ movement.operation_code }}</strong>
+        <span class="text-muted ms-1">{{ movement.get_type_display }} · {{ movement.warehouse|default:"—" }}</span>
+      </span>
+      <span class="text-muted small">{{ movement.date|date:"d/m/Y H:i" }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if sales_document.notes %}<div class="alert alert-secondary mt-3 mb-0"><strong>Notas:</strong> {{ sales_document.notes }}</div>{% endif %}
 
 <div class="mt-3 d-flex justify-content-end">
-  <a href="{% url 'sales:document_detail' sales_document.pk %}" class="btn btn-outline-secondary btn-sm">
+  <a href="{% url 'sales:document_detail' sales_document.pk %}" class="btn btn-outline-primary btn-sm">
     <i class="ti ti-history me-1"></i>Abrir detalle y bitácora
   </a>
 </div>

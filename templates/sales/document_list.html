@@ -57,7 +57,7 @@
             <div class="d-inline-flex gap-1 align-items-center">
             <a href="{% url 'sales:document_detail' v.pk %}"
                data-preview-url="{% url 'sales:document_preview' v.pk %}"
-               class="btn btn-sm btn-outline-secondary js-document-preview" title="Ver detalle">
+               class="btn btn-sm btn-outline-secondary js-document-preview" title="Detalle del documento" aria-label="Detalle del documento">
               <i class="ti ti-eye"></i>
             </a>
             <a href="{% url 'sales:document_pdf' v.pk %}" target="_blank"

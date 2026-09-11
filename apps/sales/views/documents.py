@@ -515,7 +515,7 @@ def document_from_order(request, pk):
             lines=lines,
             sale_order=order,
             created_by=request.user,
-            issue_date=timezone.now().date(),
+            issue_date=timezone.now(),
             currency=order.currency,
             notes=order.notes,
         )

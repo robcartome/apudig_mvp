@@ -519,7 +519,7 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         ):
             self.fields[field_name].widget.attrs.update(_select)
         self.fields["notes"].widget.attrs.update(_textarea)
-        self.fields["issue_date"].widget = forms.DateInput(
+        self.fields["issue_date"].widget = forms.DateTimeInput(
             format="%Y-%m-%dT%H:%M",
             attrs={"class": "form-control", "type": "datetime-local"},
         )
@@ -560,6 +560,9 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             self.add_error("series", "La serie no corresponde a la sucursal y tipo de documento.")
         if cleaned_data.get("register_inventory_movement") and not warehouse:
             self.add_error("warehouse", "Seleccione un almacén para registrar la salida.")
+        if not cleaned_data.get("register_inventory_movement"):
+            cleaned_data["warehouse"] = None
+            self.instance.warehouse = None
         if warehouse and store and warehouse.store_id != store.id:
             self.add_error("warehouse", "El almacén no pertenece a la sucursal seleccionada.")
         if manual_number:
