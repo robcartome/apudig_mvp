@@ -46,11 +46,12 @@ def active_company_context(request):
     # Filtrar: si una empresa tiene accesos a nivel de sucursal, no mostrar el
     # acceso genérico de empresa (store=None) — evita entradas redundantes.
     # El acceso genérico sí se incluye cuando la empresa no tiene sucursales asignadas.
-    companies_with_store_access = {a.company_id for a in all_accesses if a.store_id is not None}
-    ctx["available_accesses"] = [
-        a for a in all_accesses
-        if a.store_id is not None or a.company_id not in companies_with_store_access
-    ]
+    ctx["available_accesses"] = list(
+        request.user.company_accesses
+        .select_related("company", "store")
+        .selectable()
+        .order_by("-is_default", "company__name", "store__name")
+    )
 
     # Determinar el acceso activo (puede ser a nivel empresa o sucursal)
     if company_id:

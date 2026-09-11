@@ -151,6 +151,7 @@ def user_create(request):
                 UserCompanyAccess.objects.get_or_create(
                     user=user,
                     company=company,
+                    store=None,
                     defaults={"is_default": True},
                 )
         messages.success(request, f"Usuario '{user.email}' creado correctamente.")
