@@ -92,8 +92,13 @@ def _ids(request):
 def _require_permission(request, action):
     if not request.user.is_authenticated:
         return redirect("login")
-    company_id, _ = _ids(request)
-    if not user_has_company_permission(request.user, company_id, f"{action}.purchases.documents"):
+    company_id, store_id = _ids(request)
+    if not user_has_company_permission(
+        request.user,
+        company_id,
+        f"{action}.purchases.documents",
+        store_id,
+    ):
         return HttpResponseForbidden("No tienes permiso para realizar esta accion sobre compras.")
     return None
 
@@ -105,13 +110,13 @@ def _require_category_settings_permission(request):
 
 
 def _permission_context(request):
-    company_id, _ = _ids(request)
+    company_id, store_id = _ids(request)
     return {
         "can_manage_purchase_documents": user_has_company_permission(
-            request.user, company_id, "manage.purchases.documents"
+            request.user, company_id, "manage.purchases.documents", store_id
         ),
         "can_authorize_purchase_documents": user_has_company_permission(
-            request.user, company_id, "authorize.purchases.documents"
+            request.user, company_id, "authorize.purchases.documents", store_id
         ),
     }
 

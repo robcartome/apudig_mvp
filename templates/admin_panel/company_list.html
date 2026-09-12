@@ -42,9 +42,11 @@
 </div>
 
 <div class="d-flex justify-content-end gap-2 mb-3">
+  {% if request.user.is_superuser %}
   <a href="{% url 'users:company_create' %}" class="btn btn-primary">
     <i class="ti ti-plus me-1"></i>Agregar Empresa
   </a>
+  {% endif %}
 </div>
 
 <div class="card">
@@ -94,9 +96,11 @@
               <a href="{% url 'users:company_edit' company.pk %}" class="btn btn-sm btn-success" title="Editar">
                 <i class="ti ti-pencil"></i>
               </a>
-              <a href="{% url 'users:company_delete' company.pk %}" class="btn btn-sm btn-danger" title="Eliminar">
-                <i class="ti ti-x"></i>
-              </a>
+              {% if request.user.is_superuser %}
+                <a href="{% url 'users:company_delete' company.pk %}" class="btn btn-sm btn-danger" title="Eliminar">
+                  <i class="ti ti-x"></i>
+                </a>
+              {% endif %}
             </div>
           </td>
         </tr>

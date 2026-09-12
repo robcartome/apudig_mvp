@@ -23,7 +23,7 @@
       </div>
       <div class="ms-auto">
         <a href="{% url 'users:user_delete' target.pk %}" class="btn btn-sm btn-outline-danger">
-          <i class="ti ti-trash me-1"></i>Eliminar usuario
+          <i class="ti ti-trash me-1"></i>{% if request.user.is_superuser %}Eliminar usuario{% else %}Retirar de empresa{% endif %}
         </a>
       </div>
     </div>
@@ -51,7 +51,7 @@
         <i class="ti ti-key me-1"></i>Roles y Accesos
       </a>
     </li>
-    {% if request.user.is_superuser %}
+    {% if can_manage_company %}
     <li class="nav-item">
       <a class="nav-link {% if detail_tab == 'accesos' %}active{% endif %}"
          href="?tab=accesos">
@@ -96,13 +96,6 @@
                 <input class="form-check-input" type="checkbox" name="is_active"
                        {% if edit_form.is_active.value %}checked{% endif %}>
                 <span class="form-check-label">Usuario activo</span>
-              </label>
-            </div>
-            <div class="col-6">
-              <label class="form-check">
-                <input class="form-check-input" type="checkbox" name="is_staff"
-                       {% if edit_form.is_staff.value %}checked{% endif %}>
-                <span class="form-check-label">Acceso de staff</span>
               </label>
             </div>
           </div>
@@ -293,9 +286,11 @@
       <button type="submit" name="save_roles" class="btn btn-primary" onclick="syncHiddenInputs()">
         <i class="ti ti-device-floppy me-1"></i>Guardar roles
       </button>
+      {% if request.user.is_superuser %}
       <a href="{% url 'users:role_list' %}" class="btn btn-outline-secondary ms-2">
         Administrar roles del sistema →
       </a>
+      {% endif %}
     </div>
   </div>
 </form>
@@ -350,7 +345,7 @@
 
 {# ── Tab: Empresas y Sucursales ── #}
 {% if detail_tab == 'accesos' %}
-{% if request.user.is_superuser %}
+{% if can_manage_company %}
 <form method="post" novalidate>
   {% csrf_token %}
   <div class="card">
@@ -359,8 +354,8 @@
         <i class="ti ti-building me-2"></i>Acceso a Empresas y Sucursales
       </h4>
       <p class="card-subtitle mt-1 text-muted small">
-        Marca las sucursales a las que este usuario puede acceder. El acceso <strong>Nivel empresa</strong>
-        permite operar sin una sucursal específica (útil para administradores).
+        Marca las sucursales y selecciona la función del usuario en cada una.
+        El rol <strong>ADMIN</strong> de la pestaña Roles concede administración de toda la empresa.
       </p>
     </div>
     <div class="card-body">
@@ -372,6 +367,7 @@
         </h5>
         <div class="row g-2 ps-2">
           {# Acceso nivel empresa #}
+          {% if not grupo.stores %}
           <div class="col-auto">
             <label class="form-check">
               <input type="checkbox" name="access"
@@ -379,14 +375,16 @@
                      class="form-check-input"
                      {% if grupo.has_company_access %}checked{% endif %}>
               <span class="form-check-label">
-                <span class="badge bg-blue-lt text-blue">Nivel empresa (admin general)</span>
+                <span class="badge bg-blue-lt text-blue">Acceso general (empresa sin sucursales)</span>
               </span>
             </label>
           </div>
+          {% endif %}
           {# Sucursales #}
           {% for info in grupo.stores %}
-          <div class="col-auto">
-            <label class="form-check">
+          <div class="col-12 col-md-6 col-xl-4">
+            <div class="d-flex align-items-center gap-2 border rounded px-2 py-2">
+            <label class="form-check mb-0 flex-grow-1">
               <input type="checkbox" name="access"
                      value="{{ grupo.company.pk }}|{{ info.store.pk }}"
                      class="form-check-input"
@@ -395,6 +393,13 @@
                 <i class="ti ti-home me-1 text-muted"></i>{{ info.store.name }}
               </span>
             </label>
+            <select name="store_role_{{ info.store.pk }}" class="form-select form-select-sm" style="width:auto" aria-label="Rol en {{ info.store.name }}">
+              <option value="ADMIN" {% if info.role == 'ADMIN' %}selected{% endif %}>Admin tienda</option>
+              <option value="SELLER" {% if info.role == 'SELLER' %}selected{% endif %}>Vendedor</option>
+              <option value="CASHIER" {% if info.role == 'CASHIER' %}selected{% endif %}>Cajero</option>
+              <option value="WAREHOUSE" {% if info.role == 'WAREHOUSE' %}selected{% endif %}>Almacenero</option>
+            </select>
+            </div>
           </div>
           {% empty %}
           <div class="col-12">
@@ -417,7 +422,7 @@
 </form>
 {% else %}
 <div class="alert alert-warning">
-  <i class="ti ti-lock me-2"></i>Solo los superusuarios pueden gestionar los accesos de empresa.
+  <i class="ti ti-lock me-2"></i>Solo los administradores pueden gestionar los accesos de su empresa.
 </div>
 {% endif %}
 {% endif %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Confirmar eliminación — Administración{% endblock %}
+{% block title %}Confirmar acción — Administración{% endblock %}
 {% block page_title %}<h2 class="page-title">Administración</h2>{% endblock %}
 
 {% block content %}
@@ -14,15 +14,20 @@
             <i class="ti ti-trash fs-2"></i>
           </span>
         </div>
-        <h3>¿Eliminar usuario?</h3>
+        <h3>{% if request.user.is_superuser %}¿Eliminar usuario?{% else %}¿Retirar usuario de la empresa?{% endif %}</h3>
         <p class="text-muted">
-          Esta acción es irreversible. Se eliminará el usuario
-          <strong>{{ target.email }}</strong> y todos sus registros de acceso.
+          {% if request.user.is_superuser %}
+            Esta acción es irreversible. Se eliminará el usuario
+            <strong>{{ target.email }}</strong> y todos sus registros de acceso.
+          {% else %}
+            Se retirarán los roles y accesos de <strong>{{ target.email }}</strong>
+            solamente en la empresa activa. Su cuenta y accesos a otras empresas se conservarán.
+          {% endif %}
         </p>
         <form method="post" class="d-flex gap-2 justify-content-center">
           {% csrf_token %}
           <button type="submit" class="btn btn-danger">
-            <i class="ti ti-trash me-1"></i>Sí, eliminar
+            <i class="ti ti-trash me-1"></i>{% if request.user.is_superuser %}Sí, eliminar{% else %}Sí, retirar{% endif %}
           </button>
           <a href="{% url 'users:user_detail' target.pk %}" class="btn btn-outline-secondary">Cancelar</a>
         </form>

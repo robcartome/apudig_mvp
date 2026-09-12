@@ -4,6 +4,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from apps.companies.models import Company, Store, UserCompanyAccess
+from apps.users.models import UserStore
 
 
 User = get_user_model()
@@ -69,15 +70,20 @@ class SelectCompanyViewTest(TestCase):
 
     def test_company_level_option_is_hidden_when_store_access_exists(self):
         user = User.objects.create_user(email="regular@example.com", password="secret")
+        company_without_stores = Company.objects.create(
+            name="Empresa sin sucursales",
+            ruc="20333333333",
+        )
         UserCompanyAccess.objects.create(user=user, company=self.company_a, store=None)
         store_access = UserCompanyAccess.objects.create(
             user=user,
             company=self.company_a,
             store=self.store_a,
         )
+        UserStore.objects.create(user=user, store=self.store_a, role="SELLER")
         company_only_access = UserCompanyAccess.objects.create(
             user=user,
-            company=self.company_b,
+            company=company_without_stores,
             store=None,
         )
         self.client.force_login(user)
@@ -87,3 +93,110 @@ class SelectCompanyViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         visible_ids = {access.pk for access in response.context["accesses"]}
         self.assertEqual(visible_ids, {store_access.pk, company_only_access.pk})
+
+    def test_both_selectors_show_only_the_stores_assigned_to_the_user(self):
+        user = User.objects.create_user(email="seller@example.com", password="secret")
+        assigned_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=self.company_a,
+            store=self.store_a,
+        )
+        unauthorized_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=self.company_b,
+            store=self.store_b,
+        )
+        UserStore.objects.create(user=user, store=self.store_a, role="SELLER")
+
+        company_c = Company.objects.create(name="Empresa C", ruc="20444444444")
+        store_c = Store.objects.create(company=company_c, name="Sucursal C")
+        second_assigned_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=company_c,
+            store=store_c,
+        )
+        UserStore.objects.create(user=user, store=store_c, role="CASHIER")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("select_company"))
+
+        self.assertEqual(response.status_code, 200)
+        expected_ids = {assigned_access.pk, second_assigned_access.pk}
+        self.assertEqual(
+            {access.pk for access in response.context["accesses"]},
+            expected_ids,
+        )
+        self.assertEqual(
+            {access.pk for access in response.context["available_accesses"]},
+            expected_ids,
+        )
+        self.assertNotIn(
+            unauthorized_access.pk,
+            {access.pk for access in response.context["accesses"]},
+        )
+
+    def test_post_rejects_an_access_not_assigned_to_the_user(self):
+        user = User.objects.create_user(email="cashier@example.com", password="secret")
+        unauthorized_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=self.company_b,
+            store=self.store_b,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("select_company"),
+            {"access_id": unauthorized_access.pk},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("active_company_id", self.client.session)
+        self.assertNotIn("active_store_id", self.client.session)
+
+    def test_inactive_company_and_store_are_not_selectable(self):
+        user = User.objects.create_user(email="active@example.com", password="secret")
+        active_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=self.company_a,
+            store=self.store_a,
+        )
+        UserStore.objects.create(user=user, store=self.store_a, role="SELLER")
+
+        inactive_store = Store.objects.create(
+            company=self.company_a,
+            name="Sucursal inactiva",
+            active=False,
+        )
+        inactive_store_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=self.company_a,
+            store=inactive_store,
+        )
+        UserStore.objects.create(user=user, store=inactive_store, role="ADMIN")
+
+        self.company_b.is_active = False
+        self.company_b.save(update_fields=["is_active"])
+        inactive_company_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=self.company_b,
+            store=self.store_b,
+        )
+        UserStore.objects.create(user=user, store=self.store_b, role="SELLER")
+
+        company_c = Company.objects.create(name="Empresa C", ruc="20555555555")
+        store_c = Store.objects.create(company=company_c, name="Sucursal C")
+        second_active_access = UserCompanyAccess.objects.create(
+            user=user,
+            company=company_c,
+            store=store_c,
+        )
+        UserStore.objects.create(user=user, store=store_c, role="SELLER")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("select_company"))
+
+        self.assertEqual(response.status_code, 200)
+        visible_ids = {access.pk for access in response.context["accesses"]}
+        self.assertEqual(visible_ids, {active_access.pk, second_active_access.pk})
+        self.assertNotIn(inactive_store_access.pk, visible_ids)
+        self.assertNotIn(inactive_company_access.pk, visible_ids)

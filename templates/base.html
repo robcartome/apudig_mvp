@@ -113,7 +113,7 @@
               <div class="d-none d-xl-block">
                 <div class="fw-semibold small">{{ user.name|default:user.email }}</div>
                 <div class="text-secondary" style="font-size:0.7rem;">
-                  {% if user.is_staff %}Administrador{% else %}Usuario{% endif %}
+                  {% if user.is_superuser %}APUDIG{% elif can_manage_company %}Administrador de empresa{% elif active_store_role == 'ADMIN' %}Administrador de tienda{% elif active_store_role == 'SELLER' %}Vendedor{% elif active_store_role == 'CASHIER' %}Cajero{% else %}Usuario{% endif %}
                 </div>
               </div>
               <i class="ti ti-chevron-down fs-5 text-muted"></i>

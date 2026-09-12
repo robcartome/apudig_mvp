@@ -275,7 +275,7 @@
         </li>
 
         {# ─── Administración ERP ─── #}
-        {% if user.is_staff %}
+        {% if can_manage_company %}
         <li class="nav-item">
           <a class="nav-link {% if '/management/' in request.path %}active{% endif %}"
              href="{% url 'users:admin_panel' %}"

@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import Company, Store, UserCompanyAccess
+from .selectors import get_user_selectable_accesses
 
 
 @login_required
@@ -22,12 +23,7 @@ def select_company(request):
                     defaults={"is_default": False},
                 )
 
-    accesses = (
-        UserCompanyAccess.objects.for_user(request.user)
-        .select_related("company", "store")
-        .selectable()
-    )
-    accesses = accesses.order_by("-is_default", "company__name", "store__name")
+    accesses = get_user_selectable_accesses(request.user)
 
     # If there is only one possible context, auto-select it and continue.
     if request.method == "GET" and accesses.count() == 1:

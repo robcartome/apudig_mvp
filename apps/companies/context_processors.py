@@ -5,6 +5,7 @@ Inyecta la empresa y sucursal activa en el contexto de todos los templates.
 Requiere que ActiveCompanyMiddleware haya procesado el request antes.
 """
 from .models import Company, CompanyBranding, Store
+from .selectors import get_user_selectable_accesses
 
 
 def active_company_context(request):
@@ -22,6 +23,8 @@ def active_company_context(request):
         "active_branding": None,
         "available_accesses": [],
         "active_access_id": None,
+        "can_manage_company": False,
+        "active_store_role": None,
     }
 
     if not request.user.is_authenticated:
@@ -36,22 +39,13 @@ def active_company_context(request):
     if store_id:
         ctx["active_store"] = Store.objects.filter(pk=store_id).first()
 
-    # Obtener todos los accesos del usuario ordenados
-    all_accesses = list(
-        request.user.company_accesses
-        .select_related("company", "store")
-        .order_by("-is_default", "company__name", "store__name")
-    )
+    from apps.users.permissions import user_is_company_admin, user_store_role
 
-    # Filtrar: si una empresa tiene accesos a nivel de sucursal, no mostrar el
-    # acceso genérico de empresa (store=None) — evita entradas redundantes.
-    # El acceso genérico sí se incluye cuando la empresa no tiene sucursales asignadas.
-    ctx["available_accesses"] = list(
-        request.user.company_accesses
-        .select_related("company", "store")
-        .selectable()
-        .order_by("-is_default", "company__name", "store__name")
-    )
+    ctx["can_manage_company"] = user_is_company_admin(request.user, company_id)
+    ctx["active_store_role"] = user_store_role(request.user, company_id, store_id)
+
+    all_accesses = list(get_user_selectable_accesses(request.user))
+    ctx["available_accesses"] = all_accesses
 
     # Determinar el acceso activo (puede ser a nivel empresa o sucursal)
     if company_id:
