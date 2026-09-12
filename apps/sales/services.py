@@ -9,8 +9,10 @@ Reglas:
 - Los snapshots del cliente (document_number, legal_name, etc.) se copian al
   momento de la creación; nunca se leen del cliente en tiempo de consulta.
 """
+from datetime import date, datetime, time
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -35,6 +37,18 @@ from .models import (
     SalesDocument,
     SalesDocumentLine,
 )
+
+
+def _normalize_document_issue_date(value):
+    """Accept legacy date callers while preserving new document timestamps."""
+    if isinstance(value, date) and not isinstance(value, datetime):
+        value = datetime.combine(value, time.min)
+    if isinstance(value, datetime):
+        if settings.USE_TZ and timezone.is_naive(value):
+            return timezone.make_aware(value, timezone.get_current_timezone())
+        if not settings.USE_TZ and timezone.is_aware(value):
+            return timezone.make_naive(value, timezone.get_current_timezone())
+    return value
 
 
 def _next_series_number(series: DocumentSeries) -> int:
@@ -717,11 +731,14 @@ def _validate_stock_for_sale(document: SalesDocument, lines: list[dict]) -> None
             )
 
 
-def _register_sale_inventory_exit(document: SalesDocument):
+def _register_sale_inventory_exit(document: SalesDocument, created_by=None):
     if not document.register_inventory_movement:
         return None
-    if document.inventory_movement_id:
-        return document.inventory_movement
+    existing = document.inventory_movements.filter(
+        origin=MovementOrigin.SALE, reversal_of__isnull=True
+    ).first()
+    if existing:
+        return existing
 
     lines = _inventory_lines_for_document(document)
     if not lines:
@@ -730,22 +747,26 @@ def _register_sale_inventory_exit(document: SalesDocument):
     movement = register_exit(
         store_id=str(document.store_id),
         warehouse_id=str(document.warehouse_id),
-        date=timezone.now(),
+        date=document.issue_date,
         lines=lines,
-        created_by=document.created_by,
+        created_by=created_by or document.created_by,
         origin=MovementOrigin.SALE,
+        sales_document=document,
         customer=document.customer,
+        document_type=document.document_type,
         series=document.series_code,
         number=document.number,
         reference_doc=str(document.pk),
         reason="Venta",
         description=f"Salida por documento {document.series_code}-{document.number}",
     )
-    return confirm_movement(movement, confirmed_by=document.created_by)
+    return confirm_movement(movement, confirmed_by=created_by or document.created_by)
 
 
-def _register_sale_inventory_reversal(document: SalesDocument):
-    original = document.inventory_movement
+def _register_sale_inventory_reversal(document: SalesDocument, created_by=None):
+    original = document.inventory_movements.filter(
+        origin=MovementOrigin.SALE, reversal_of__isnull=True
+    ).first()
     if original is None:
         return None
     if hasattr(original, "reversal"):
@@ -764,17 +785,19 @@ def _register_sale_inventory_reversal(document: SalesDocument):
         warehouse_id=str(original.warehouse_id),
         date=timezone.now(),
         lines=lines,
-        created_by=document.created_by,
+        created_by=created_by or document.created_by,
         origin=MovementOrigin.SALE_REVERSAL,
+        sales_document=document,
         reversal_of=original,
         customer=document.customer,
+        document_type=document.document_type,
         series=document.series_code,
         number=document.number,
         reference_doc=str(document.pk),
         reason="Anulación de venta",
         description=f"Reversión de {document.series_code}-{document.number}",
     )
-    return confirm_movement(movement, confirmed_by=document.created_by)
+    return confirm_movement(movement, confirmed_by=created_by or document.created_by)
 
 
 @transaction.atomic
@@ -793,6 +816,9 @@ def create_sales_document_draft(
     lines: misma estructura que create_quotation.
     """
     document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
+    kwargs["issue_date"] = _normalize_document_issue_date(kwargs.get("issue_date"))
+    if not kwargs.get("register_inventory_movement", False):
+        kwargs["warehouse"] = None
     lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(line) for line in lines]
     totals = _calc_sales_document_totals(
@@ -830,7 +856,7 @@ def create_sales_document_draft(
 def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
     """Copia un documento como borrador con un correlativo nuevo."""
     source = (
-        SalesDocument.objects.select_for_update()
+        SalesDocument.objects.select_for_update(of=("self",))
         .select_related("customer", "document_type", "series")
         .prefetch_related("lines__product")
         .get(pk=sales_document_id)
@@ -864,7 +890,7 @@ def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
         series=source.series,
         lines=lines,
         created_by=copied_by,
-        issue_date=timezone.now().date(),
+        issue_date=timezone.now(),
         currency=source.currency,
         exchange_rate=source.exchange_rate,
         global_discount_amount=source.global_discount_amount,
@@ -950,7 +976,7 @@ def create_document_from_quotation(
         series=series,
         lines=lines,
         created_by=created_by,
-        issue_date=timezone.now().date(),
+        issue_date=timezone.now(),
         currency=quotation.currency,
         exchange_rate=quotation.exchange_rate,
         payment_method=quotation.payment_method,
@@ -980,6 +1006,10 @@ def update_sales_document_draft(
         raise ValueError("Solo se pueden editar documentos en Borrador.")
 
     store_id = kwargs.get("store_id", document.store_id)
+    if "issue_date" in kwargs:
+        kwargs["issue_date"] = _normalize_document_issue_date(kwargs["issue_date"])
+    if not kwargs.get("register_inventory_movement", document.register_inventory_movement):
+        kwargs["warehouse"] = None
     document_type = kwargs.get("document_type", document.document_type)
     document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
     lines = _normalize_lines_uom(lines)
@@ -1060,10 +1090,9 @@ def issue_sales_document(sales_document_id, issued_by=None) -> SalesDocument:
         )
 
     sales_document.number = number_str
-    inventory_movement = _register_sale_inventory_exit(sales_document)
-    sales_document.inventory_movement = inventory_movement
+    inventory_movement = _register_sale_inventory_exit(sales_document, issued_by)
     sales_document.status = "ISSUED"
-    sales_document.save(update_fields=["number", "inventory_movement", "status"])
+    sales_document.save(update_fields=["number", "status"])
     _audit_sales_document(
         sales_document,
         "ISSUE",
@@ -1085,7 +1114,7 @@ def void_sales_document(sales_document_id, reason: str = "", voided_by=None) -> 
     sales_document = SalesDocument.objects.select_for_update().get(pk=sales_document_id)
     if sales_document.status != "ISSUED":
         raise ValueError("Solo se pueden anular comprobantes emitidos.")
-    reversal = _register_sale_inventory_reversal(sales_document)
+    reversal = _register_sale_inventory_reversal(sales_document, voided_by)
     sales_document.status = "VOIDED"
     if reason:
         sales_document.notes = (sales_document.notes + "\n" + reason).strip()
@@ -1164,7 +1193,7 @@ def create_credit_note(
         series=series,
         lines=lines,
         created_by=created_by,
-        issue_date=timezone.now().date(),
+        issue_date=timezone.now(),
         currency=original.currency,
         global_discount_amount=original.global_discount_amount,
         global_discount_before_tax=original.global_discount_before_tax,

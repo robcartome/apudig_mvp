@@ -421,6 +421,13 @@ class Movement(TimeStampedModel):
         blank=True,
         related_name="inventory_movements",
     )
+    sales_document = models.ForeignKey(
+        "sales.SalesDocument",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movements"
     )

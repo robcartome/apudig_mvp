@@ -197,7 +197,8 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
         Movement.objects.for_store(store_id)
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
                         "supplier", "customer", "document_type", "created_by",
-                        "purchase_document__document_type", "purchase_document__supplier")
+                        "purchase_document__document_type", "purchase_document__supplier",
+                        "sales_document__document_type", "reversal_of__sales_document__document_type")
         .prefetch_related(
             "details__product__unit", "details__unit",
             "details__purchase_receipt_matches__purchase_document_line__purchase_document__document_type",
@@ -274,7 +275,8 @@ def get_movement_detail(pk):
         )
         .select_related("store", "warehouse", "warehouse_origin", "warehouse_dest",
                         "supplier", "customer", "carrier", "document_type", "created_by", "confirmed_by", "closed_by",
-                        "purchase_document__document_type", "purchase_document__supplier")
+                        "purchase_document__document_type", "purchase_document__supplier",
+                        "sales_document__document_type", "reversal_of__sales_document__document_type")
         .get(pk=pk)
     )
 

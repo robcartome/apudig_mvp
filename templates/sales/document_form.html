@@ -162,9 +162,10 @@
           </label>
           {% if header_form.register_inventory_movement.errors %}<div class="text-danger small mt-1">{{ header_form.register_inventory_movement.errors.0 }}</div>{% endif %}
         </div>
-        <div class="col-12 col-md-4">
+        <div class="col-12 col-md-4" id="sales-warehouse-field">
           <label class="form-label">Almacén</label>
           {{ header_form.warehouse }}
+          <div class="form-hint">Se habilita cuando la venta debe generar una salida de inventario.</div>
           {% if header_form.warehouse.errors %}<div class="text-danger small mt-1">{{ header_form.warehouse.errors.0 }}</div>{% endif %}
         </div>
       </div>
@@ -431,5 +432,5 @@
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260905-2"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20260909-1"></script>
 {% endblock %}

@@ -33,6 +33,21 @@
   // Build the price-list API URL template (replace the placeholder UUID)
   const PRICE_LIST_URL_TPL = configEl.dataset.priceListUrl;
   const DEFAULT_PRICE_LIST_ID = configEl.dataset.defaultPriceListId || '';
+  const registerInventoryMovement = document.getElementById('id_register_inventory_movement');
+  const warehouse = document.getElementById('id_warehouse');
+  const warehouseField = document.getElementById('sales-warehouse-field');
+
+  function updateInventoryMovementControls() {
+    const enabled = registerInventoryMovement?.checked === true;
+    if (warehouse) {
+      warehouse.disabled = !enabled;
+      warehouse.required = enabled;
+    }
+    warehouseField?.classList.toggle('opacity-50', !enabled);
+  }
+
+  registerInventoryMovement?.addEventListener('change', updateInventoryMovementControls);
+  updateInventoryMovementControls();
 
   // TAX_TYPE_CHOICES (must match sales/models.py)
   const TAX_TYPES = [
@@ -59,7 +74,7 @@
   ProductPicker.configure({
     searchUrl: configEl.dataset.searchUrl,
     createUrl: configEl.dataset.createUrl,
-    getWarehouse: () => '',
+    getWarehouse: () => warehouse?.value || '',
     modalId: 'quickCreateModal',
     errorId: 'qc-error',
     nameId: 'qc-name',

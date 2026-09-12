@@ -309,7 +309,7 @@ class SalesDocument(TimeStampedModel):
     customer_legal_name = models.CharField(max_length=300)
     customer_address = models.CharField(max_length=500, blank=True)
     customer_ubigeo = models.CharField(max_length=6, blank=True)
-    issue_date = models.DateField()
+    issue_date = models.DateTimeField()
     currency = models.CharField(max_length=3, default="PEN")
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, default=1)
     payment_method = models.ForeignKey(
@@ -382,13 +382,6 @@ class SalesDocument(TimeStampedModel):
         blank=True,
         related_name="sales_documents",
     )
-    inventory_movement = models.OneToOneField(
-        "inventory.Movement",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="sales_document",
-    )
     sunat_ticket = models.CharField(max_length=100, blank=True)
     sunat_cdr_status = models.CharField(max_length=20, blank=True)
     sunat_response_code = models.CharField(max_length=10, blank=True)
@@ -420,6 +413,18 @@ class SalesDocument(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.document_type.code} {self.series_code}-{self.number}"
+
+    @property
+    def inventory_movement(self):
+        """Compatibilidad: salida original generada por este comprobante."""
+        return self.inventory_movements.filter(
+            origin="SALE", reversal_of__isnull=True
+        ).first()
+
+    @property
+    def inventory_movement_id(self):
+        movement = self.inventory_movement
+        return movement.pk if movement else None
 
 
 class SalesDocumentLine(SaleLineBase):

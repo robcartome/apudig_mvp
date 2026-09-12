@@ -455,6 +455,7 @@ def _movement_snapshot(movement: Movement) -> dict:
         "id": str(movement.id),
         "operation_code": movement.operation_code,
         "type": movement.type,
+        "origin": movement.origin,
         "status": movement.status,
         "date": movement.date.isoformat() if movement.date else None,
         "store_id": str(movement.store_id) if movement.store_id else None,
@@ -463,6 +464,9 @@ def _movement_snapshot(movement: Movement) -> dict:
         "warehouse_dest_id": str(movement.warehouse_dest_id) if movement.warehouse_dest_id else None,
         "reason": movement.reason,
         "reference_doc": movement.reference_doc,
+        "document_type_id": str(movement.document_type_id) if movement.document_type_id else None,
+        "sales_document_id": str(movement.sales_document_id) if movement.sales_document_id else None,
+        "purchase_document_id": str(movement.purchase_document_id) if movement.purchase_document_id else None,
         "series": movement.series,
         "number": movement.number,
         "details": [

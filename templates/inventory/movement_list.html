@@ -89,11 +89,23 @@
           </td>
 
           <td class="text-muted">
-            {% if obj.document_type %}{{ obj.document_type.name|default:obj.document_type.code }}{% else %}OTROS{% endif %}
-            {% if obj.series or obj.number %}
-            {{ obj.series|default:"0000" }}-{{ obj.number|default:"0" }}
+            {% if obj.sales_document %}
+            <a href="{% url 'sales:document_detail' obj.sales_document.pk %}">
+              {{ obj.sales_document.document_type.name|default:obj.sales_document.document_type.code }}
+              {{ obj.sales_document.series_code|default:"0000" }}-{{ obj.sales_document.number|default:"0" }}
+            </a>
+            {% elif obj.reversal_of.sales_document %}
+            <a href="{% url 'sales:document_detail' obj.reversal_of.sales_document.pk %}">
+              {{ obj.reversal_of.sales_document.document_type.name|default:obj.reversal_of.sales_document.document_type.code }}
+              {{ obj.reversal_of.sales_document.series_code|default:"0000" }}-{{ obj.reversal_of.sales_document.number|default:"0" }}
+            </a>
             {% else %}
-            0000-0
+              {% if obj.document_type %}{{ obj.document_type.name|default:obj.document_type.code }}{% else %}OTROS{% endif %}
+              {% if obj.series or obj.number %}
+              {{ obj.series|default:"0000" }}-{{ obj.number|default:"0" }}
+              {% else %}
+              0000-0
+              {% endif %}
             {% endif %}
           </td>
 
@@ -314,6 +326,23 @@
               <i class="ti ti-file-invoice me-1"></i>{{ purchase_document.document_type.name }} {{ purchase_document.series }}-{{ purchase_document.number }}
             </a>
             {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if obj.sales_document or obj.reversal_of.sales_document %}
+        <div class="card border-primary-subtle mb-3">
+          <div class="card-body py-3">
+            <div class="text-muted small mb-1">Documento de venta relacionado</div>
+            {% if obj.sales_document %}
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'sales:document_detail' obj.sales_document.pk %}">
+              <i class="ti ti-file-invoice me-1"></i>{{ obj.sales_document.document_type.name }} {{ obj.sales_document.series_code }}-{{ obj.sales_document.number }}
+            </a>
+            {% else %}
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'sales:document_detail' obj.reversal_of.sales_document.pk %}">
+              <i class="ti ti-file-invoice me-1"></i>{{ obj.reversal_of.sales_document.document_type.name }} {{ obj.reversal_of.sales_document.series_code }}-{{ obj.reversal_of.sales_document.number }}
+            </a>
+            {% endif %}
           </div>
         </div>
         {% endif %}

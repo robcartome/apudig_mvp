@@ -273,6 +273,11 @@ class SalesDocumentServiceTest(TestCase):
         self.assertEqual(issued.inventory_movement.origin, MovementOrigin.SALE)
         self.assertEqual(issued.inventory_movement.status, MovementStatus.CONFIRMED)
         self.assertEqual(issued.inventory_movement.reference_doc, str(document.pk))
+        self.assertEqual(issued.inventory_movement.sales_document_id, document.pk)
+        self.assertEqual(
+            issued.inventory_movement.document_type_id, document.document_type_id
+        )
+        self.assertEqual(issued.inventory_movement.date, issued.issue_date)
         report = get_movement_traceability_report(str(self.store.pk))
         entry = report["products"][0]["entries"][0]
         self.assertEqual(entry["origin"], MovementOrigin.SALE)
@@ -429,6 +434,8 @@ class SalesDocumentServiceTest(TestCase):
         reversal = issued.inventory_movement.reversal
         self.assertEqual(reversal.origin, MovementOrigin.SALE_REVERSAL)
         self.assertEqual(reversal.status, MovementStatus.CONFIRMED)
+        self.assertEqual(reversal.sales_document_id, document.pk)
+        self.assertEqual(reversal.document_type_id, document.document_type_id)
         audit = AuditLog.objects.get(
             entity="SalesDocument", entity_id=str(document.pk), action="VOID"
         )
@@ -705,9 +712,43 @@ class SalesDocumentViewsTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, document.customer_legal_name)
+        self.assertContains(response, "Documento de venta")
+        self.assertContains(response, "Forma de pago")
+        self.assertContains(response, "Inventario")
+        self.assertContains(response, "Ítems del documento")
         self.assertContains(
             response, reverse("sales:document_detail", kwargs={"pk": document.pk})
         )
+
+    def test_inventory_list_links_sale_document_with_type_series_and_number(self):
+        self._login()
+        self.fac_series.document_type.name = "Factura Electrónica"
+        self.fac_series.document_type.save(update_fields=["name"])
+        StockByWarehouse.objects.create(
+            product=self.product, warehouse=self.warehouse, quantity=Decimal("5")
+        )
+        document = create_sales_document_draft(
+            store_id=str(self.store.pk),
+            customer=self.customer,
+            document_type=self.fac_series.document_type,
+            series=self.fac_series,
+            lines=[_make_line(self.product, qty="1")],
+            created_by=self.user,
+            issue_date=timezone.now(),
+            currency="PEN",
+            register_inventory_movement=True,
+            warehouse=self.warehouse,
+        )
+        issue_sales_document(document.pk, issued_by=self.user)
+
+        response = self.client.get(reverse("inventory:movement_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, reverse("sales:document_detail", kwargs={"pk": document.pk})
+        )
+        self.assertContains(response, "Factura Electrónica")
+        self.assertContains(response, f"{document.series_code}-{document.number}")
 
     def test_copy_creates_independent_draft_with_new_number(self):
         self._login()
@@ -1024,6 +1065,32 @@ class SalesDocumentViewsTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("warehouse", response.context["header_form"].errors)
         self.assertFalse(SalesDocument.objects.exists())
+
+    def test_create_clears_warehouse_when_inventory_is_disabled(self):
+        self._login()
+        self.fac_series.document_type.category = "BILLING"
+        self.fac_series.document_type.save(update_fields=["category"])
+        data = {
+            "store": str(self.store.pk),
+            "customer": str(self.customer.pk),
+            "document_type": str(self.fac_series.document_type_id),
+            "series": str(self.fac_series.pk),
+            "issue_date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
+            "currency": "PEN",
+            "warehouse": str(self.warehouse.pk),
+            "lines-TOTAL_FORMS": "1",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "1",
+            "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-product": str(self.product.pk),
+            "lines-0-quantity": "1",
+            "lines-0-unit_price": "10",
+            "lines-0-tax_type": "10",
+            "lines-0-igv_rate": "18",
+        }
+        response = self.client.post(reverse("sales:document_create"), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(SalesDocument.objects.get().warehouse_id)
 
     def test_detail_ok(self):
         self._login()
