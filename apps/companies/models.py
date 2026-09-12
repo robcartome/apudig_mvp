@@ -12,6 +12,16 @@ class UserCompanyAccessQuerySet(CompanyScopedQuerySet):
     def for_user(self, user):
         return self.filter(user=user)
 
+    def selectable(self):
+        """Hide company-level access when the user has store-level access."""
+        companies_with_store_access = self.filter(
+            store__isnull=False,
+        ).values_list("company_id", flat=True)
+        return self.exclude(
+            store__isnull=True,
+            company_id__in=companies_with_store_access,
+        )
+
 
 class UserCompanyAccessManager(CompanyScopedManager):
     def get_queryset(self):
@@ -87,6 +97,13 @@ class UserCompanyAccess(TimeStampedModel):
     class Meta:
         db_table = "user_companies"
         unique_together = ("user", "company", "store")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "company"),
+                condition=models.Q(store__isnull=True),
+                name="uniq_user_company_without_store",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.user} -> {self.company}"

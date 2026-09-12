@@ -24,4 +24,17 @@ class ActiveCompanyMiddleware:
     def __call__(self, request):
         request.active_company_id = _validate_uuid(request.session.get("active_company_id"))
         request.active_store_id = _validate_uuid(request.session.get("active_store_id"))
+
+        if request.user.is_authenticated and request.active_company_id:
+            from apps.users.permissions import user_can_access_context
+
+            if not user_can_access_context(
+                request.user,
+                request.active_company_id,
+                request.active_store_id,
+            ):
+                request.session.pop("active_company_id", None)
+                request.session.pop("active_store_id", None)
+                request.active_company_id = None
+                request.active_store_id = None
         return self.get_response(request)

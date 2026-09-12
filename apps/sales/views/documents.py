@@ -84,9 +84,9 @@ def _require_document_permission(request, action):
     redirect_response = _require_auth(request)
     if redirect_response:
         return redirect_response
-    company_id, _ = _get_ids(request)
+    company_id, store_id = _get_ids(request)
     if not user_has_company_permission(
-        request.user, company_id, f"{action}.sales.documents"
+        request.user, company_id, f"{action}.sales.documents", store_id
     ):
         return HttpResponseForbidden(
             "No tienes permiso para realizar esta acción sobre documentos de venta."
@@ -95,13 +95,13 @@ def _require_document_permission(request, action):
 
 
 def _document_permissions_context(request):
-    company_id, _ = _get_ids(request)
+    company_id, store_id = _get_ids(request)
     return {
         "can_manage_sales_documents": user_has_company_permission(
-            request.user, company_id, "manage.sales.documents"
+            request.user, company_id, "manage.sales.documents", store_id
         ),
         "can_authorize_sales_documents": user_has_company_permission(
-            request.user, company_id, "authorize.sales.documents"
+            request.user, company_id, "authorize.sales.documents", store_id
         ),
     }
 

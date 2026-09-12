@@ -151,7 +151,7 @@
             </tr>
             <tr>
               <td class="text-muted fw-semibold">Rol</td>
-              <td>{% if user.is_staff %}Administrador{% else %}Usuario{% endif %}</td>
+              <td>{% if user.is_superuser %}APUDIG{% elif can_manage_company %}Administrador de empresa{% elif active_store_role == 'ADMIN' %}Administrador de tienda{% elif active_store_role == 'SELLER' %}Vendedor{% elif active_store_role == 'CASHIER' %}Cajero{% else %}Usuario{% endif %}</td>
             </tr>
           </tbody>
         </table>

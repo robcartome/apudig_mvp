@@ -30,6 +30,13 @@ from apps.users.models import (
     RolePermission,
     UserOperationalFlags,
     UserRole,
+    UserStore,
+)
+from apps.users.permissions import user_is_company_admin
+from apps.users.services import (
+    grant_company_admin_access,
+    revoke_company_admin_access,
+    set_store_access,
 )
 
 User = get_user_model()
@@ -40,11 +47,16 @@ User = get_user_model()
 # ─────────────────────────────────────────────
 
 def _staff_required(request):
-    """Returns (ok, response|None). If not staff, returns (False, redirect/403)."""
+    """Authorize APUDIG superusers or an ADMIN role in the active company."""
     if not request.user.is_authenticated:
         return False, redirect("login")
-    if not request.user.is_staff:
-        return False, HttpResponseForbidden("Acceso restringido al personal de administración.")
+    if not request.user.is_superuser and not user_is_company_admin(
+        request.user,
+        request.session.get("active_company_id"),
+    ):
+        return False, HttpResponseForbidden(
+            "Acceso restringido a administradores de la empresa activa."
+        )
     return True, None
 
 
@@ -53,6 +65,40 @@ def _get_active_company(request):
     if company_id:
         return Company.objects.filter(pk=company_id).first()
     return None
+
+
+def _superuser_required(request):
+    """Restrict platform-wide configuration to APUDIG personnel."""
+    if not request.user.is_authenticated:
+        return False, redirect("login")
+    if not request.user.is_superuser:
+        return False, HttpResponseForbidden(
+            "Esta operacion esta reservada al personal de APUDIG."
+        )
+    return True, None
+
+
+def _company_users(company):
+    role_user_ids = UserRole.objects.filter(company=company).values_list("user_id", flat=True)
+    access_user_ids = UserCompanyAccess.objects.filter(company=company).values_list("user_id", flat=True)
+    store_user_ids = UserStore.objects.filter(
+        store__company=company,
+        is_active=True,
+    ).values_list("user_id", flat=True)
+    return User.objects.filter(
+        Q(id__in=role_user_ids)
+        | Q(id__in=access_user_ids)
+        | Q(id__in=store_user_ids)
+    ).distinct()
+
+
+def _manageable_user_or_404(request, pk, company):
+    if request.user.is_superuser:
+        return get_object_or_404(User, pk=pk)
+    return get_object_or_404(
+        _company_users(company).filter(is_superuser=False),
+        pk=pk,
+    )
 
 
 # ─────────────────────────────────────────────
@@ -87,9 +133,7 @@ def user_list(request):
         # Usuarios visibles por empresa activa:
         # - con roles en la empresa
         # - o con acceso explícito a la empresa (user_companies)
-        role_user_ids = UserRole.objects.filter(company=company).values_list("user_id", flat=True)
-        company_access_user_ids = UserCompanyAccess.objects.for_company(company.pk).values_list("user_id", flat=True)
-        qs = User.objects.filter(Q(id__in=role_user_ids) | Q(id__in=company_access_user_ids)).distinct()
+        qs = _company_users(company).filter(is_superuser=False)
 
         # Evita el caso confuso de quedar sin ningún usuario visible estando logueado.
         if not qs.exists() and request.user.is_authenticated:
@@ -151,6 +195,7 @@ def user_create(request):
                 UserCompanyAccess.objects.get_or_create(
                     user=user,
                     company=company,
+                    store=None,
                     defaults={"is_default": True},
                 )
         messages.success(request, f"Usuario '{user.email}' creado correctamente.")
@@ -170,8 +215,8 @@ def user_detail(request, pk):
     if not ok:
         return err
 
-    target = get_object_or_404(User, pk=pk)
     company = _get_active_company(request)
+    target = _manageable_user_or_404(request, pk, company)
     tab = request.GET.get("tab", "general")
 
     # Formulario de edición general
@@ -212,40 +257,65 @@ def user_detail(request, pk):
     if company:
         assigned_role_ids = UserRole.objects.filter(user=target, company=company).values_list("role_id", flat=True)
         assigned_roles = list(Role.objects.filter(id__in=assigned_role_ids))
-        available_roles = list(Role.objects.exclude(id__in=assigned_role_ids))
+        available_role_qs = Role.objects.exclude(id__in=assigned_role_ids)
+        if not request.user.is_superuser:
+            available_role_qs = available_role_qs.exclude(name__iexact="SUPERUSER")
+        available_roles = list(available_role_qs)
 
     # Guardar roles (POST desde tab roles)
     if request.method == "POST" and "save_roles" in request.POST and company:
         selected_ids = request.POST.getlist("role_ids")
+        selected_roles = Role.objects.filter(pk__in=selected_ids)
+        if not request.user.is_superuser:
+            selected_roles = selected_roles.exclude(name__iexact="SUPERUSER")
+        selected_roles = list(selected_roles)
+        was_company_admin = user_is_company_admin(target, company.pk)
         with transaction.atomic():
             # Eliminar roles no seleccionados
-            UserRole.objects.filter(user=target, company=company).exclude(role_id__in=selected_ids).delete()
+            UserRole.objects.filter(user=target, company=company).exclude(
+                role_id__in=[role.pk for role in selected_roles]
+            ).delete()
             # Agregar nuevos
-            for role_id in selected_ids:
-                role = Role.objects.filter(pk=role_id).first()
-                if role:
-                    UserRole.objects.get_or_create(user=target, role=role, company=company)
+            for role in selected_roles:
+                UserRole.objects.get_or_create(user=target, role=role, company=company)
+
+            is_company_admin = any(role.name.upper() == "ADMIN" for role in selected_roles)
+            if is_company_admin:
+                grant_company_admin_access(target, company)
+            elif was_company_admin:
+                revoke_company_admin_access(target, company)
         messages.success(request, "Roles actualizados correctamente.")
         return redirect(f"{request.path}?tab=roles")
 
     # ── Tab: Empresas y Sucursales (accesos) ──────────────────────────────
     # Solo superusuarios pueden gestionar los accesos de otros usuarios
     accesos_por_empresa = []
-    if request.user.is_superuser:
+    if request.user.is_superuser or company:
         user_access_pairs = set(
             UserCompanyAccess.objects.for_user(target)
             .values_list("company_id", "store_id")
         )
+        store_roles = {
+            str(store_id): role
+            for store_id, role in UserStore.objects.filter(
+                user=target,
+                is_active=True,
+            ).values_list("store_id", "role")
+        }
         # Normalizar: store_id None queda como None, UUID como str
         user_access_set = {
             (str(c), str(s) if s else None)
             for c, s in user_access_pairs
         }
-        for co in Company.objects.filter(is_active=True).prefetch_related("stores").order_by("name"):
+        managed_companies = Company.objects.filter(is_active=True)
+        if not request.user.is_superuser:
+            managed_companies = managed_companies.filter(pk=company.pk)
+        for co in managed_companies.prefetch_related("stores").order_by("name"):
             stores_info = [
                 {
                     "store": st,
                     "has_access": (str(co.pk), str(st.pk)) in user_access_set,
+                    "role": store_roles.get(str(st.pk), "SELLER"),
                 }
                 for st in co.stores.filter(active=True).order_by("name")
             ]
@@ -255,7 +325,7 @@ def user_detail(request, pk):
                 "stores": stores_info,
             })
 
-    if request.method == "POST" and "save_accesos" in request.POST and request.user.is_superuser:
+    if request.method == "POST" and "save_accesos" in request.POST and company:
         selected_pairs = request.POST.getlist("access")  # e.g. ["UUID|", "UUID|UUID"]
         desired: set[tuple[str, str | None]] = set()
         for item in selected_pairs:
@@ -265,24 +335,53 @@ def user_detail(request, pk):
             if co_id:
                 desired.add((co_id, st_id))
 
+        allowed_company_ids = {
+            str(pk)
+            for pk in (
+                Company.objects.filter(is_active=True).values_list("pk", flat=True)
+                if request.user.is_superuser
+                else [company.pk]
+            )
+        }
+        desired = {pair for pair in desired if pair[0] in allowed_company_ids}
+
         with transaction.atomic():
             # Eliminar los accesos que ya no están seleccionados
-            for access in UserCompanyAccess.objects.for_user(target).select_related("company", "store"):
+            managed_accesses = UserCompanyAccess.objects.for_user(target).filter(
+                company_id__in=allowed_company_ids,
+            ).select_related("company", "store")
+            for access in managed_accesses:
                 key = (str(access.company_id), str(access.store_id) if access.store_id else None)
                 if key not in desired:
                     access.delete()
+                    if access.store_id:
+                        UserStore.objects.filter(user=target, store_id=access.store_id).delete()
             # Agregar los accesos nuevos
             for co_id, st_id in desired:
                 co = Company.objects.filter(pk=co_id).first()
                 if not co:
                     continue
-                store = Store.objects.filter(pk=st_id, company=co).first() if st_id else None
-                UserCompanyAccess.objects.get_or_create(
-                    user=target,
-                    company=co,
-                    store=store,
-                    defaults={"is_default": False},
-                )
+                if st_id:
+                    store = Store.objects.filter(pk=st_id, company=co, active=True).first()
+                    if not store:
+                        continue
+                    role = request.POST.get(f"store_role_{st_id}", "SELLER").upper()
+                    valid_roles = {choice[0] for choice in UserStore.ROLE_CHOICES}
+                    set_store_access(
+                        target,
+                        store,
+                        role if role in valid_roles else "SELLER",
+                    )
+                else:
+                    UserCompanyAccess.objects.get_or_create(
+                        user=target,
+                        company=co,
+                        store=None,
+                        defaults={"is_default": False},
+                    )
+            for co in Company.objects.filter(pk__in=allowed_company_ids):
+                if user_is_company_admin(target, co.pk):
+                    grant_company_admin_access(target, co)
         messages.success(request, "Accesos a empresas/sucursales actualizados.")
         return redirect(f"{request.path}?tab=accesos")
 
@@ -306,7 +405,8 @@ def user_delete(request, pk):
     if not ok:
         return err
 
-    target = get_object_or_404(User, pk=pk)
+    company = _get_active_company(request)
+    target = _manageable_user_or_404(request, pk, company)
 
     if target == request.user:
         messages.error(request, "No puedes eliminar tu propia cuenta.")
@@ -314,8 +414,19 @@ def user_delete(request, pk):
 
     if request.method == "POST":
         email = target.email
-        target.delete()
-        messages.success(request, f"Usuario '{email}' eliminado.")
+        if request.user.is_superuser:
+            target.delete()
+            messages.success(request, f"Usuario '{email}' eliminado.")
+        else:
+            with transaction.atomic():
+                UserRole.objects.filter(user=target, company=company).delete()
+                UserCompanyAccess.objects.filter(user=target, company=company).delete()
+                UserStore.objects.filter(user=target, store__company=company).delete()
+                UserOperationalFlags.objects.filter(user=target, company=company).delete()
+            messages.success(
+                request,
+                f"Acceso de '{email}' retirado de {company.name}.",
+            )
         return redirect("users:user_list")
 
     return render(request, "admin_panel/user_confirm_delete.html", {
@@ -330,7 +441,7 @@ def user_delete(request, pk):
 
 @login_required
 def role_list(request):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -347,7 +458,7 @@ def role_list(request):
 
 @login_required
 def role_create(request):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -367,7 +478,7 @@ def role_create(request):
 
 @login_required
 def role_edit(request, pk):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -396,7 +507,7 @@ def role_edit(request, pk):
 
 @login_required
 def role_delete(request, pk):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -416,7 +527,7 @@ def role_delete(request, pk):
 @login_required
 def role_permissions(request, pk):
     """Gestión de permisos asignados a un rol (dual-list)."""
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -453,7 +564,7 @@ def role_permissions(request, pk):
 
 @login_required
 def permission_list(request):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -472,7 +583,7 @@ def permission_list(request):
 
 @login_required
 def permission_create(request):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -492,7 +603,7 @@ def permission_create(request):
 
 @login_required
 def permission_delete(request, pk):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -522,8 +633,9 @@ def company_list(request):
     if request.user.is_superuser:
         companies = Company.objects.prefetch_related("stores", "branding").order_by("name")
     else:
-        company_ids = UserRole.objects.filter(user=request.user).values_list("company_id", flat=True).distinct()
-        companies = Company.objects.filter(id__in=company_ids).prefetch_related("stores", "branding").order_by("name")
+        companies = Company.objects.filter(
+            pk=request.session.get("active_company_id")
+        ).prefetch_related("stores", "branding").order_by("name")
 
     total_stores = sum(c.stores.count() for c in companies)
 
@@ -536,7 +648,7 @@ def company_list(request):
 
 @login_required
 def company_create(request):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -573,7 +685,10 @@ def company_edit(request, pk):
     if not ok:
         return err
 
-    company = get_object_or_404(Company, pk=pk)
+    companies = Company.objects.all()
+    if not request.user.is_superuser:
+        companies = companies.filter(pk=request.session.get("active_company_id"))
+    company = get_object_or_404(companies, pk=pk)
     branding, _ = CompanyBranding.objects.get_or_create(company=company)
     stores = company.stores.order_by("name")
 
@@ -606,7 +721,7 @@ def company_edit(request, pk):
 
 @login_required
 def company_delete(request, pk):
-    ok, err = _staff_required(request)
+    ok, err = _superuser_required(request)
     if not ok:
         return err
 
@@ -634,7 +749,10 @@ def store_create(request, company_pk):
     if not ok:
         return err
 
-    company = get_object_or_404(Company, pk=company_pk)
+    companies = Company.objects.all()
+    if not request.user.is_superuser:
+        companies = companies.filter(pk=request.session.get("active_company_id"))
+    company = get_object_or_404(companies, pk=company_pk)
     form = StoreAdminForm(request.POST or None)
 
     if request.method == "POST" and form.is_valid():
@@ -645,19 +763,26 @@ def store_create(request, company_pk):
 
             # Propagar acceso a la nueva sucursal para usuarios que ya tienen
             # acceso a la empresa (global) o roles dentro de la empresa.
-            company_access_user_ids = UserCompanyAccess.objects.filter(
+            company_admin_ids = UserRole.objects.filter(
                 company=company,
-                store__isnull=True,
+                role__name__iexact="ADMIN",
             ).values_list("user_id", flat=True)
-            role_user_ids = UserRole.objects.filter(company=company).values_list("user_id", flat=True)
-
-            target_user_ids = set(list(company_access_user_ids) + list(role_user_ids) + [request.user.id])
+            platform_admin_ids = User.objects.filter(
+                is_superuser=True,
+                is_active=True,
+            ).values_list("id", flat=True)
+            target_user_ids = set(company_admin_ids) | set(platform_admin_ids)
             for user_id in target_user_ids:
                 UserCompanyAccess.objects.get_or_create(
                     user_id=user_id,
                     company=company,
                     store=store,
                     defaults={"is_default": False},
+                )
+                UserStore.objects.update_or_create(
+                    user_id=user_id,
+                    store=store,
+                    defaults={"role": "ADMIN", "is_active": True},
                 )
         messages.success(request, f"Sucursal '{store.name}' creada.")
         return redirect("users:company_edit", pk=company.pk)
@@ -677,7 +802,10 @@ def store_edit(request, company_pk, pk):
     if not ok:
         return err
 
-    company = get_object_or_404(Company, pk=company_pk)
+    companies = Company.objects.all()
+    if not request.user.is_superuser:
+        companies = companies.filter(pk=request.session.get("active_company_id"))
+    company = get_object_or_404(companies, pk=company_pk)
     store = get_object_or_404(Store, pk=pk, company=company)
     form = StoreAdminForm(request.POST or None, instance=store)
 
@@ -702,7 +830,10 @@ def store_delete(request, company_pk, pk):
     if not ok:
         return err
 
-    company = get_object_or_404(Company, pk=company_pk)
+    companies = Company.objects.all()
+    if not request.user.is_superuser:
+        companies = companies.filter(pk=request.session.get("active_company_id"))
+    company = get_object_or_404(companies, pk=company_pk)
     store = get_object_or_404(Store, pk=pk, company=company)
 
     if request.method == "POST":

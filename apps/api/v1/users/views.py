@@ -1,14 +1,17 @@
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from django.contrib.auth import authenticate, get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
+from django.db.models import Q
 from rest_framework import permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.api.v1.auth.tokens import build_access_from_refresh_payload, decode_token
-from apps.companies.models import UserCompanyAccess
+from apps.companies.models import Company, UserCompanyAccess
 from apps.api.v1.users.helpers import get_company_security_map, get_default_access, make_token_pair
-from apps.users.models import Permission, Role, UserRole
+from apps.users.models import Permission, Role, UserRole, UserStore
+from apps.users.permissions import user_is_company_admin
+from apps.users.services import grant_company_admin_access, revoke_company_admin_access
 
 from .serializers import (
     AssignRoleRequestSerializer,
@@ -62,6 +65,40 @@ def _serialize_company_list(accesses, security_map: dict):
 
 def _get_user_companies(user):
     return UserCompanyAccess.objects.filter(user=user).select_related("company", "store")
+
+
+def _request_company_id(request):
+    if isinstance(request.auth, dict) and request.auth.get("company_id"):
+        return str(request.auth["company_id"])
+    return (
+        getattr(request, "active_company_id", None)
+        or request.session.get("active_company_id")
+    )
+
+
+def _can_administer_company(request, company_id=None):
+    company_id = str(company_id or _request_company_id(request) or "")
+    return request.user.is_superuser or user_is_company_admin(request.user, company_id)
+
+
+def _company_users(company_id):
+    role_users = UserRole.objects.filter(company_id=company_id).values_list("user_id", flat=True)
+    access_users = UserCompanyAccess.objects.filter(company_id=company_id).values_list("user_id", flat=True)
+    store_users = UserStore.objects.filter(
+        store__company_id=company_id,
+        is_active=True,
+    ).values_list("user_id", flat=True)
+    User = get_user_model()
+    return User.objects.filter(
+        Q(pk__in=role_users) | Q(pk__in=access_users) | Q(pk__in=store_users)
+    ).distinct()
+
+
+def _forbidden():
+    return Response(
+        {"detail": "Se requiere el rol ADMIN en la empresa activa."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 class TokenObtainAPIView(APIView):
@@ -244,9 +281,16 @@ class UsersListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(tags=["Auth"], summary="List users")
-    def get(self, _request):
+    def get(self, request):
+        company_id = _request_company_id(request)
+        if not _can_administer_company(request, company_id):
+            return _forbidden()
         User = get_user_model()
-        users = User.objects.filter(is_active=True).order_by("email")
+        users = (
+            User.objects.filter(is_active=True).order_by("email")
+            if request.user.is_superuser
+            else _company_users(company_id).filter(is_active=True, is_superuser=False).order_by("email")
+        )
         payload = [
             {
                 "id": str(user.id),
@@ -264,17 +308,33 @@ class RegisterUserAPIView(APIView):
 
     @extend_schema(tags=["Auth"], summary="Register user", request=RegisterUserRequestSerializer)
     def post(self, request):
+        company_id = _request_company_id(request)
+        if not company_id or not _can_administer_company(request, company_id):
+            return _forbidden()
+        company = Company.objects.filter(pk=company_id, is_active=True).first()
+        if not company:
+            return Response(
+                {"detail": "La empresa activa no existe o esta inactiva."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = RegisterUserRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         User = get_user_model()
         try:
-            user = User.objects.create_user(
-                email=serializer.validated_data["email"].lower().strip(),
-                password=serializer.validated_data["password"],
-                name=serializer.validated_data.get("name", ""),
-                phone=serializer.validated_data.get("phone", ""),
-            )
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    email=serializer.validated_data["email"].lower().strip(),
+                    password=serializer.validated_data["password"],
+                    name=serializer.validated_data.get("name", ""),
+                    phone=serializer.validated_data.get("phone", ""),
+                )
+                UserCompanyAccess.objects.create(
+                    user=user,
+                    company=company,
+                    store=None,
+                    is_default=True,
+                )
         except IntegrityError:
             return Response({"detail": "Ya existe un usuario con ese email."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -293,13 +353,20 @@ class RolesAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(tags=["Auth"], summary="List roles")
-    def get(self, _request):
-        roles = Role.objects.all().order_by("name")
+    def get(self, request):
+        if not _can_administer_company(request):
+            return _forbidden()
+        roles = Role.objects.all()
+        if not request.user.is_superuser:
+            roles = roles.exclude(name__iexact="SUPERUSER")
+        roles = roles.order_by("name")
         payload = [{"id": str(role.id), "name": role.name, "description": role.description} for role in roles]
         return Response(payload, status=status.HTTP_200_OK)
 
     @extend_schema(tags=["Auth"], summary="Create role", request=CreateRoleRequestSerializer)
     def post(self, request):
+        if not request.user.is_superuser:
+            return _forbidden()
         serializer = CreateRoleRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -321,7 +388,9 @@ class PermissionsAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(tags=["Auth"], summary="List permissions")
-    def get(self, _request):
+    def get(self, request):
+        if not _can_administer_company(request):
+            return _forbidden()
         permissions_qs = Permission.objects.all().order_by("code")
         payload = [
             {
@@ -335,6 +404,8 @@ class PermissionsAPIView(APIView):
 
     @extend_schema(tags=["Auth"], summary="Create permission", request=CreatePermissionRequestSerializer)
     def post(self, request):
+        if not request.user.is_superuser:
+            return _forbidden()
         serializer = CreatePermissionRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -364,18 +435,28 @@ class AssignRoleAPIView(APIView):
         serializer = AssignRoleRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        company_id = serializer.validated_data["company_id"]
+        if not _can_administer_company(request, company_id):
+            return _forbidden()
+
         User = get_user_model()
         try:
-            user = User.objects.get(pk=serializer.validated_data["user_id"])
+            users = User.objects.all() if request.user.is_superuser else _company_users(company_id).filter(is_superuser=False)
+            user = users.get(pk=serializer.validated_data["user_id"])
             role = Role.objects.get(pk=serializer.validated_data["role_id"])
         except (User.DoesNotExist, Role.DoesNotExist):
             return Response({"detail": "Usuario o rol no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-        UserRole.objects.get_or_create(
+        if role.name.upper() == "SUPERUSER" and not request.user.is_superuser:
+            return _forbidden()
+
+        role_assignment, _ = UserRole.objects.get_or_create(
             user=user,
             role=role,
-            company_id=serializer.validated_data["company_id"],
+            company_id=company_id,
         )
+        if role.name.upper() == "ADMIN":
+            grant_company_admin_access(user, role_assignment.company)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -387,11 +468,21 @@ class RemoveRoleAPIView(APIView):
         serializer = AssignRoleRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        deleted, _ = UserRole.objects.filter(
+        company_id = serializer.validated_data["company_id"]
+        if not _can_administer_company(request, company_id):
+            return _forbidden()
+
+        assignment = UserRole.objects.filter(
             user_id=serializer.validated_data["user_id"],
             role_id=serializer.validated_data["role_id"],
-            company_id=serializer.validated_data["company_id"],
-        ).delete()
-        if not deleted:
+            company_id=company_id,
+        ).select_related("role", "company").first()
+        if not assignment:
             return Response({"detail": "Asignacion no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        was_admin = assignment.role.name.upper() == "ADMIN"
+        company = assignment.company
+        assigned_user = assignment.user
+        assignment.delete()
+        if was_admin:
+            revoke_company_admin_access(assigned_user, company)
         return Response(status=status.HTTP_204_NO_CONTENT)

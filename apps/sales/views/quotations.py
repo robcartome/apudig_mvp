@@ -252,7 +252,7 @@ def quotation_detail(request, pk):
             store_id=store_id, active=True
         ).order_by("name"),
         "can_manage_sales_documents": user_has_company_permission(
-            request.user, company_id, "manage.sales.documents"
+            request.user, company_id, "manage.sales.documents", store_id
         ),
     })
 
