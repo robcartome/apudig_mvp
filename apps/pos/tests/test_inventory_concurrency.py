@@ -130,8 +130,8 @@ class PosInventoryConcurrencyTest(TransactionTestCase):
                     }],
                     payment_items=[{
                         "means_of_payment_id": self.cash.pk,
-                        "amount": Decimal("11.80"),
-                        "received_amount": Decimal("11.80"),
+                        "amount": Decimal("10.00"),
+                        "received_amount": Decimal("10.00"),
                         "change_amount": Decimal("0.00"),
                     }],
                     cashier=User.objects.get(pk=self.user.pk),

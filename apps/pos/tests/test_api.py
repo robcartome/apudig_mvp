@@ -200,8 +200,8 @@ class PosApiTest(TestCase):
             "lines": [line],
             "payments": [{
                 "means_of_payment_id": str(self.cash.pk),
-                "amount": "118.00",
-                "received_amount": "118.00",
+                "amount": "100.00",
+                "received_amount": "100.00",
                 "change_amount": "0.00",
             }],
         }
@@ -248,7 +248,7 @@ class PosApiTest(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
         self.assertEqual(data["prices"][0]["name"], "Mayorista")
-        self.assertEqual(data["prices"][0]["amount"], "94.40")
+        self.assertEqual(data["prices"][0]["amount"], "80.00")
         self.assertEqual(len(data["warehouses"]), 2)
         self.assertTrue(any(item["is_current"] for item in data["warehouses"]))
 
@@ -273,9 +273,9 @@ class PosApiTest(TestCase):
         product = Product.objects.get(pk=response.json()["id"])
         self.assertEqual(product.company, self.company)
         self.assertEqual(product.sku, "LLA-001")
-        self.assertEqual(product.price_sale, Decimal("100.00"))
+        self.assertEqual(product.price_sale, Decimal("118.00"))
         self.assertEqual(product.category, category)
-        self.assertEqual(product.unit_conversions.get().sale_price, Decimal("100.000000"))
+        self.assertEqual(product.unit_conversions.get().sale_price, Decimal("118.000000"))
         self.assertTrue(AuditLog.objects.filter(
             entity="Product", entity_id=str(product.pk), meta_data__source="POS"
         ).exists())
@@ -326,7 +326,7 @@ class PosApiTest(TestCase):
 
         self.assertEqual(denied.status_code, 403, denied.content)
         self.assertEqual(allowed.status_code, 200, allowed.content)
-        self.assertEqual(allowed.json()[0]["unit_price"], "80.00")
+        self.assertEqual(allowed.json()[0]["unit_price"], "67.796610")
 
     def test_product_ids_can_reprice_existing_cart_without_text_search(self):
         price_list = PriceList.objects.create(company=self.company, name="Distribuidor")
@@ -347,7 +347,7 @@ class PosApiTest(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual([item["id"] for item in response.json()], [str(self.product.pk)])
-        self.assertEqual(response.json()[0]["unit_price"], "75.00")
+        self.assertEqual(response.json()[0]["unit_price"], "63.559322")
 
     def test_product_search_uses_register_price_and_warehouse_stock(self):
         response = self.client.get(
@@ -363,7 +363,7 @@ class PosApiTest(TestCase):
         self.assertEqual(len(response.json()), 1)
         product = response.json()[0]
         self.assertEqual(product["id"], str(self.product.pk))
-        self.assertEqual(product["unit_price"], "100.00")
+        self.assertEqual(product["unit_price"], "84.745763")
         self.assertEqual(product["stock"], "10.000")
         self.assertEqual(product["unit"], "NIU")
 
@@ -393,15 +393,15 @@ class PosApiTest(TestCase):
         product = search.json()[0]
         box_data = next(item for item in product["units"] if item["id"] == str(box.pk))
         self.assertEqual(box_data["conversion_factor"], "12.000000")
-        self.assertEqual(box_data["unit_price"], "110.000000")
+        self.assertEqual(box_data["unit_price"], "93.220339")
         self.assertEqual(product["stock_unit"], "NIU")
 
         session_id = self._open_session()
         payload = self._checkout_payload(session_id)
         payload["lines"][0]["unit_id"] = str(box.pk)
         payload["payments"][0].update({
-            "amount": "129.80",
-            "received_amount": "129.80",
+            "amount": "110.00",
+            "received_amount": "110.00",
         })
         checkout = self._post("/api/v1/pos/sales/checkout/", payload)
 
@@ -436,8 +436,8 @@ class PosApiTest(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
         self.assertEqual(data["opening_total"], "10.00")
-        self.assertEqual(data["cash_sales"], "118.00")
-        self.assertEqual(data["expected_cash_total"], "128.00")
+        self.assertEqual(data["cash_sales"], "100.00")
+        self.assertEqual(data["expected_cash_total"], "110.00")
         self.assertEqual(data["transactions"]["completed"], 1)
         self.assertTrue(data["can_close"])
 
@@ -462,7 +462,7 @@ class PosApiTest(TestCase):
         response = self.client.get(f"/api/v1/pos/sessions/{session_id}/summary/")
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
-        self.assertEqual(data["expected_cash_total"], "133.00")
+        self.assertEqual(data["expected_cash_total"], "115.00")
         self.assertEqual(data["sales"][0]["document"], "NV01-00000001")
         self.assertEqual(data["movement_details"][0]["description"], "Fondo adicional")
         self.assertEqual(data["movement_details"][0]["movement_type_label"], "Ingreso")
@@ -568,11 +568,11 @@ class PosApiTest(TestCase):
         payload["lines"][0]["quantity"] = "2.000"
         updated = self._post("/api/v1/pos/sales/drafts/", payload)
         self.assertEqual(updated.status_code, 200, updated.content)
-        self.assertEqual(updated.json()["total"], "236.00")
+        self.assertEqual(updated.json()["total"], "200.00")
         payload["payments"] = [{
             "means_of_payment_id": str(self.cash.pk),
-            "amount": "236.00",
-            "received_amount": "236.00",
+            "amount": "200.00",
+            "received_amount": "200.00",
             "change_amount": "0.00",
         }]
         completed = self._post("/api/v1/pos/sales/checkout/", payload)
@@ -632,7 +632,7 @@ class PosApiTest(TestCase):
         self.assertEqual(response.json()["payment_condition"], "CREDIT")
         self.assertEqual(response.json()["payment_status"], "PENDING")
         self.assertEqual(response.json()["paid_amount"], "0.00")
-        self.assertEqual(response.json()["outstanding_amount"], "118.00")
+        self.assertEqual(response.json()["outstanding_amount"], "100.00")
         transaction = PosTransaction.objects.get(pk=response.json()["id"])
         self.assertEqual(transaction.sales_document.due_date, due_date)
         self.assertEqual(transaction.sales_document.payment_method, self.credit_method)
@@ -656,7 +656,7 @@ class PosApiTest(TestCase):
         self.assertEqual(response.status_code, 201, response.content)
         self.assertEqual(response.json()["payment_status"], "PARTIAL")
         self.assertEqual(response.json()["paid_amount"], "50.00")
-        self.assertEqual(response.json()["outstanding_amount"], "68.00")
+        self.assertEqual(response.json()["outstanding_amount"], "50.00")
         closed = self._post(f"/api/v1/pos/sessions/{session_id}/close/", {
             "counted_cash_total": "50.00",
         })
@@ -686,7 +686,7 @@ class PosApiTest(TestCase):
             f"/api/v1/pos/collections/?cash_session_id={collection_session_id}"
         )
         self.assertEqual(pending.status_code, 200, pending.content)
-        self.assertEqual(pending.json()[0]["outstanding_total"], "118.00")
+        self.assertEqual(pending.json()[0]["outstanding_total"], "100.00")
 
         idempotency_key = uuid.uuid4()
         collection_payload = {
@@ -702,7 +702,7 @@ class PosApiTest(TestCase):
 
         self.assertEqual(first.status_code, 201, first.content)
         self.assertEqual(repeated.status_code, 201, repeated.content)
-        self.assertEqual(first.json()["outstanding_total"], "78.00")
+        self.assertEqual(first.json()["outstanding_total"], "60.00")
         transaction_record = PosTransaction.objects.get(pk=sale.json()["id"])
         self.assertEqual(transaction_record.payment_status, PosTransaction.PaymentStatus.PARTIAL)
         payments = transaction_record.sales_document.pos_payments.all()
@@ -854,13 +854,13 @@ class PosApiTest(TestCase):
         self.assertEqual(repeated.status_code, 200, repeated.content)
         self.assertTrue(returned.json()["created"])
         self.assertFalse(repeated.json()["created"])
-        self.assertEqual(returned.json()["total"], "59.00")
+        self.assertEqual(returned.json()["total"], "50.00")
         self.assertIsNone(returned.json()["credit_note_id"])
         stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
         self.assertEqual(stock.quantity, Decimal("9.500"))
         summary = self.client.get(f"/api/v1/pos/sessions/{session_id}/summary/")
-        self.assertEqual(summary.json()["refund_total"], "59.00")
-        self.assertEqual(summary.json()["expected_cash_total"], "59.00")
+        self.assertEqual(summary.json()["refund_total"], "50.00")
+        self.assertEqual(summary.json()["expected_cash_total"], "50.00")
 
     def test_cashier_cannot_return_without_refund_permission(self):
         session_id = self._open_session()
@@ -893,7 +893,7 @@ class PosApiTest(TestCase):
             self._checkout_payload(original_session_id),
         )
         closed = self._post(f"/api/v1/pos/sessions/{original_session_id}/close/", {
-            "counted_cash_total": "118.00",
+            "counted_cash_total": "100.00",
         })
         self.assertEqual(closed.status_code, 200, closed.content)
         refund_session_id = self._open_session()
@@ -1078,7 +1078,7 @@ class PosApiTest(TestCase):
         self.assertEqual(request_response.status_code, 200, request_response.content)
 
         blocked_close = self._post(f"/api/v1/pos/sessions/{session_id}/close/", {
-            "counted_cash_total": "236.00",
+            "counted_cash_total": "200.00",
         })
         self.assertEqual(blocked_close.status_code, 400)
         self.assertEqual(blocked_close.json()["code"], "CLOSE_HAS_PENDING_INVOICES")
@@ -1088,14 +1088,14 @@ class PosApiTest(TestCase):
             "invoice_series_id": str(self.invoice_series.pk),
         })
         self.assertEqual(invoice_response.status_code, 201, invoice_response.content)
-        self.assertEqual(invoice_response.json()["total"], "236.00")
+        self.assertEqual(invoice_response.json()["total"], "200.00")
         self.assertEqual(SalesDocumentSource.objects.count(), 2)
 
         stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
         self.assertEqual(stock.quantity, Decimal("8.000"))
 
         closed = self._post(f"/api/v1/pos/sessions/{session_id}/close/", {
-            "counted_cash_total": "236.00",
+            "counted_cash_total": "200.00",
         })
         self.assertEqual(closed.status_code, 200, closed.content)
         self.assertEqual(closed.json()["cash_difference"], "0.00")
