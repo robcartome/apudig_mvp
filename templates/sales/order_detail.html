@@ -66,7 +66,7 @@
           </div>
           <div class="col-6 mb-2">
             <div class="text-muted small">Moneda</div>
-            <div>{{ order.currency }}</div>
+            <div>{{ order.currency|currency_symbol }}</div>
           </div>
           <div class="col-6 mb-2">
             <div class="text-muted small">Emisión</div>
@@ -157,15 +157,15 @@
       <tfoot class="table-light fw-semibold">
         <tr>
           <td colspan="6" class="text-end">Subtotal:</td>
-          <td colspan="3" class="text-end">{{ order.currency }} {{ order.subtotal|floatformat:2 }}</td>
+          <td colspan="3" class="text-end">{{ order.currency|currency_symbol }} {{ order.subtotal|floatformat:2 }}</td>
         </tr>
         <tr>
           <td colspan="6" class="text-end">IGV:</td>
-          <td colspan="3" class="text-end">{{ order.currency }} {{ order.igv_total|floatformat:2 }}</td>
+          <td colspan="3" class="text-end">{{ order.currency|currency_symbol }} {{ order.igv_total|floatformat:2 }}</td>
         </tr>
         <tr class="fs-5">
           <td colspan="6" class="text-end">TOTAL:</td>
-          <td colspan="3" class="text-end">{{ order.currency }} {{ order.total|floatformat:2 }}</td>
+          <td colspan="3" class="text-end">{{ order.currency|currency_symbol }} {{ order.total|floatformat:2 }}</td>
         </tr>
       </tfoot>
     </table>

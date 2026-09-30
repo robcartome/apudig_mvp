@@ -117,6 +117,11 @@ class CashSessionHistoryViewTest(TestCase):
         self.assertContains(response, "Pagos")
         self.assertContains(response, "Ingreso de sencillo")
         self.assertContains(response, "120,00")
+        self.assertContains(response, "Resumen del día")
+        self.assertContains(response, "Resumen por medio de pago")
+        self.assertContains(response, "Detalle Vale de Ingreso")
+        self.assertContains(response, "Detalle Vale de Salida")
+        self.assertContains(response, "financial-report.css")
 
     def test_invalid_uuid_filter_is_ignored_safely(self):
         self._login(self.cashier)

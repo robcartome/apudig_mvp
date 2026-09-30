@@ -107,7 +107,7 @@
           </tbody>
         </table>
         <p class="text-muted small px-3 py-2 mb-0">
-          Valorización total (Stock × P.Compra): <strong>S/ {{ summary.grand_valuation|floatformat:2 }}</strong>
+          Valorización total (Stock × P.Compra): <strong>S/. {{ summary.grand_valuation|floatformat:2 }}</strong>
         </p>
       </div>
     </div>
@@ -147,9 +147,9 @@
           <td class="text-end">{{ row.stocks|get_item:wh.pk|default:0|floatformat:2 }}</td>
           {% endfor %}
           <td class="text-end fw-bold">{{ row.total_stock|floatformat:2 }}</td>
-          <td class="text-end text-muted small">S/ {{ row.price_purchase|floatformat:2 }}</td>
-          <td class="text-end text-muted small">S/ {{ row.price_sale|floatformat:2 }}</td>
-          <td class="text-end">S/ {{ row.total_valuation|floatformat:2 }}</td>
+          <td class="text-end text-muted small">S/. {{ row.price_purchase|floatformat:2 }}</td>
+          <td class="text-end text-muted small">S/. {{ row.price_sale|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ row.total_valuation|floatformat:2 }}</td>
         </tr>
         {% empty %}
         <tr>
@@ -168,7 +168,7 @@
           {% endfor %}
           <td class="text-end">{{ summary.grand_total|floatformat:2 }}</td>
           <td colspan="2"></td>
-          <td class="text-end">S/ {{ summary.grand_valuation|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ summary.grand_valuation|floatformat:2 }}</td>
         </tr>
       </tfoot>
       {% endif %}

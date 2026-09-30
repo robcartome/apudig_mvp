@@ -144,7 +144,7 @@ class CashSession(TimeStampedModel):
             if self.store_id != self.register.store_id:
                 errors["store"] = "La sesion debe pertenecer a la sucursal de la caja."
         if self.currency not in {"PEN", "USD"}:
-            errors["currency"] = "La moneda de la sesion debe ser PEN o USD."
+            errors["currency"] = "La moneda de la sesion debe ser S/. o $."
         if self.status == self.Status.CLOSED and (not self.closed_at or not self.closed_by_id):
             errors["status"] = "Una sesion cerrada requiere fecha y responsable de cierre."
         if (

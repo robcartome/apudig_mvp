@@ -57,7 +57,7 @@
             {% elif order.status == "CANCELLED" %}<span class="badge bg-danger-lt">Cancelado</span>
             {% else %}<span class="badge bg-muted-lt">{{ order.get_status_display }}</span>{% endif %}
           </td>
-          <td class="text-end">{{ order.currency }} {{ order.total|floatformat:2 }}</td>
+          <td class="text-end">{{ order.currency|currency_symbol }} {{ order.total|floatformat:2 }}</td>
           <td class="text-end">
             <div class="d-inline-flex gap-1">
             <a href="{% url 'sales:order_detail' order.pk %}" class="btn btn-sm btn-ghost-secondary" title="Ver">

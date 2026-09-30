@@ -48,6 +48,57 @@ class Company(TimeStampedModel):
         return self.name
 
 
+class TaxRate(TimeStampedModel):
+    """Versioned fiscal rule used to resolve taxes for new operations.
+
+    Commercial documents keep their own tax snapshots; changing a rule never
+    changes an already created document.
+    """
+
+    AFFECTATION_CHOICES = [
+        ("10", "Gravado IGV"),
+        ("20", "Exonerado"),
+        ("30", "Inafecto"),
+        ("40", "Exportacion"),
+        ("11", "Operacion gratuita"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="tax_rates")
+    country_code = models.CharField(max_length=2, default="PE")
+    code = models.CharField(max_length=30, default="IGV_GENERAL_PE")
+    name = models.CharField(max_length=100, default="IGV general")
+    affectation_type = models.CharField(max_length=5, choices=AFFECTATION_CHOICES, default="10")
+    rate = models.DecimalField(max_digits=5, decimal_places=2)
+    valid_from = models.DateField()
+    valid_until = models.DateField(null=True, blank=True)
+    active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "tax_rates"
+        ordering = ("-valid_from", "code")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("company", "code", "affectation_type", "valid_from"),
+                name="uniq_company_tax_rule_from",
+            ),
+            models.CheckConstraint(condition=models.Q(rate__gte=0), name="tax_rate_gte_zero"),
+            models.CheckConstraint(
+                condition=models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=models.F("valid_from")),
+                name="tax_rate_valid_period",
+            ),
+            models.UniqueConstraint(
+                fields=("company", "affectation_type"),
+                condition=models.Q(active=True, is_default=True, valid_until__isnull=True),
+                name="uniq_current_default_tax_affectation",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.company} / {self.name} {self.rate}%"
+
+
 class CompanyBranding(TimeStampedModel):
     """company_branding — identidad visual, relación 1:1 con Company."""
 

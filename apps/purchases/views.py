@@ -14,8 +14,10 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.companies.models import CompanyOperationalSettings, Store
 from apps.core.models import AuditLog
+from apps.core.currency import currency_symbol
 from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.inventory.models import Category, Movement, MovementStatus, MovementType, Product, Unit
+from apps.inventory.pricing import tax_rate_for_company
 from apps.partners.models import Supplier
 from apps.sales.models import MeansOfPayment
 from apps.users.permissions import user_has_company_permission
@@ -229,7 +231,7 @@ def _form_context(form, formset, company_id, title, document=None):
         "operational_settings": operational_settings or CompanyOperationalSettings(company_id=company_id),
         "payment_methods": list(form.fields["payment_method"].queryset.values("id", "is_cash")),
         "price_decimal_places": operational_settings.price_decimal_places if operational_settings else 2,
-        "default_igv_rate": operational_settings.default_igv_rate if operational_settings else 18,
+        "default_igv_rate": tax_rate_for_company(company_id),
     }
 
 
@@ -477,7 +479,7 @@ def purchase_document_create(request):
         store_id=store.pk,
         initial=initial,
     )
-    default_igv_rate = settings.default_igv_rate if settings else 18
+    default_igv_rate = tax_rate_for_company(company_id)
     formset = PurchaseDocumentLineFormSet(
         request.POST or None, prefix="lines",
         form_kwargs={"company_id": company_id, "default_igv_rate": default_igv_rate},
@@ -567,7 +569,7 @@ def purchase_expense_create(request):
         request.POST or None, company_id=company_id, store_id=store.pk,
         initial=initial,
     )
-    default_igv_rate = settings.default_igv_rate if settings else 18
+    default_igv_rate = tax_rate_for_company(company_id)
     formset = PurchaseExpenseLineFormSet(
         request.POST or None, prefix="lines",
         form_kwargs={"company_id": company_id, "default_igv_rate": default_igv_rate},
@@ -666,9 +668,7 @@ def purchase_document_edit(request, pk):
         initial=None if request.method == "POST" else _initial_lines(document),
         form_kwargs={
             "company_id": company_id,
-            "default_igv_rate": CompanyOperationalSettings.objects.filter(
-                company_id=company_id
-            ).values_list("default_igv_rate", flat=True).first() or 18,
+            "default_igv_rate": tax_rate_for_company(company_id),
         },
     )
     if request.method == "POST" and form.is_valid() and formset.is_valid():
@@ -906,10 +906,10 @@ def _purchase_price_history_xlsx(rows, price_decimal_places):
     headers = [
         "Código", "Producto", "Proveedor", "Último precio (fecha)",
         "Anterior 1 (fecha)", "Anterior 2 (fecha)", "Anterior 3 (fecha)",
-        "Anterior 4 (fecha)", "Variación PEN", "Variación %",
+        "Anterior 4 (fecha)", "Variación S/.", "Variación %",
     ]
     worksheet.append([
-        "Precios unitarios con IGV, convertidos a PEN y a la unidad base del "
+        "Precios unitarios con IGV, convertidos a soles (S/.) y a la unidad base del "
         "producto. No se aplican descuentos globales; solo se muestran cambios de precio."
     ])
     worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
@@ -933,7 +933,7 @@ def _purchase_price_history_xlsx(rows, price_decimal_places):
             reference = "-".join(part for part in (document.series, document.number) if part)
             suffix = f" · {reference}" if reference else ""
             price_cells.append(
-                f'PEN {event["price"]:.{price_decimal_places}f} '
+                f'{currency_symbol("PEN")} {event["price"]:.{price_decimal_places}f} '
                 f'({document.issue_date:%d/%m/%Y}{suffix})'
             )
         worksheet.append([
@@ -985,7 +985,8 @@ def purchase_analytics(request):
         response["Content-Disposition"] = 'attachment; filename="reporte_compras_proveedores.csv"'
         response.write("\ufeff")
         writer = csv.writer(response)
-        writer.writerow(["Proveedor", "Documentos", "Compras PEN", "Pagado PEN", "Saldo PEN", "Costos adicionales PEN"])
+        pen = currency_symbol("PEN")
+        writer.writerow(["Proveedor", "Documentos", f"Compras {pen}", f"Pagado {pen}", f"Saldo {pen}", f"Costos adicionales {pen}"])
         for row in report["supplier_rows"]:
             writer.writerow([
                 row["supplier"].name, row["document_count"], row["spend_pen"],

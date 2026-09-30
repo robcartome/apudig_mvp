@@ -8,7 +8,7 @@ from django.utils import timezone
 from uuid import UUID
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 
 from apps.users.permissions import user_has_company_permission
 from apps.companies.models import CompanyOperationalSettings
@@ -16,8 +16,11 @@ from apps.inventory.models import Product, Warehouse
 from apps.partners.models import Customer
 from apps.sales.models import DocumentSeries, MeansOfPayment
 from apps.pos.forms import PosRegisterForm
-from apps.pos.models import CashSafeMovement, CashSession, PosRegister, PosTransaction, SalesPayment
+from apps.pos.models import (
+    CashMovement, CashSafeMovement, CashSession, PosRegister, PosTransaction, SalesPayment,
+)
 from apps.core.models import AuditLog
+from apps.core.currency import currency_symbol
 from apps.pos.selectors import (
     get_cash_session_history, get_cash_session_summary, get_daily_pos_sales_totals,
 )
@@ -231,6 +234,18 @@ def cash_session_detail(request, pk):
     movements = cash_session.cash_movements.select_related(
         "created_by", "authorized_by"
     ).order_by("-created_at")
+    income_movements = movements.filter(movement_type=CashMovement.MovementType.PAY_IN)
+    outgoing_movements = movements.exclude(movement_type=CashMovement.MovementType.PAY_IN)
+    daily_summary = list(
+        sales.filter(status=PosTransaction.Status.COMPLETED)
+        .values(
+            "sales_document__document_type__code",
+            "sales_document__document_type__name",
+            "payment_condition",
+        )
+        .annotate(operations=Count("id"), total=Sum("sales_document__total"))
+        .order_by("sales_document__document_type__code", "payment_condition")
+    )
     payments = cash_session.sales_payments.filter(
         status=SalesPayment.Status.REGISTERED
     ).select_related(
@@ -241,6 +256,9 @@ def cash_session_detail(request, pk):
         "summary": summary,
         "sales": sales,
         "movements": movements,
+        "income_movements": income_movements,
+        "outgoing_movements": outgoing_movements,
+        "daily_summary": daily_summary,
         "payments": payments,
     })
 
@@ -281,7 +299,7 @@ def cash_safe_ledger(request):
         elif amount <= 0:
             messages.error(request, "El importe debe ser mayor que cero.")
         elif amount > available:
-            messages.error(request, f"El saldo disponible en caja fuerte es {currency} {available:.2f}.")
+            messages.error(request, f"El saldo disponible en caja fuerte es {currency_symbol(currency)} {available:.2f}.")
         elif not recipient:
             messages.error(request, "Indique quién recibe o retira el dinero.")
         elif movement_type == CashSafeMovement.MovementType.BANK_DEPOSIT and not destination:

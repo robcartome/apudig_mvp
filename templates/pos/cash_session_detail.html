@@ -1,48 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Resumen de caja | APUDIG{% endblock %}
+{% load static %}
+{% block title %}Cierre de caja N.º {{ cash_session.session_number }} | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/components/financial-report.css' %}?v=20260930-1" rel="stylesheet">{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3"><div class="row align-items-center"><div class="col">
-  <div class="page-pretitle">{{ cash_session.register.code }} · {{ cash_session.store.name }} · {{ cash_session.currency }}</div>
-  <h2 class="page-title">{% if cash_session.status == 'OPEN' %}Caja activa{% else %}Cierre de caja{% endif %} N.º {{ cash_session.session_number }}</h2>
-  <div class="text-muted">Turno desde {{ cash_session.opened_at|date:"d/m/Y H:i" }} hasta {{ cash_session.closed_at|date:"d/m/Y H:i"|default:"ahora" }}</div>
-</div><div class="col-auto"><a class="btn btn-outline-secondary" href="{% url 'pos:cash_session_list' %}"><i class="ti ti-arrow-left me-1"></i>Volver a cierres</a></div></div></div>
+<div class="report-shell">
+  <div class="d-print-none d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary" href="{% url 'pos:cash_session_list' %}"><i class="ti ti-arrow-left me-1"></i>Volver a cierres</a>
+    <button class="btn btn-outline-primary" type="button" onclick="window.print()"><i class="ti ti-printer me-1"></i>Imprimir reporte</button>
+  </div>
 
-<div class="card mb-3"><div class="card-body"><div class="row g-3 align-items-center">
-  <div class="col-md-4"><div class="text-muted small">Inicio del turno</div><strong>{{ cash_session.opened_at|date:"d/m/Y H:i:s" }}</strong></div>
-  <div class="col-md-4"><div class="text-muted small">Término del turno</div><strong>{{ cash_session.closed_at|date:"d/m/Y H:i:s"|default:"Caja todavía activa" }}</strong></div>
-  <div class="col-md-2"><div class="text-muted small">Cajero</div><strong>{{ cash_session.opened_by.display_name|default:"—" }}</strong></div>
-  <div class="col-md-2 text-md-end">{% include "components/status_badge.html" with status=cash_session.status label=cash_session.get_status_display %}</div>
-</div></div></div>
+  <header class="report-hero">
+    <div class="report-hero__content">
+      <div class="report-hero__eyebrow">{{ cash_session.register.code }} · {{ cash_session.store.name }}</div>
+      <h1>{% if cash_session.status == 'OPEN' %}Caja activa{% else %}Cierre de caja{% endif %} N.º {{ cash_session.session_number }}</h1>
+      <p>Ventas, Pagos y Movimientos conciliados del turno en {{ cash_session.currency|currency_symbol }}</p>
+    </div>
+    <div class="report-hero__icon"><i class="ti ti-device-desktop-dollar"></i></div>
+  </header>
 
-<div class="row row-cards mb-3">
-  <div class="col-sm-6 col-xl-3"><div class="card card-sm h-100"><div class="card-body"><div class="text-muted">Total ventas / cobros</div><div class="h2 mb-1">{{ cash_session.currency }} {{ summary.payment_total|floatformat:2 }}</div><div class="small text-muted">{{ summary.transactions.completed }} venta(s) completada(s)</div></div></div></div>
-  <div class="col-sm-6 col-xl-3"><div class="card card-sm h-100"><div class="card-body"><div class="text-muted">Vales de ingreso</div><div class="h2 mb-1 text-success">{{ cash_session.currency }} {{ summary.cash_in|floatformat:2 }}</div><div class="small text-muted">Movimientos ajenos a ventas</div></div></div></div>
-  <div class="col-sm-6 col-xl-3"><div class="card card-sm h-100"><div class="card-body"><div class="text-muted">Vales de salida y retiros</div><div class="h2 mb-1 text-danger">{{ cash_session.currency }} {{ summary.cash_out|floatformat:2 }}</div><div class="small text-muted">Incluye depósitos en caja fuerte</div></div></div></div>
-  <div class="col-sm-6 col-xl-3"><div class="card card-sm h-100"><div class="card-body"><div class="text-muted">Efectivo esperado en gaveta</div><div class="h2 mb-1">{{ cash_session.currency }} {{ summary.expected_cash_total|floatformat:2 }}</div><div class="small text-muted">Diferencia: {% if cash_session.cash_difference is not None %}{{ cash_session.currency }} {{ cash_session.cash_difference|floatformat:2 }}{% else %}Pendiente de arqueo{% endif %}</div></div></div></div>
+  <section class="report-period" aria-label="Datos del turno">
+    <div class="report-period__item"><span><i class="ti ti-calendar-event me-1"></i>Inicio</span><strong>{{ cash_session.opened_at|date:"d/m/Y H:i:s" }}</strong></div>
+    <div class="report-period__item"><span><i class="ti ti-calendar-check me-1"></i>Término</span><strong>{{ cash_session.closed_at|date:"d/m/Y H:i:s"|default:"Caja todavía activa" }}</strong></div>
+    <div class="report-period__item"><span><i class="ti ti-user me-1"></i>Cajero</span><strong>{{ cash_session.opened_by.display_name|default:"—" }}</strong></div>
+    <div class="report-period__item"><span><i class="ti ti-activity me-1"></i>Estado</span><strong>{% include "components/status_badge.html" with status=cash_session.status label=cash_session.get_status_display %}</strong></div>
+  </section>
+
+  <section class="report-kpis" aria-label="Indicadores del cierre">
+    <article class="report-kpi"><div class="report-kpi__top"><span>Total ventas / cobros</span><span class="report-kpi__icon"><i class="ti ti-chart-line"></i></span></div><strong>{{ cash_session.currency|currency_symbol }} {{ summary.payment_total|floatformat:2 }}</strong><small>{{ summary.transactions.completed }} venta(s) completada(s)</small></article>
+    <article class="report-kpi is-positive"><div class="report-kpi__top"><span>Vales de ingreso</span><span class="report-kpi__icon"><i class="ti ti-circle-arrow-down"></i></span></div><strong>+ {{ cash_session.currency|currency_symbol }} {{ summary.cash_in|floatformat:2 }}</strong><small>Entradas ajenas a ventas</small></article>
+    <article class="report-kpi is-negative"><div class="report-kpi__top"><span>Vales de salida</span><span class="report-kpi__icon"><i class="ti ti-circle-arrow-up"></i></span></div><strong>- {{ cash_session.currency|currency_symbol }} {{ summary.cash_out|floatformat:2 }}</strong><small>Salidas, retiros y depósitos</small></article>
+    <article class="report-kpi"><div class="report-kpi__top"><span>Efectivo esperado</span><span class="report-kpi__icon"><i class="ti ti-cash-banknote"></i></span></div><strong>{{ cash_session.currency|currency_symbol }} {{ summary.expected_cash_total|floatformat:2 }}</strong><small>{% if cash_session.cash_difference is not None %}Diferencia {{ cash_session.currency|currency_symbol }} {{ cash_session.cash_difference|floatformat:2 }}{% else %}Arqueo pendiente{% endif %}</small></article>
+  </section>
+
+  <section class="report-section">
+    <div class="report-section__header"><div class="report-section__title"><i class="ti ti-report-analytics"></i><div><h2>Resumen del día</h2><p>Documentos emitidos y distribución del efectivo del turno</p></div></div></div>
+    <div class="report-section__body report-table-wrap"><table class="report-table"><thead><tr><th>Tipo de documento</th><th>Condición</th><th class="amount">Operaciones</th><th class="amount">Monto total</th></tr></thead><tbody>
+      <tr><td><strong>Apertura de caja</strong><small>Fondo inicial</small></td><td>Efectivo</td><td class="amount">1</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ summary.opening_total|floatformat:2 }}</td></tr>
+      {% for row in daily_summary %}<tr><td><strong>{{ row.sales_document__document_type__name|default:row.sales_document__document_type__code }}</strong><small>{{ row.sales_document__document_type__code }}</small></td><td>{% if row.payment_condition == 'CREDIT' %}Crédito{% else %}Contado{% endif %}</td><td class="amount">{{ row.operations }}</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ row.total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="4" class="report-empty">No existen ventas completadas en este turno.</td></tr>{% endfor %}
+      <tr class="is-total"><td colspan="3">TOTAL COBRADO POR VENTAS</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ summary.payment_total|floatformat:2 }}</td></tr>
+      <tr><td colspan="3">Efectivo esperado en gaveta</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ summary.expected_cash_total|floatformat:2 }}</td></tr>
+      <tr><td colspan="3">Efectivo contado</td><td class="amount">{% if cash_session.counted_cash_total is not None %}{{ cash_session.currency|currency_symbol }} {{ cash_session.counted_cash_total|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+      <tr class="is-carry"><td colspan="3"><i class="ti ti-arrow-right me-1"></i>Saldo para próxima apertura</td><td class="amount">{% if cash_session.next_opening_total is not None %}{{ cash_session.currency|currency_symbol }} {{ cash_session.next_opening_total|floatformat:2 }}{% else %}—{% endif %}</td></tr>
+      <tr><td colspan="3">Guardado en caja fuerte</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ cash_session.safe_deposit_total|floatformat:2 }}</td></tr>
+      <tr><td>Enviado directamente al banco</td><td colspan="2">{{ cash_session.bank_deposit_destination|default:"—" }}</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ cash_session.bank_deposit_total|floatformat:2 }}</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="report-section">
+    <div class="report-section__header"><div class="report-section__title"><i class="ti ti-credit-card-pay"></i><div><h2>Resumen por medio de pago</h2><p>Conciliación entre lo registrado y lo declarado al cierre</p></div></div></div>
+    <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Medio de pago</th><th>Tipo</th><th class="amount">Operaciones</th><th class="amount">Recaudado</th><th class="amount">Devuelto</th><th class="amount">Por sistema</th><th class="amount">Declarado</th><th class="amount">Diferencia</th></tr></thead><tbody>
+      {% for item in summary.payments %}<tr><td><strong>{{ item.means_of_payment__name }}</strong></td><td>{{ item.means_of_payment__kind }}</td><td class="amount">{{ item.operations }}</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ item.gross_total|floatformat:2 }}</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ item.refund_total|floatformat:2 }}</td><td class="amount"><strong>{{ cash_session.currency|currency_symbol }} {{ item.total|floatformat:2 }}</strong></td><td class="amount">{% if item.counted_amount is not None %}{{ cash_session.currency|currency_symbol }} {{ item.counted_amount|floatformat:2 }}{% else %}—{% endif %}</td><td class="amount {% if item.difference < 0 %}is-negative{% elif item.difference > 0 %}is-positive{% endif %}">{% if item.difference is not None %}{{ cash_session.currency|currency_symbol }} {{ item.difference|floatformat:2 }}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="report-empty">Sin pagos registrados.</td></tr>{% endfor %}
+      <tr class="is-total"><td colspan="5">TOTAL NETO RECAUDADO</td><td class="amount">{{ cash_session.currency|currency_symbol }} {{ summary.payment_total|floatformat:2 }}</td><td colspan="2"></td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="report-section">
+    <div class="report-section__header"><div class="report-section__title"><i class="ti ti-receipt-2"></i><div><h2>Detalle Vale de Ingreso</h2><p>Entradas de efectivo no asociadas directamente a ventas</p></div></div></div>
+    <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Fecha</th><th>Documento interno</th><th>Comentario</th><th>Registrado por</th><th>Autorizado por</th><th class="amount">Monto total</th></tr></thead><tbody>{% for movement in income_movements %}<tr><td>{{ movement.created_at|date:"d/m/Y H:i" }}</td><td><strong>VAL-{{ movement.id|stringformat:"s"|slice:":8"|upper }}</strong></td><td>{{ movement.description }}{% if movement.reason_code %}<small>{{ movement.reason_code }}</small>{% endif %}</td><td>{{ movement.created_by.display_name|default:"—" }}</td><td>{{ movement.authorized_by.display_name|default:"—" }}</td><td class="amount is-positive">+ {{ cash_session.currency|currency_symbol }} {{ movement.amount|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="6" class="report-empty">Sin vales de ingreso registrados.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+
+  <section class="report-section">
+    <div class="report-section__header"><div class="report-section__title"><i class="ti ti-cash-off"></i><div><h2>Detalle Vale de Salida</h2><p>Egresos, retiros preventivos y depósitos realizados durante el turno</p></div></div></div>
+    <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Fecha</th><th>Documento interno</th><th>Tipo</th><th>Comentario</th><th>Registrado por</th><th>Autorizado por</th><th class="amount">Monto total</th></tr></thead><tbody>{% for movement in outgoing_movements %}<tr><td>{{ movement.created_at|date:"d/m/Y H:i" }}</td><td><strong>VAL-{{ movement.id|stringformat:"s"|slice:":8"|upper }}</strong></td><td>{{ movement.get_movement_type_display }}</td><td>{{ movement.description }}{% if movement.reason_code %}<small>{{ movement.reason_code }}</small>{% endif %}</td><td>{{ movement.created_by.display_name|default:"—" }}</td><td>{{ movement.authorized_by.display_name|default:"—" }}</td><td class="amount is-negative">- {{ cash_session.currency|currency_symbol }} {{ movement.amount|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="7" class="report-empty">Sin vales de salida, retiros o depósitos.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+
+  <section class="report-section">
+    <div class="report-section__header"><div class="report-section__title"><i class="ti ti-shopping-cart"></i><div><h2>Ventas relacionadas</h2><p>Trazabilidad documental del turno</p></div></div></div>
+    <div class="report-table-wrap"><table class="report-table"><thead><tr><th>Documento</th><th>Fecha</th><th>Cliente</th><th>Cajero</th><th>Estado</th><th class="amount">Total</th></tr></thead><tbody>{% for sale in sales %}<tr><td><a href="{% url 'sales:document_detail' sale.sales_document_id %}"><strong>{{ sale.sales_document.series_code }}-{{ sale.sales_document.number }}</strong></a><small>{{ sale.ticket_code }}</small></td><td>{{ sale.started_at|date:"d/m/Y H:i" }}</td><td>{{ sale.sales_document.customer_legal_name|default:"—" }}</td><td>{{ sale.cashier.display_name|default:"—" }}</td><td>{% include "components/status_badge.html" with status=sale.status label=sale.get_status_display %}</td><td class="amount">{{ sale.sales_document.currency|currency_symbol }} {{ sale.sales_document.total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="6" class="report-empty">Sin ventas relacionadas.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+
+  {% if cash_session.opening_note or cash_session.closing_note %}<section class="report-section"><div class="report-section__header"><div class="report-section__title"><i class="ti ti-message-circle"></i><div><h2>Observaciones</h2><p>Notas registradas durante la apertura y el cierre</p></div></div></div><div class="report-notes"><div class="report-note"><span>Apertura</span>{{ cash_session.opening_note|default:"—" }}</div><div class="report-note"><span>Cierre</span>{{ cash_session.closing_note|default:"—" }}</div></div></section>{% endif %}
 </div>
-
-<div class="card mb-3"><div class="card-header"><h3 class="card-title">Resumen del turno</h3></div><div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>Concepto</th><th>Detalle</th><th class="text-end">Importe</th></tr></thead><tbody>
-  <tr><td>Fondo de apertura</td><td>Efectivo</td><td class="text-end">{{ cash_session.currency }} {{ summary.opening_total|floatformat:2 }}</td></tr>
-  <tr><td>Ventas cobradas en efectivo</td><td>Neto de devoluciones</td><td class="text-end">{{ cash_session.currency }} {{ summary.cash_sales|floatformat:2 }}</td></tr>
-  <tr><td>Otros medios de pago</td><td>Tarjetas, transferencias y otros</td><td class="text-end">{{ cash_session.currency }} {{ summary.non_cash_sales|floatformat:2 }}</td></tr>
-  <tr><td>Vales de ingreso</td><td>Entradas manuales</td><td class="text-end text-success">+ {{ cash_session.currency }} {{ summary.cash_in|floatformat:2 }}</td></tr>
-  <tr><td>Vales de salida / retiros</td><td>Egresos, retiros preventivos y depósitos</td><td class="text-end text-danger">- {{ cash_session.currency }} {{ summary.cash_out|floatformat:2 }}</td></tr>
-  <tr class="table-active fw-bold"><td colspan="2">TOTAL ESPERADO EN GAVETA</td><td class="text-end">{{ cash_session.currency }} {{ summary.expected_cash_total|floatformat:2 }}</td></tr>
-  <tr><td colspan="2">Efectivo contado</td><td class="text-end">{% if cash_session.counted_cash_total is not None %}{{ cash_session.currency }} {{ cash_session.counted_cash_total|floatformat:2 }}{% else %}—{% endif %}</td></tr>
-  <tr><td colspan="2">Fondo para siguiente apertura</td><td class="text-end">{% if cash_session.next_opening_total is not None %}{{ cash_session.currency }} {{ cash_session.next_opening_total|floatformat:2 }}{% else %}—{% endif %}</td></tr>
-  <tr><td colspan="2">Guardado en caja fuerte</td><td class="text-end">{{ cash_session.currency }} {{ cash_session.safe_deposit_total|floatformat:2 }}</td></tr>
-  <tr><td>Enviado directamente al banco</td><td>{{ cash_session.bank_deposit_destination|default:"—" }}</td><td class="text-end">{{ cash_session.currency }} {{ cash_session.bank_deposit_total|floatformat:2 }}</td></tr>
-</tbody></table></div></div>
-
-<div class="card mb-3"><div class="card-header"><ul class="nav nav-tabs card-header-tabs" data-bs-toggle="tabs">
-  <li class="nav-item"><a href="#tab-payments" class="nav-link active" data-bs-toggle="tab">Pagos por medio</a></li>
-  <li class="nav-item"><a href="#tab-sales" class="nav-link" data-bs-toggle="tab">Ventas</a></li>
-  <li class="nav-item"><a href="#tab-movements" class="nav-link" data-bs-toggle="tab">Vales y movimientos</a></li>
-</ul></div><div class="card-body"><div class="tab-content">
-  <div class="tab-pane active show" id="tab-payments"><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>Medio</th><th>Tipo</th><th class="text-end">Operaciones</th><th class="text-end">Cobrado</th><th class="text-end">Reembolsado</th><th class="text-end">Por sistema</th><th class="text-end">Contado</th><th class="text-end">Diferencia</th></tr></thead><tbody>{% for item in summary.payments %}<tr><td>{{ item.means_of_payment__name }}</td><td>{{ item.means_of_payment__kind }}</td><td class="text-end">{{ item.operations }}</td><td class="text-end">{{ cash_session.currency }} {{ item.gross_total|floatformat:2 }}</td><td class="text-end">{{ cash_session.currency }} {{ item.refund_total|floatformat:2 }}</td><td class="text-end fw-semibold">{{ cash_session.currency }} {{ item.total|floatformat:2 }}</td><td class="text-end">{% if item.counted_amount is not None %}{{ cash_session.currency }} {{ item.counted_amount|floatformat:2 }}{% else %}—{% endif %}</td><td class="text-end">{% if item.difference is not None %}{{ cash_session.currency }} {{ item.difference|floatformat:2 }}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Sin pagos registrados.</td></tr>{% endfor %}</tbody></table></div></div>
-  <div class="tab-pane" id="tab-sales"><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>Documento</th><th>Hora</th><th>Cliente</th><th>Cajero</th><th>Estado</th><th class="text-end">Total</th></tr></thead><tbody>{% for sale in sales %}<tr><td><a href="{% url 'sales:document_detail' sale.sales_document_id %}">{{ sale.sales_document.series_code }}-{{ sale.sales_document.number }}</a><div class="small text-muted">{{ sale.ticket_code }}</div></td><td>{{ sale.started_at|date:"d/m/Y H:i" }}</td><td>{{ sale.sales_document.customer_legal_name|default:"—" }}</td><td>{{ sale.cashier.display_name|default:"—" }}</td><td>{% include "components/status_badge.html" with status=sale.status label=sale.get_status_display %}</td><td class="text-end">{{ sale.sales_document.currency }} {{ sale.sales_document.total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Sin ventas relacionadas.</td></tr>{% endfor %}</tbody></table></div></div>
-  <div class="tab-pane" id="tab-movements"><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>Fecha</th><th>Comprobante interno</th><th>Tipo</th><th>Motivo</th><th>Usuario</th><th>Autorizado por</th><th class="text-end">Importe</th></tr></thead><tbody>{% for movement in movements %}<tr><td>{{ movement.created_at|date:"d/m/Y H:i" }}</td><td>VAL-{{ movement.id|stringformat:"s"|slice:":8"|upper }}</td><td>{% if movement.movement_type == 'PAY_IN' %}Vale de ingreso{% elif movement.movement_type == 'PAY_OUT' %}Vale de salida{% else %}{{ movement.get_movement_type_display }}{% endif %}</td><td>{{ movement.description }}{% if movement.reason_code %}<div class="small text-muted">{{ movement.reason_code }}</div>{% endif %}</td><td>{{ movement.created_by.display_name|default:"—" }}</td><td>{{ movement.authorized_by.display_name|default:"—" }}</td><td class="text-end">{{ cash_session.currency }} {{ movement.amount|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Sin vales ni movimientos monetarios.</td></tr>{% endfor %}</tbody></table></div></div>
-</div></div></div>
-
-{% if cash_session.opening_note or cash_session.closing_note %}<div class="card"><div class="card-header"><h3 class="card-title">Observaciones</h3></div><div class="card-body"><div class="row"><div class="col-md-6"><div class="text-muted small">Apertura</div>{{ cash_session.opening_note|default:"—" }}</div><div class="col-md-6"><div class="text-muted small">Cierre</div>{{ cash_session.closing_note|default:"—" }}</div></div></div></div>{% endif %}
 {% endblock %}

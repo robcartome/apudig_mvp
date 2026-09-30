@@ -30,7 +30,7 @@
 {% if can_audit_all %}
 <div class="card mb-3">
   <div class="card-header"><div><h3 class="card-title mb-0">Resumen diario por POS</h3><div class="text-muted small">Consolida todos los turnos y cajeros de la caja física. Al consultar también se filtra el listado inferior.</div></div><form class="ms-auto d-flex gap-2" method="get"><input class="form-control" type="date" name="daily_date" value="{{ daily_date }}"><button class="btn btn-outline-primary" type="submit"><i class="ti ti-search me-1"></i>Consultar</button></form></div>
-  <div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>Caja POS</th><th class="text-end">Sesiones</th><th class="text-end">Ventas</th><th>Moneda</th><th class="text-end">Total vendido</th></tr></thead><tbody>{% for row in daily_totals %}<tr><td><strong>{{ row.register__code }}</strong><div class="small text-muted">{{ row.register__name }}</div></td><td class="text-end">{{ row.sessions }}</td><td class="text-end">{{ row.sales_count }}</td><td>{{ row.sales_document__currency }}</td><td class="text-end fw-semibold">{{ row.sales_document__currency }} {{ row.sales_total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No hay ventas POS completadas en esta fecha.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>Caja POS</th><th class="text-end">Sesiones</th><th class="text-end">Ventas</th><th>Moneda</th><th class="text-end">Total vendido</th></tr></thead><tbody>{% for row in daily_totals %}<tr><td><strong>{{ row.register__code }}</strong><div class="small text-muted">{{ row.register__name }}</div></td><td class="text-end">{{ row.sessions }}</td><td class="text-end">{{ row.sales_count }}</td><td>{{ row.sales_document__currency|currency_symbol }}</td><td class="text-end fw-semibold">{{ row.sales_document__currency|currency_symbol }} {{ row.sales_total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No hay ventas POS completadas en esta fecha.</td></tr>{% endfor %}</tbody></table></div>
 </div>
 {% endif %}
 
@@ -39,20 +39,20 @@
     <table class="table table-vcenter card-table text-nowrap">
       <thead><tr><th>Cierre / turno</th><th>Caja</th><th>Sucursal</th><th>Cajero</th><th>Apertura</th><th>Cierre</th><th class="text-end">Fondo inicial</th><th class="text-end">Ventas/cobros</th><th class="text-end">Esperado</th><th class="text-end">Contado</th><th class="text-end">Gaveta siguiente</th><th class="text-end">Caja fuerte</th><th class="text-end">Banco</th><th class="text-end">Diferencia</th><th>Estado</th></tr></thead>
       <tbody>{% for session in page_obj %}<tr>
-        <td><a class="fw-semibold" href="{% url 'pos:cash_session_detail' session.pk %}">{% if session.status == 'OPEN' %}Caja activa{% else %}Cierre{% endif %} N.º {{ session.session_number }}</a><div class="small text-muted">Turno {{ session.currency }} · Ver resumen</div></td>
+        <td><a class="fw-semibold" href="{% url 'pos:cash_session_detail' session.pk %}">{% if session.status == 'OPEN' %}Caja activa{% else %}Cierre{% endif %} N.º {{ session.session_number }}</a><div class="small text-muted">Turno {{ session.currency|currency_symbol }} · Ver resumen</div></td>
         <td><strong>{{ session.register.code }}</strong><div class="small text-muted">{{ session.register.name }}</div></td>
         <td>{{ session.store.name }}</td>
         <td>{{ session.opened_by.display_name|default:"—" }}</td>
         <td>{{ session.opened_at|date:"d/m/Y H:i" }}</td>
         <td>{{ session.closed_at|date:"d/m/Y H:i"|default:"—" }}</td>
-        <td class="text-end">{{ session.currency }} {{ session.opening_total|floatformat:2 }}</td>
-        <td class="text-end">{{ session.currency }} {{ session.net_collected_total|floatformat:2 }}</td>
-        <td class="text-end">{{ session.currency }} {{ session.display_expected_cash_total|floatformat:2 }}{% if session.status == 'OPEN' %}<div class="small text-muted">En curso</div>{% endif %}</td>
-        <td class="text-end">{% if session.counted_cash_total is not None %}{{ session.currency }} {{ session.counted_cash_total|floatformat:2 }}{% else %}—{% endif %}</td>
-        <td class="text-end">{% if session.next_opening_total is not None %}{{ session.currency }} {{ session.next_opening_total|floatformat:2 }}{% else %}—{% endif %}</td>
-        <td class="text-end">{{ session.currency }} {{ session.safe_deposit_total|floatformat:2 }}</td>
-        <td class="text-end">{{ session.currency }} {{ session.bank_deposit_total|floatformat:2 }}</td>
-        <td class="text-end {% if session.cash_difference < 0 %}text-danger{% elif session.cash_difference > 0 %}text-warning{% endif %}">{% if session.cash_difference is not None %}{{ session.currency }} {{ session.cash_difference|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.opening_total|floatformat:2 }}</td>
+        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.net_collected_total|floatformat:2 }}</td>
+        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.display_expected_cash_total|floatformat:2 }}{% if session.status == 'OPEN' %}<div class="small text-muted">En curso</div>{% endif %}</td>
+        <td class="text-end">{% if session.counted_cash_total is not None %}{{ session.currency|currency_symbol }} {{ session.counted_cash_total|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td class="text-end">{% if session.next_opening_total is not None %}{{ session.currency|currency_symbol }} {{ session.next_opening_total|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.safe_deposit_total|floatformat:2 }}</td>
+        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.bank_deposit_total|floatformat:2 }}</td>
+        <td class="text-end {% if session.cash_difference < 0 %}text-danger{% elif session.cash_difference > 0 %}text-warning{% endif %}">{% if session.cash_difference is not None %}{{ session.currency|currency_symbol }} {{ session.cash_difference|floatformat:2 }}{% else %}—{% endif %}</td>
         <td>{% include "components/status_badge.html" with status=session.status label=session.get_status_display %}</td>
       </tr>{% empty %}<tr><td colspan="15" class="text-center text-muted py-5">No existen cierres para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
     </table>

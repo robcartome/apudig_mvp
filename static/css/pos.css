@@ -1033,6 +1033,13 @@
   gap: 8px;
 }
 
+.pos-payment-help {
+  margin: -3px 0 10px;
+  color: var(--pos-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
 .pos-payment-row {
   padding: 9px;
   border: 1px solid var(--pos-border);
@@ -1053,13 +1060,83 @@
   font-size: 0.76rem;
 }
 
+.pos-payment-field {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.pos-payment-field > span,
+.pos-payment-change > span {
+  color: var(--pos-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .pos-payment-row input {
   text-align: right;
 }
 
-.pos-payment-row .pos-payment-reference,
-.pos-payment-row .pos-cash-received {
+.pos-payment-row .pos-payment-reference {
   grid-column: 1 / -1;
+}
+
+.pos-payment-change {
+  grid-column: 2 / 3;
+  min-height: 40px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.pos-payment-change strong { font-size: 0.86rem; }
+
+.pos-dialog.pos-checkout-review { width: min(880px, calc(100vw - 24px)); }
+
+.pos-review-meta,
+.pos-review-settlement {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pos-review-meta > div,
+.pos-review-settlement > span {
+  padding: 11px 13px;
+  border: 1px solid var(--pos-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.pos-review-meta span,
+.pos-review-settlement span { color: var(--pos-muted); font-size: 0.72rem; }
+.pos-review-meta strong,
+.pos-review-settlement strong { color: var(--pos-ink); font-size: 0.84rem; }
+.pos-review-section { margin-top: 16px; }
+.pos-review-section h3 { margin: 0 0 7px; font-size: 0.82rem; }
+.pos-review-table-wrap { overflow-x: auto; border: 1px solid var(--pos-border); border-radius: 10px; }
+.pos-review-table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.pos-review-table-wrap th,
+.pos-review-table-wrap td { padding: 9px 11px; border-bottom: 1px solid var(--pos-border); text-align: right; white-space: nowrap; }
+.pos-review-table-wrap th:first-child,
+.pos-review-table-wrap td:first-child { text-align: left; white-space: normal; }
+.pos-review-table-wrap tbody tr:last-child td { border-bottom: 0; }
+.pos-review-table-wrap small { display: block; color: var(--pos-muted); }
+.pos-review-totals { margin: 10px 0 0 auto; width: min(360px, 100%); display: grid; gap: 4px; }
+.pos-review-totals span { display: flex; justify-content: space-between; font-size: 0.76rem; }
+.pos-review-totals .is-total { margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--pos-border); font-size: 0.94rem; }
+.pos-review-settlement { margin-top: 10px; }
+
+@media (max-width: 575.98px) {
+  .pos-review-meta,
+  .pos-review-settlement { grid-template-columns: 1fr; }
 }
 
 .pos-payment-remove {
@@ -1080,6 +1157,14 @@
 
 .pos-payment-balance strong {
   color: var(--pos-ink);
+}
+
+.pos-payment-balance strong.is-negative {
+  color: #d92d20;
+}
+
+.pos-payment-balance strong.is-positive {
+  color: #b54708;
 }
 
 .pos-customer-section {

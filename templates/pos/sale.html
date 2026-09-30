@@ -5,7 +5,7 @@
 {% block body_class %}pos-page{% endblock %}
 
 {% block extra_css %}
-  <link href="{% static 'css/pos.css' %}?v=20260929-7" rel="stylesheet">
+  <link href="{% static 'css/pos.css' %}?v=20260930-2" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -175,14 +175,14 @@
           <textarea id="sale-notes" rows="2" maxlength="1000" placeholder="Información visible para la operación"></textarea>
         </div>
         <dl class="pos-totals" aria-label="Totales de la venta">
-          <div><dt>Subtotal</dt><dd><span class="currency-label">S/</span> <span id="subtotal">0.00</span></dd></div>
+          <div><dt>Subtotal</dt><dd><span class="currency-label">S/.</span> <span id="subtotal">0.00</span></dd></div>
           <div id="global-discount-row">
             <dt><label for="global-discount">Descuento global</label></dt>
-            <dd><span class="currency-label">S/</span> <input id="global-discount" class="pos-global-discount" type="number" min="0" step="0.01" value="0.00" inputmode="decimal"></dd>
+            <dd><span class="currency-label">S/.</span> <input id="global-discount" class="pos-global-discount" type="number" min="0" step="0.01" value="0.00" inputmode="decimal"></dd>
           </div>
-          <div><dt>Descuento</dt><dd><span class="currency-label">S/</span> <span id="discount-total">0.00</span></dd></div>
-          <div><dt>IGV</dt><dd><span class="currency-label">S/</span> <span id="igv-total">0.00</span></dd></div>
-          <div class="pos-totals__grand"><dt>Total</dt><dd><span class="currency-label">S/</span> <span id="sale-total">0.00</span></dd></div>
+          <div><dt>Descuento</dt><dd><span class="currency-label">S/.</span> <span id="discount-total">0.00</span></dd></div>
+          <div><dt>IGV</dt><dd><span class="currency-label">S/.</span> <span id="igv-total">0.00</span></dd></div>
+          <div class="pos-totals__grand"><dt>Total</dt><dd><span class="currency-label">S/.</span> <span id="sale-total">0.00</span></dd></div>
         </dl>
       </div>
     </section>
@@ -192,7 +192,7 @@
       <div class="pos-checkout-heading">
         <div>
           <span>Cobro</span>
-          <strong><span class="currency-label">S/</span> <span id="checkout-total">0.00</span></strong>
+          <strong><span class="currency-label">S/.</span> <span id="checkout-total">0.00</span></strong>
         </div>
         <button id="close-mobile-checkout" class="pos-icon-button pos-mobile-only" type="button" aria-label="Cerrar cobro">
           <i class="ti ti-x"></i>
@@ -233,7 +233,7 @@
         <div id="payment-lines" class="pos-payment-lines"></div>
         <div class="pos-payment-balance">
           <span id="payment-balance-label">Por cobrar</span>
-          <strong><span class="currency-label">S/</span> <span id="payment-balance">0.00</span></strong>
+          <strong><span class="currency-label">S/.</span> <span id="payment-balance">0.00</span></strong>
         </div>
       </section>
 
@@ -267,8 +267,8 @@
         <div>
           <label for="sale-currency">Moneda</label>
           <select id="sale-currency" class="form-select">
-            <option value="PEN">Soles (PEN)</option>
-            <option value="USD">Dólares (USD)</option>
+            <option value="PEN">Soles (S/.)</option>
+            <option value="USD">Dólares ($)</option>
           </select>
         </div>
         <div id="exchange-rate-wrap" hidden>
@@ -286,7 +286,7 @@
         </button>
         <button id="checkout-button" class="btn btn-primary" type="button" disabled>
           <span>Guardar y cobrar</span>
-          <strong><span class="currency-label">S/</span> <span id="checkout-button-total">0.00</span></strong>
+          <strong><span class="currency-label">S/.</span> <span id="checkout-button-total">0.00</span></strong>
         </button>
         <p><i class="ti ti-lock"></i> La venta y el stock se registran en una sola operación.</p>
       </div>
@@ -295,8 +295,22 @@
 
   <button id="mobile-checkout-button" class="pos-mobile-checkout-button" type="button" disabled>
     <span><i class="ti ti-cash"></i> Cobrar</span>
-    <strong><span class="currency-label">S/</span> <span id="mobile-checkout-total">0.00</span></strong>
+    <strong><span class="currency-label">S/.</span> <span id="mobile-checkout-total">0.00</span></strong>
   </button>
+
+  <dialog id="checkout-review-dialog" class="pos-dialog pos-dialog--large pos-checkout-review">
+    <form id="checkout-review-form" method="dialog">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <div class="pos-dialog__icon is-primary"><i class="ti ti-receipt-2"></i></div>
+      <h2>Revisar venta y cobro</h2>
+      <p>Esta es una precuenta. La venta, el stock y la caja se registrarán recién al confirmar.</p>
+      <div id="checkout-review-content"></div>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Volver a editar</button>
+        <button id="confirm-checkout-button" class="btn btn-primary" type="submit"><i class="ti ti-check me-1"></i>Confirmar y cobrar</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="open-session-dialog" class="pos-dialog" data-static="true">
     <form id="open-session-form" method="dialog">
@@ -304,9 +318,9 @@
       <h2>Abrir caja</h2>
       <p>Registra el fondo inicial antes de comenzar a vender.</p>
       <label for="opening-currency">Moneda de la sesión</label>
-      <select id="opening-currency" class="form-select"><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option></select>
+      <select id="opening-currency" class="form-select"><option value="PEN">S/. · Soles</option><option value="USD">$ · Dólares</option></select>
       <label for="opening-total">Fondo inicial</label>
-      <div class="pos-money-input"><span id="opening-currency-symbol">S/</span><input id="opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
+      <div class="pos-money-input"><span id="opening-currency-symbol">S/.</span><input id="opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
       <details class="pos-cash-details">
         <summary>Contar por denominaciones</summary>
         <div id="opening-denominations" class="pos-denomination-grid"></div>
@@ -330,7 +344,7 @@
         <option value="DEPOSIT" data-requires-movement-authorization>Depósito (requiere autorización)</option>
       </select>
       <label for="movement-amount">Importe</label>
-      <div class="pos-money-input"><span>S/</span><input id="movement-amount" type="number" min="0.01" step="0.01" required></div>
+      <div class="pos-money-input"><span>S/.</span><input id="movement-amount" type="number" min="0.01" step="0.01" required></div>
       <label for="movement-description">Motivo</label>
       <textarea id="movement-description" rows="2" maxlength="500" required></textarea>
       <label for="movement-reason-code">Categoría <span>(opcional)</span></label>
@@ -364,7 +378,7 @@
         <input id="collection-document-id" type="hidden">
         <div id="collection-selected-sale" class="pos-cash-summary"></div>
         <label for="collection-means">Medio de pago</label><select id="collection-means" class="form-select" required></select>
-        <label for="collection-amount">Importe a cobrar</label><div class="pos-money-input"><span id="collection-currency-symbol">S/</span><input id="collection-amount" type="number" min="0.01" step="0.01" required></div>
+        <label for="collection-amount">Importe a cobrar</label><div class="pos-money-input"><span id="collection-currency-symbol">S/.</span><input id="collection-amount" type="number" min="0.01" step="0.01" required></div>
         <label for="collection-reference">Referencia <span>(según medio)</span></label><input id="collection-reference" class="form-control" maxlength="120">
         <div class="pos-dialog__actions"><button class="btn btn-outline-secondary" type="button" data-cancel-collection>Cancelar selección</button><button class="btn btn-primary" type="submit">Registrar cobranza</button></div>
       </form>
@@ -381,7 +395,7 @@
       </div>
       <div id="cash-close-details" class="pos-cash-close-details"></div>
       <label for="counted-cash">Efectivo contado</label>
-      <div class="pos-money-input"><span>S/</span><input id="counted-cash" type="number" min="0" step="0.01" required></div>
+      <div class="pos-money-input"><span>S/.</span><input id="counted-cash" type="number" min="0" step="0.01" required></div>
       <div id="cash-difference-preview" class="pos-cash-difference"></div>
       <details class="pos-cash-details">
         <summary>Contar efectivo por denominaciones</summary>
@@ -389,12 +403,12 @@
       </details>
       <div id="close-tender-counts" class="pos-tender-counts"></div>
       <label for="next-opening-total">Fondo para la siguiente apertura</label>
-      <div class="pos-money-input"><span>S/</span><input id="next-opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
+      <div class="pos-money-input"><span>S/.</span><input id="next-opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
       <div class="pos-closing-allocation">
         <label for="safe-deposit-total"><span>Guardar en caja fuerte</span><small>Queda bajo custodia de la tienda</small></label>
-        <div class="pos-money-input"><span>S/</span><input id="safe-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
+        <div class="pos-money-input"><span>S/.</span><input id="safe-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
         <label for="bank-deposit-total"><span>Enviar directamente al banco</span><small>Dinero separado para depósito</small></label>
-        <div class="pos-money-input"><span>S/</span><input id="bank-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
+        <div class="pos-money-input"><span>S/.</span><input id="bank-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
         <label id="bank-deposit-destination-label" for="bank-deposit-destination" hidden><span>Banco / cuenta destino</span><small>Ej.: BCP cuenta corriente</small></label>
         <input id="bank-deposit-destination" class="form-control" maxlength="200" placeholder="Banco y cuenta destino" hidden>
       </div>
@@ -486,8 +500,8 @@
         <label for="quick-product-name">Nombre <b>*</b></label><input id="quick-product-name" class="form-control" maxlength="500" required>
         <label for="quick-product-sku">Código <b>*</b></label><input id="quick-product-sku" class="form-control" maxlength="100" required>
         <label for="quick-product-barcode">Código de barras</label><input id="quick-product-barcode" class="form-control" maxlength="100">
-        <label for="quick-product-price">Precio de venta <b>*</b></label><div class="input-group"><span class="input-group-text">S/</span><input id="quick-product-price" class="form-control text-end" type="number" min="0" step="0.01" required><span class="input-group-text"><label class="m-0"><input id="quick-product-includes-tax" type="checkbox" checked> Con IGV</label></span></div>
-        <label for="quick-product-tax">Impuesto <b>*</b></label><select id="quick-product-tax" class="form-select"><option value="10">Gravado · IGV 18%</option><option value="20">Exonerado · 0%</option><option value="30">Inafecto · 0%</option><option value="40">Exportación · 0%</option></select>
+        <label for="quick-product-price">Precio de venta <b>*</b></label><div class="input-group"><span class="input-group-text">S/.</span><input id="quick-product-price" class="form-control text-end" type="number" min="0" step="0.01" required><span class="input-group-text"><label class="m-0"><input id="quick-product-includes-tax" type="checkbox" checked> Con IGV</label></span></div>
+        <label for="quick-product-tax">Impuesto <b>*</b></label><select id="quick-product-tax" class="form-select"><option value="10">Gravado · IGV</option><option value="20">Exonerado · 0%</option><option value="30">Inafecto · 0%</option><option value="40">Exportación · 0%</option></select>
         <label for="quick-product-unit">Unidad <b>*</b></label><select id="quick-product-unit" class="form-select" required></select>
         <label for="quick-product-category">Categoría</label><select id="quick-product-category" class="form-select"><option value="">Sin categoría</option></select>
       </div>
@@ -519,7 +533,7 @@
       <div class="pos-consolidation-footer">
         <label for="invoice-series">Serie de factura</label>
         <select id="invoice-series" class="form-select"></select>
-        <div><span>Total seleccionado</span><strong>S/ <span id="consolidation-total">0.00</span></strong></div>
+        <div><span>Total seleccionado</span><strong>S/. <span id="consolidation-total">0.00</span></strong></div>
       </div>
       <div class="pos-dialog__actions">
         <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
@@ -622,5 +636,5 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/pos.js' %}?v=20260929-8"></script>
+  <script src="{% static 'js/pos.js' %}?v=20260930-3"></script>
 {% endblock %}

@@ -142,33 +142,33 @@
   <tbody>
     <tr>
       <td>Op. Gravadas</td>
-      <td class="text-right">{{ sales_document.currency }} {{ sales_document.taxable_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.taxable_amount|floatformat:2 }}</td>
     </tr>
     {% if sales_document.exempt_amount %}
     <tr>
       <td>Op. Exoneradas</td>
-      <td class="text-right">{{ sales_document.currency }} {{ sales_document.exempt_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.exempt_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
     {% if sales_document.unaffected_amount %}
     <tr>
       <td>Op. Inafectas</td>
-      <td class="text-right">{{ sales_document.currency }} {{ sales_document.unaffected_amount|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.unaffected_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
     {% if sales_document.global_discount_amount %}
     <tr>
       <td>Descuento general{% if sales_document.global_discount_before_tax %} antes del IGV{% endif %}</td>
-      <td class="text-right">- {{ sales_document.currency }} {{ sales_document.global_discount_amount|floatformat:2 }}</td>
+      <td class="text-right">- {{ sales_document.currency|currency_symbol }} {{ sales_document.global_discount_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
     <tr>
-      <td>IGV (18%)</td>
-      <td class="text-right">{{ sales_document.currency }} {{ sales_document.igv_total|floatformat:2 }}</td>
+      <td>IGV</td>
+      <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.igv_total|floatformat:2 }}</td>
     </tr>
     <tr>
       <td>TOTAL A PAGAR</td>
-      <td class="text-right">{{ sales_document.currency }} {{ sales_document.total|floatformat:2 }}</td>
+      <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.total|floatformat:2 }}</td>
     </tr>
   </tbody>
 </table>

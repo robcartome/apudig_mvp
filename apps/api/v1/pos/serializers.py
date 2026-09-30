@@ -288,7 +288,7 @@ class PosSaleLineInputSerializer(serializers.Serializer):
         choices=("10", "11", "20", "30", "40"), default="10"
     )
     igv_rate = serializers.DecimalField(
-        max_digits=5, decimal_places=2, min_value=Decimal("0.00"), default=Decimal("18.00")
+        max_digits=5, decimal_places=2, min_value=Decimal("0.00"), default=Decimal("0.00")
     )
     sunat_product_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
     product_code = serializers.CharField(max_length=100, required=False, allow_blank=True)

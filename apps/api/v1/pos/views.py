@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from apps.api.v1.base import BaseCompanyAPIView
 from apps.inventory import selectors as inventory_selectors
 from apps.inventory.models import Category, PriceList, Product, ProductPrice, ProductUnit, StockByWarehouse, Unit, Warehouse
+from apps.inventory.pricing import split_final_price, tax_rate_for_company
 from apps.core.models import AuditLog
 from apps.partners.models import Customer
 from apps.pos import selectors
@@ -265,7 +266,7 @@ class PosProductSearchAPIView(PosAPIView):
         )
         currency = (request.query_params.get("currency") or "PEN").upper()
         if currency not in {"PEN", "USD"}:
-            raise ValidationError({"currency": "La moneda debe ser PEN o USD."})
+            raise ValidationError({"currency": "La moneda debe ser S/. o $."})
         search = (request.query_params.get("search") or "").strip()
         product_ids = [
             value.strip()
@@ -347,14 +348,25 @@ class PosProductSearchAPIView(PosAPIView):
             if currency == "PEN" and base_price is None:
                 base_price = base_unit_prices.get(product_id, product.price_sale)
             units = []
+            product_tax_rate = tax_rate_for_company(
+                company_id, affectation_type=product.tax_affectation
+            )
             for conversion in conversions_by_product.get(product_id, []):
-                unit_price = (
+                commercial_price = (
                     conversion.sale_price
                     if currency == "PEN" and conversion.sale_price is not None and not has_list_price
                     else (
                         base_price * conversion.conversion_factor
                         if base_price is not None else None
                     )
+                )
+                unit_price = (
+                    split_final_price(
+                        commercial_price,
+                        affectation_type=product.tax_affectation,
+                        tax_rate=product_tax_rate,
+                    ).unit_value
+                    if commercial_price is not None else None
                 )
                 units.append({
                     "id": str(conversion.unit_id),
@@ -365,12 +377,20 @@ class PosProductSearchAPIView(PosAPIView):
                     "is_default_sale": conversion.is_default_sale,
                 })
             if not any(item["id"] == str(product.unit_id) for item in units):
+                base_unit_value = (
+                    split_final_price(
+                        base_price,
+                        affectation_type=product.tax_affectation,
+                        tax_rate=product_tax_rate,
+                    ).unit_value
+                    if base_price is not None else None
+                )
                 units.append({
                     "id": str(product.unit_id),
                     "code": product.unit.code,
                     "name": product.unit.name,
                     "conversion_factor": "1.000000",
-                    "unit_price": str(base_price) if base_price is not None else None,
+                    "unit_price": str(base_unit_value) if base_unit_value is not None else None,
                     "is_default_sale": not any(item["is_default_sale"] for item in units),
                 })
             units.sort(key=lambda item: (not item["is_default_sale"], item["code"]))
@@ -386,8 +406,8 @@ class PosProductSearchAPIView(PosAPIView):
                 "unit": selected_unit["code"],
                 "unit_price": selected_unit["unit_price"],
                 "units": units,
-                "tax_type": "10",
-                "igv_rate": "18.00",
+                "tax_type": product.tax_affectation,
+                "igv_rate": str(product_tax_rate),
                 "stock": str(stock_by_product.get(str(product.pk), 0)),
                 "stock_unit": product.unit.code,
                 "tracks_inventory": product.tracks_inventory,
@@ -429,14 +449,16 @@ class PosProductCommercialAPIView(PosAPIView):
                     "price_list_id": str(item.price_list_id),
                     "name": item.price_list.name,
                     "currency": item.currency,
-                    "amount": str((item.amount * Decimal("1.18")).quantize(Decimal("0.01"))),
+                    "amount": str(item.amount),
+                    "price_includes_tax": item.price_list.prices_include_tax,
                     "is_default": item.price_list.is_default,
                 }
                 for item in prices
             ],
             "base_price": {
                 "currency": "PEN",
-                "amount": str((product.price_sale * Decimal("1.18")).quantize(Decimal("0.01"))),
+                "amount": str(product.price_sale),
+                "price_includes_tax": True,
             },
             "warehouses": [
                 {
@@ -472,20 +494,21 @@ class PosProductCreateAPIView(PosAPIView):
             raise ValidationError({"barcode": "Ya existe un producto con este código de barras."})
         price = data["sale_price"]
         tax_type = data["tax_type"]
-        net_price = (
-            (price / Decimal("1.18")).quantize(Decimal("0.000001"))
-            if data["includes_tax"] and tax_type == "10" else price
-        )
+        rate = tax_rate_for_company(company_id, affectation_type=tax_type)
+        commercial_price = price
+        if not data["includes_tax"] and tax_type == "10":
+            commercial_price = price * (Decimal("1") + rate / Decimal("100"))
         with transaction.atomic():
             product = Product.objects.create(
                 company_id=company_id, name=data["name"], sku=data["sku"],
                 barcode=data.get("barcode", ""), unit=unit, category=category,
-                price_sale=net_price.quantize(Decimal("0.01")),
+                price_sale=commercial_price.quantize(Decimal("0.01")),
+                tax_affectation=tax_type,
                 tracks_inventory=data["tracks_inventory"], active=True,
             )
             ProductUnit.objects.create(
                 product=product, unit=unit, conversion_factor=1,
-                sale_price=net_price, is_default_sale=True,
+                sale_price=commercial_price, is_default_sale=True,
                 is_default_purchase=True, active=True,
             )
             AuditLog.objects.create(

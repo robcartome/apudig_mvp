@@ -8,6 +8,7 @@ from django import forms
 from django.utils import timezone
 
 from apps.core.managers import filter_by_company
+from apps.core.currency import currency_choices
 from apps.companies.models import Store
 from apps.inventory.models import PriceList, Product, Warehouse
 from apps.partners.models import Customer, DocumentType
@@ -172,7 +173,7 @@ class QuotationHeaderForm(forms.ModelForm):
     igv_rate_default = forms.DecimalField(
         label="IGV",
         min_value=Decimal("0"), max_value=Decimal("100"),
-        max_digits=5, decimal_places=2, initial=Decimal("18"),
+        max_digits=5, decimal_places=2, initial=Decimal("0"),
         required=False,
         widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
     )
@@ -197,6 +198,9 @@ class QuotationHeaderForm(forms.ModelForm):
 
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if company_id and not self.is_bound:
+            from apps.inventory.pricing import tax_rate_for_company
+            self.fields["igv_rate_default"].initial = tax_rate_for_company(company_id)
         self.fields["customer"].queryset = filter_by_company(
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
@@ -210,6 +214,9 @@ class QuotationHeaderForm(forms.ModelForm):
                 active=True,
             )
         if company_id:
+            self.fields["price_list"].queryset = PriceList.objects.filter(
+                company_id=company_id, active=True
+            ).order_by("name")
             self.fields["payment_method"].queryset = PaymentMethod.objects.filter(
                 company_id=company_id, active=True
             )
@@ -219,6 +226,7 @@ class QuotationHeaderForm(forms.ModelForm):
         self.fields["series"].widget.attrs.update(_select)
         self.fields["store"].widget.attrs.update(_select)
         self.fields["currency"].widget.attrs.update(_select)
+        self.fields["price_list"].widget.attrs.update({**_select, "id": "price-list-select"})
         self.fields["notes"].widget.attrs.update(_textarea)
         self.fields["exchange_rate"].widget.attrs.update({**_text, "step": "0.000001", "min": "0"})
         self.fields["exchange_rate"].required = False
@@ -267,13 +275,13 @@ class QuotationHeaderForm(forms.ModelForm):
         model = SalesQuotation
         fields = (
             "store", "customer", "series", "number", "issue_date", "valid_until",
-            "currency", "exchange_rate", "notes", "internal_reference",
+            "currency", "exchange_rate", "price_list", "notes", "internal_reference",
             "payment_method", "means_of_payment",
         )
         widgets = {
             "internal_reference": forms.TextInput(attrs=_text),
             "currency": forms.Select(
-                choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+                choices=currency_choices(),
                 attrs=_select,
             ),
         }
@@ -324,7 +332,7 @@ class QuotationLineForm(forms.Form):
         min_value=Decimal("0"),
         max_digits=5,
         decimal_places=2,
-        initial=Decimal("18"),
+        initial=Decimal("0"),
         required=False,
         widget=forms.HiddenInput(),
     )
@@ -338,7 +346,7 @@ class QuotationLineForm(forms.Form):
         return self.cleaned_data.get("discount_amount") or Decimal("0")
 
     def clean_igv_rate(self):
-        return self.cleaned_data.get("igv_rate") or Decimal("18")
+        return self.cleaned_data.get("igv_rate") or Decimal("0")
 
 
 QuotationLineFormSet = forms.formset_factory(
@@ -396,7 +404,7 @@ class SaleOrderHeaderForm(forms.ModelForm):
         )
         widgets = {
             "currency": forms.Select(
-                choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+                choices=currency_choices(),
                 attrs=_select,
             ),
         }
@@ -446,7 +454,7 @@ class SaleOrderLineForm(forms.Form):
         min_value=Decimal("0"),
         max_digits=5,
         decimal_places=2,
-        initial=Decimal("18"),
+        initial=Decimal("0"),
         required=False,
         widget=forms.NumberInput(attrs={**_text, "step": "0.01"}),
     )
@@ -455,7 +463,7 @@ class SaleOrderLineForm(forms.Form):
         return self.cleaned_data.get("discount_amount") or Decimal("0")
 
     def clean_igv_rate(self):
-        return self.cleaned_data.get("igv_rate") or Decimal("18")
+        return self.cleaned_data.get("igv_rate") or Decimal("0")
 
 
 SaleOrderLineFormSet = forms.formset_factory(
@@ -634,7 +642,7 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         )
         widgets = {
             "currency": forms.Select(
-                choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+                choices=currency_choices(),
                 attrs=_select,
             ),
             "register_inventory_movement": forms.CheckboxInput(attrs=_check),
@@ -694,7 +702,7 @@ class SalesDocumentLineForm(forms.Form):
         min_value=Decimal("0"),
         max_digits=5,
         decimal_places=2,
-        initial=Decimal("18"),
+        initial=Decimal("0"),
         required=False,
         widget=forms.HiddenInput(),
     )
@@ -708,7 +716,7 @@ class SalesDocumentLineForm(forms.Form):
         return self.cleaned_data.get("discount_amount") or Decimal("0")
 
     def clean_igv_rate(self):
-        return self.cleaned_data.get("igv_rate") or Decimal("18")
+        return self.cleaned_data.get("igv_rate") or Decimal("0")
 
 
 SalesDocumentLineFormSet = forms.formset_factory(

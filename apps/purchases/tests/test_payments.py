@@ -149,5 +149,5 @@ class SupplierPaymentViewTest(TestCase):
         self.assertEqual(self.document.payment_status, PurchasePaymentStatus.PARTIALLY_PAID)
 
         response = self.client.get(reverse("purchases:document_list"))
-        self.assertContains(response, "PEN 35.00")
+        self.assertContains(response, "S/. 35.00")
         self.assertContains(response, "03/09/2026 11:00")

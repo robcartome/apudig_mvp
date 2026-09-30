@@ -159,7 +159,7 @@ class SaleLineBase(models.Model):
     stock_quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
     discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     tax_type = models.CharField(max_length=5, choices=TAX_TYPE_CHOICES, default="10")
-    igv_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
+    igv_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     sunat_product_code = models.CharField(max_length=30, blank=True)
     product_code = models.CharField(max_length=50, blank=True)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -197,6 +197,10 @@ class SalesQuotation(TimeStampedModel):
     valid_until = models.DateField(null=True, blank=True)
     currency = models.CharField(max_length=3, default="PEN")
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, default=1)
+    price_list = models.ForeignKey(
+        "inventory.PriceList", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="quotations",
+    )
     status = models.CharField(max_length=20, choices=QUOTATION_STATUS_CHOICES, default="DRAFT")
     source_quotation = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="revisions"
@@ -449,6 +453,7 @@ class SalesDocument(TimeStampedModel):
 class SalesDocumentLine(SaleLineBase):
     sales_document = models.ForeignKey(SalesDocument, on_delete=models.CASCADE, related_name="lines")
     memo = models.CharField(max_length=500, blank=True)
+    global_discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     sale_order_line = models.ForeignKey(
         SaleOrderLine, on_delete=models.SET_NULL, null=True, blank=True, related_name="sales_document_lines"
     )

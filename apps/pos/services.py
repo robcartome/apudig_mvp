@@ -6,7 +6,9 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.core.models import AuditLog
+from apps.core.currency import currency_symbol
 from apps.inventory.models import MovementOrigin, PriceList, Product, ProductPrice, ProductUnit, Warehouse
+from apps.inventory.pricing import split_final_price, tax_rate_for_company
 from apps.inventory.services import confirm_movement, register_entry
 from apps.partners.models import Customer, DocumentType
 from apps.sales.models import DocumentSeries, MeansOfPayment, PaymentMethod, SalesDocument
@@ -115,7 +117,7 @@ def open_cash_session(
         raise PosDomainError("CASH_SESSION_ALREADY_OPEN", "La caja ya tiene una sesion abierta.")
     currency = (currency or "PEN").upper()
     if currency not in {"PEN", "USD"}:
-        raise PosDomainError("INVALID_CASH_SESSION_CURRENCY", "La moneda debe ser PEN o USD.")
+        raise PosDomainError("INVALID_CASH_SESSION_CURRENCY", "La moneda debe ser S/. o $.")
 
     opening_total = _money(opening_total, "fondo inicial")
     if opening_total < 0:
@@ -957,25 +959,31 @@ def _resolve_pos_lines(
                 },
             )
 
-        expected_price = list_prices.get(str(product.pk))
-        if expected_price is None and currency == "PEN":
-            expected_price = product.price_sale
+        expected_commercial_price = list_prices.get(str(product.pk))
+        if expected_commercial_price is None and currency == "PEN":
+            expected_commercial_price = product.price_sale
         if (
             currency == "PEN"
             and conversion is not None
             and conversion.sale_price is not None
         ):
-            expected_price = conversion.sale_price
-        elif expected_price is not None and conversion is not None:
-            expected_price = Decimal(str(expected_price)) * Decimal(
+            expected_commercial_price = conversion.sale_price
+        elif expected_commercial_price is not None and conversion is not None:
+            expected_commercial_price = Decimal(str(expected_commercial_price)) * Decimal(
                 str(conversion.conversion_factor)
             )
-        if expected_price is None:
+        if expected_commercial_price is None:
             raise PosDomainError(
                 "PRICE_NOT_CONFIGURED",
-                f"No existe un precio en {currency} para {product.name}.",
+                f"No existe un precio en {currency_symbol(currency)} para {product.name}.",
             )
-        expected_price = Decimal(str(expected_price)).quantize(Decimal("0.000001"))
+        tax_type = item.get("tax_type") or product.tax_affectation
+        effective_rate = tax_rate_for_company(company_id, affectation_type=tax_type)
+        expected_price = split_final_price(
+            expected_commercial_price,
+            affectation_type=tax_type,
+            tax_rate=effective_rate,
+        ).unit_value
         submitted_price = item.get("unit_price")
         unit_price = (
             expected_price
@@ -1006,8 +1014,8 @@ def _resolve_pos_lines(
             "unit_price": unit_price,
             "unit_id": requested_unit_id,
             "discount_amount": discount,
-            "tax_type": item.get("tax_type") or "10",
-            "igv_rate": Decimal(str(item.get("igv_rate") or 18)),
+            "tax_type": tax_type,
+            "igv_rate": effective_rate,
             "sunat_product_code": (item.get("sunat_product_code") or "").strip(),
             "product_code": (item.get("product_code") or product.sku).strip(),
             "memo": (item.get("memo") or "").strip(),

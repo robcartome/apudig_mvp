@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Company, CompanyBranding, CompanyDocumentSettings, CompanyOperationalSettings,
-    Store, UserCompanyAccess,
+    Store, TaxRate, UserCompanyAccess,
 )
 
 
@@ -10,6 +10,13 @@ from .models import (
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "ruc", "is_active")
     search_fields = ("name", "ruc")
+
+
+@admin.register(TaxRate)
+class TaxRateAdmin(admin.ModelAdmin):
+    list_display = ("company", "code", "affectation_type", "rate", "valid_from", "valid_until", "active", "is_default")
+    list_filter = ("company", "affectation_type", "active", "is_default")
+    search_fields = ("company__name", "code", "name")
 
 
 @admin.register(CompanyBranding)

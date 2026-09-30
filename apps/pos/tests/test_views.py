@@ -55,6 +55,9 @@ class PosWorkspaceViewTest(TestCase):
         self.assertTemplateUsed(response, "pos/sale.html")
         self.assertContains(response, "Nueva venta")
         self.assertContains(response, "/api/v1/pos/sales/checkout/")
+        self.assertContains(response, 'id="checkout-review-dialog"')
+        self.assertContains(response, "Ingrese solo lo que entrega el cliente")
+        self.assertContains(response, "Confirmar y cobrar")
         self.assertContains(response, 'data-product-search-mode="SEARCH"')
         self.assertContains(response, 'id="pos-catalog-browser" class="pos-catalog-browser" hidden')
 

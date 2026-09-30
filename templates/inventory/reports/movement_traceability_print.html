@@ -42,7 +42,7 @@
         <td>{{ item.type_label }}</td>
         <td class="text-right">{{ item.movements }}</td>
         <td class="text-right {% if item.quantity_total < 0 %}neg{% endif %}">{{ item.quantity_total|floatformat:2 }}</td>
-        <td class="text-right">S/ {{ item.amount_total|floatformat:2 }}</td>
+        <td class="text-right">S/. {{ item.amount_total|floatformat:2 }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -81,8 +81,8 @@
         <td>{{ entry.document }}</td>
         <td>{{ entry.reference_doc }}</td>
         <td class="text-right {% if entry.signed_quantity < 0 %}neg{% endif %}">{{ entry.signed_quantity|floatformat:2 }}</td>
-        <td class="text-right">S/ {{ entry.unit_price|floatformat:2 }}</td>
-        <td class="text-right">S/ {{ entry.amount|floatformat:2 }}</td>
+        <td class="text-right">S/. {{ entry.unit_price|floatformat:2 }}</td>
+        <td class="text-right">S/. {{ entry.amount|floatformat:2 }}</td>
       </tr>
       {% endfor %}
     </tbody>

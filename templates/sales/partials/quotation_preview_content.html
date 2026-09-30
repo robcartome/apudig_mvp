@@ -49,7 +49,7 @@
     <tfoot class="table-light fw-semibold">
       <tr>
         <td colspan="8" class="text-end">TOTAL:</td>
-        <td class="text-end">{{ quotation.currency }} {{ quotation.total|floatformat:2 }}</td>
+        <td class="text-end">{{ quotation.currency|currency_symbol }} {{ quotation.total|floatformat:2 }}</td>
       </tr>
     </tfoot>
   </table>

@@ -52,7 +52,7 @@
             <div>{{ v.customer_legal_name }}</div>
             <div class="text-muted small">{{ v.customer_document_number }}</div>
           </td>
-          <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
+          <td class="text-end">{{ v.currency|currency_symbol }} {{ v.total|floatformat:2 }}</td>
           <td>{% include "components/status_badge.html" with status=v.status label=v.get_status_display %}</td>
           <td>
             {% if v.pos_transaction %}
@@ -113,7 +113,7 @@
         {% endfor %}
       </tbody>
       <tfoot class="table-light"><tr><th colspan="9" class="text-end py-3">Total filtrado (no incluye anulados, cancelados ni rechazados):
-        {% for item in filtered_totals %}<span class="ms-3">{{ item.currency }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
+        {% for item in filtered_totals %}<span class="ms-3">{{ item.currency|currency_symbol }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
       </th></tr></tfoot>
     </table>
   </div>

@@ -69,7 +69,7 @@
     config: app.dataset.configUrl,
   };
 
-  const currencySymbol = () => (state.currency === "USD" ? "$" : "S/");
+  const currencySymbol = (currency = state.currency) => CurrencyDisplay.symbol(currency);
   const number = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -161,6 +161,7 @@
     state.busy = value;
     byId("pos-loading-text").textContent = label;
     byId("pos-loading").hidden = !value;
+    if (byId("confirm-checkout-button")) byId("confirm-checkout-button").disabled = value;
     updateCheckoutAvailability();
   }
 
@@ -175,11 +176,11 @@
   function renderDenominations(containerId) {
     const container = byId(containerId);
     const symbol = containerId === "opening-denominations"
-      ? (byId("opening-currency")?.value === "USD" ? "$" : "S/")
+      ? currencySymbol(byId("opening-currency")?.value)
       : currencySymbol();
     container.innerHTML = cashDenominations.map((denomination) => `
       <label>
-        <span>${symbol} ${fixed(denomination)}</span>
+        <span class="fw-bold">${symbol} ${fixed(denomination)}</span>
         <input type="number" min="0" step="1" value="0" inputmode="numeric" data-denomination="${denomination}">
       </label>`).join("");
   }
@@ -495,7 +496,7 @@
 
   function addProduct(product) {
     if (product.unit_price === null) {
-      showAlert(`No hay precio configurado en ${state.currency} para ${product.name}.`);
+      showAlert(`No hay precio configurado en ${currencySymbol()} para ${product.name}.`);
       return;
     }
     const existing = state.cart.get(product.id);
@@ -526,7 +527,7 @@
         discount: 0,
         memo: "",
         taxType: product.tax_type || "10",
-        igvRate: number(product.igv_rate || 18),
+        igvRate: number(product.igv_rate || 0),
         baseStock: number(product.stock),
         stock: number(product.stock) / conversionFactor,
         stockUnit: product.stock_unit || product.unit,
@@ -601,8 +602,67 @@
     updateCheckoutAvailability();
   }
 
+  function paymentBreakdown() {
+    const saleTotal = totals().total;
+    const nonCashTotal = state.payments.reduce((sum, payment) => {
+      const means = state.means.find((item) => item.id === payment.meansId);
+      return sum + (means?.kind === "CASH" ? 0 : number(payment.amount));
+    }, 0);
+    let cashPending = Math.max(saleTotal - nonCashTotal, 0);
+    const rows = state.payments.map((payment) => {
+      const means = state.means.find((item) => item.id === payment.meansId);
+      const isCash = means?.kind === "CASH";
+      const entered = isCash ? number(payment.received) : number(payment.amount);
+      const applied = isCash ? Math.min(entered, cashPending) : entered;
+      if (isCash) cashPending = Math.max(cashPending - applied, 0);
+      return {
+        payment,
+        means,
+        entered,
+        applied,
+        change: isCash ? Math.max(entered - applied, 0) : 0,
+      };
+    });
+    const appliedTotal = rows.reduce((sum, row) => sum + row.applied, 0);
+    return {
+      rows,
+      appliedTotal,
+      changeTotal: rows.reduce((sum, row) => sum + row.change, 0),
+      difference: appliedTotal - saleTotal,
+    };
+  }
+
+  function paymentRow(payment) {
+    return paymentBreakdown().rows.find((row) => row.payment.key === payment.key);
+  }
+
   function paymentTotal() {
-    return state.payments.reduce((sum, payment) => sum + number(payment.amount), 0);
+    return paymentBreakdown().appliedTotal;
+  }
+
+  function cashChangeTotal() {
+    return paymentBreakdown().changeTotal;
+  }
+
+  function renderPaymentDifference() {
+    const difference = paymentBreakdown().difference;
+    const label = byId("payment-balance-label");
+    const amount = byId("payment-balance");
+    label.textContent = state.paymentCondition === "CREDIT" ? "Saldo a crédito" : "Diferencia";
+    const visibleValue = state.paymentCondition === "CREDIT" ? -Math.abs(difference) : difference;
+    amount.textContent = `${visibleValue > 0.005 ? "+" : ""}${fixed(visibleValue)}`;
+    amount.parentElement.classList.toggle("is-negative", visibleValue < -0.005);
+    amount.parentElement.classList.toggle("is-positive", visibleValue > 0.005);
+  }
+
+  function refreshPaymentCalculations() {
+    const breakdown = paymentBreakdown();
+    breakdown.rows.forEach((item) => {
+      const row = byId("payment-lines").querySelector(`[data-payment-key="${item.payment.key}"]`);
+      const change = row?.querySelector(".pos-payment-change strong");
+      if (change) change.textContent = `${currencySymbol()} ${fixed(item.change)}`;
+    });
+    renderPaymentDifference();
   }
 
   function defaultMeans() {
@@ -640,24 +700,21 @@
       container.innerHTML = state.payments.map((payment) => {
         const means = state.means.find((item) => item.id === payment.meansId) || state.means[0];
         const isCash = means?.kind === "CASH";
-        const requiresReference = Boolean(means?.requires_reference);
+        const requiresReference = Boolean(means && means.kind !== "CASH");
+        const row = paymentRow(payment);
         return `
           <div class="pos-payment-row" data-payment-key="${payment.key}">
-            <select data-payment-action="means" aria-label="Medio de pago">
+            <label class="pos-payment-field"><span>Medio de pago</span><select data-payment-action="means" aria-label="Medio de pago">
               ${state.means.map((item) => `<option value="${item.id}" ${item.id === means?.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
-            </select>
-            <input data-payment-action="amount" type="number" min="0.01" step="0.01" value="${fixed(payment.amount)}" aria-label="Importe del pago">
+            </select></label>
+            <label class="pos-payment-field"><span>${isCash ? "Monto recibido" : "Monto pagado"}</span><input data-payment-action="${isCash ? "received" : "amount"}" type="number" min="0" step="0.01" value="${fixed(isCash ? payment.received : payment.amount)}" aria-label="${isCash ? "Efectivo recibido" : "Monto pagado"}"></label>
             <button class="pos-payment-remove" data-payment-action="remove" type="button" aria-label="Quitar pago" ${state.paymentCondition === "CASH" && state.payments.length === 1 ? "disabled" : ""}><i class="ti ti-x"></i></button>
-            ${isCash ? `<input class="pos-cash-received" data-payment-action="received" type="number" min="0" step="0.01" value="${fixed(payment.received)}" placeholder="Efectivo recibido" aria-label="Efectivo recibido">` : ""}
-            ${requiresReference ? `<input class="pos-payment-reference" data-payment-action="reference" maxlength="120" value="${escapeHtml(payment.reference)}" placeholder="N.º de operación" aria-label="Número de operación">` : ""}
+            ${isCash ? `<div class="pos-payment-change"><span>Vuelto</span><strong>${currencySymbol()} ${fixed(row?.change || 0)}</strong></div>` : ""}
+            ${requiresReference ? `<label class="pos-payment-field pos-payment-reference"><span>N.º de operación / voucher</span><input data-payment-action="reference" maxlength="120" value="${escapeHtml(payment.reference)}" placeholder="Ej.: OP003457" aria-label="Número de operación o voucher"></label>` : ""}
           </div>`;
       }).join("");
     }
-    const balance = totals().total - paymentTotal();
-    byId("payment-balance-label").textContent = balance < -0.005
-      ? "Exceso"
-      : (state.paymentCondition === "CREDIT" ? "Saldo a crédito" : "Por cobrar");
-    byId("payment-balance").textContent = fixed(Math.abs(balance));
+    renderPaymentDifference();
     updateCheckoutAvailability();
   }
 
@@ -689,8 +746,11 @@
     }
     if (
       state.paymentCondition === "CASH"
-      && Math.abs(paymentTotal() - totals().total) > 0.009
-    ) return "Los pagos deben cuadrar con el total.";
+      && paymentBreakdown().difference < -0.009
+    ) return `Falta cobrar ${currencySymbol()} ${fixed(Math.abs(paymentBreakdown().difference))}.`;
+    if (state.paymentCondition === "CASH" && paymentBreakdown().difference > 0.009) {
+      return "Los pagos no efectivos superan el total de la venta.";
+    }
     if (state.paymentCondition === "CREDIT") {
       if (!byId("payment-method").value) return "Configure una condición comercial de crédito.";
       if (!byId("credit-due-date").value) return "Indique la fecha de vencimiento.";
@@ -700,9 +760,9 @@
     }
     for (const payment of state.payments) {
       const means = state.means.find((item) => item.id === payment.meansId);
-      if (!means || number(payment.amount) <= 0) return "Revise los importes de pago.";
-      if (means.requires_reference && !payment.reference.trim()) return `Ingrese la referencia de ${means.name}.`;
-      if (means.kind === "CASH" && number(payment.received) < number(payment.amount)) return "El efectivo recibido no cubre el pago.";
+      const entered = means?.kind === "CASH" ? number(payment.received) : number(payment.amount);
+      if (!means || entered <= 0) return "Revise los importes de pago.";
+      if (means.kind !== "CASH" && !payment.reference.trim()) return `Ingrese el número de operación o voucher de ${means.name}.`;
     }
     if (state.documentType === "01") {
       if (!state.selectedCustomer || state.selectedCustomer.document_number?.length !== 11) {
@@ -953,7 +1013,7 @@
           { name: "Precio base", currency: data.base_price.currency, amount: data.base_price.amount, is_default: false },
           ...data.prices,
         ];
-        byId("product-commercial-content").innerHTML = `<div class="pos-commercial-list">${rows.map((item) => `<div><span><i class="ti ti-tag"></i><strong>${escapeHtml(item.name)}</strong>${item.is_default ? "<small>Predeterminada</small>" : ""}</span><b>${escapeHtml(item.currency)} ${fixed(item.amount)}</b></div>`).join("")}</div>`;
+        byId("product-commercial-content").innerHTML = `<div class="pos-commercial-list">${rows.map((item) => `<div><span><i class="ti ti-tag"></i><strong>${escapeHtml(item.name)}</strong>${item.is_default ? "<small>Predeterminada</small>" : ""}</span><b>${escapeHtml(currencySymbol(item.currency))} ${fixed(item.amount)}</b></div>`).join("")}</div>`;
       } else {
         byId("product-commercial-content").innerHTML = data.product.tracks_inventory
           ? `<div class="pos-commercial-list">${data.warehouses.length ? data.warehouses.map((item) => `<div class="${item.is_current ? "is-current" : ""}"><span><i class="ti ti-building-warehouse"></i><strong>${escapeHtml(item.warehouse)}</strong><small>${escapeHtml(item.store)}${item.is_current ? " · Sucursal actual" : ""}</small></span><b>${fixed(item.quantity, 3)} ${escapeHtml(data.product.unit)}</b></div>`).join("") : '<div class="pos-no-results">No existen almacenes activos.</div>'}</div>`
@@ -993,9 +1053,10 @@
   }
 
   function paymentPayload(payment) {
-    const means = state.means.find((item) => item.id === payment.meansId);
-    const amount = number(payment.amount);
-    const received = means?.kind === "CASH" ? number(payment.received) : amount;
+    const row = paymentRow(payment);
+    const means = row?.means;
+    const amount = row?.applied || 0;
+    const received = means?.kind === "CASH" ? row.entered : amount;
     return {
       means_of_payment_id: payment.meansId,
       amount: fixed(amount),
@@ -1003,7 +1064,7 @@
       exchange_rate: fixed(byId("exchange-rate").value || 1, 6),
       amount_in_sale_currency: fixed(amount),
       received_amount: fixed(received),
-      change_amount: fixed(means?.kind === "CASH" ? Math.max(received - amount, 0) : 0),
+      change_amount: fixed(row?.change || 0),
       operation_reference: payment.reference || "",
     };
   }
@@ -1114,6 +1175,7 @@
   }
 
   async function checkout() {
+    if (state.busy) return;
     const problem = checkoutProblem();
     if (problem) {
       showAlert(problem);
@@ -1126,6 +1188,7 @@
       const payload = salePayload(true);
       const result = await api(endpoints.checkout, { method: "POST", body: JSON.stringify(payload) });
       renderReceipt(result, cartSnapshot);
+      closeDialog(byId("checkout-review-dialog"));
       resetSale();
       document.body.classList.remove("pos-checkout-open");
       openDialog(byId("success-dialog"));
@@ -1134,6 +1197,41 @@
     } finally {
       setBusy(false);
     }
+  }
+
+  function renderCheckoutReview() {
+    const values = totals();
+    byId("confirm-checkout-button").innerHTML = state.paymentCondition === "CREDIT"
+      ? '<i class="ti ti-check me-1"></i>Confirmar venta a crédito'
+      : '<i class="ti ti-check me-1"></i>Confirmar y cobrar';
+    const documentLabels = { NV: "Nota de venta", "03": "Boleta", "01": "Factura" };
+    const lines = [...state.cart.values()].map((line) => {
+      const lineValue = lineTotals(line);
+      return `<tr><td><strong>${escapeHtml(line.name)}</strong>${line.memo ? `<small>${escapeHtml(line.memo)}</small>` : ""}</td><td>${fixed(line.quantity, number(line.quantity) % 1 ? 3 : 0)}</td><td>${currencySymbol()} ${fixed(grossUnitPrice(line))}</td><td>${currencySymbol()} ${fixed(lineValue.total)}</td></tr>`;
+    }).join("");
+    const payments = paymentBreakdown().rows.map((row) => {
+      const { payment, means } = row;
+      const isCash = means?.kind === "CASH";
+      return `<tr><td><strong>${escapeHtml(means?.name || "Medio de pago")}</strong>${payment.reference ? `<small>Operación: ${escapeHtml(payment.reference)}</small>` : ""}</td><td>${currencySymbol()} ${fixed(row.applied)}</td><td>${currencySymbol()} ${fixed(row.entered)}</td><td>${isCash ? `${currencySymbol()} ${fixed(row.change)}` : "—"}</td></tr>`;
+    }).join("");
+    const customer = state.selectedCustomer
+      ? `${escapeHtml(state.selectedCustomer.legal_name)} · ${escapeHtml(state.selectedCustomer.document_number || "Sin documento")}`
+      : "VARIOS · Sin documento";
+    byId("checkout-review-content").innerHTML = `
+      <div class="pos-review-meta"><div><span>Documento</span><strong>${escapeHtml(documentLabels[state.documentType] || state.documentType)} · ${escapeHtml(byId("document-series").selectedOptions[0]?.textContent || "")}</strong></div><div><span>Cliente</span><strong>${customer}</strong></div></div>
+      <section class="pos-review-section"><h3>Productos</h3><div class="pos-review-table-wrap"><table><thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead><tbody>${lines}</tbody></table></div></section>
+      <div class="pos-review-totals"><span>Subtotal <strong>${currencySymbol()} ${fixed(values.subtotal)}</strong></span><span>Descuentos <strong>− ${currencySymbol()} ${fixed(values.discount)}</strong></span><span>IGV <strong>${currencySymbol()} ${fixed(values.tax)}</strong></span><span class="is-total">Total a pagar <strong>${currencySymbol()} ${fixed(values.total)}</strong></span></div>
+      <section class="pos-review-section"><h3>Distribución del cobro</h3><div class="pos-review-table-wrap"><table><thead><tr><th>Medio</th><th>Aplicado</th><th>Recibido</th><th>Vuelto</th></tr></thead><tbody>${payments || '<tr><td colspan="4">Sin pago inmediato</td></tr>'}</tbody></table></div></section>
+      <div class="pos-review-settlement"><span>Total aplicado <strong>${currencySymbol()} ${fixed(paymentTotal())}</strong></span><span>Vuelto al cliente <strong>${currencySymbol()} ${fixed(cashChangeTotal())}</strong></span></div>`;
+  }
+
+  function prepareCheckoutReview() {
+    const problem = checkoutProblem();
+    if (problem) return showAlert(problem);
+    hideAlert();
+    renderCheckoutReview();
+    openDialog(byId("checkout-review-dialog"));
+    setTimeout(() => byId("confirm-checkout-button").focus(), 30);
   }
 
   function renderReceipt(result, lines) {
@@ -1169,7 +1267,7 @@
       ${receiptLines}
       <div class="pos-receipt__row"><span>Subtotal</span><span>${escapeHtml(result.subtotal)}</span></div>
       <div class="pos-receipt__row"><span>IGV</span><span>${escapeHtml(result.igv_total)}</span></div>
-      <div class="pos-receipt__row pos-receipt__total"><span>TOTAL ${escapeHtml(result.currency)}</span><span>${escapeHtml(result.total)}</span></div>
+      <div class="pos-receipt__row pos-receipt__total"><span>TOTAL ${escapeHtml(currencySymbol(result.currency))}</span><span>${escapeHtml(result.total)}</span></div>
       ${number(result.outstanding_amount) > 0 ? `<div class="pos-receipt__row"><strong>SALDO PENDIENTE</strong><strong>${escapeHtml(result.outstanding_amount)}</strong></div>` : ""}
       ${electronicNotice}`;
     byId("receipt-a4-button").href = result.document_pdf_url || "#";
@@ -1252,7 +1350,7 @@
       const note = result.credit_note_number
         ? ` Nota de Crédito ${result.credit_note_series}-${result.credit_note_number}.`
         : "";
-      showAlert(`Devolución registrada por ${result.currency} ${result.total}.${note}`, "success");
+      showAlert(`Devolución registrada por ${currencySymbol(result.currency)} ${result.total}.${note}`, "success");
     } catch (error) {
       showAlert(error.message);
     } finally {
@@ -1300,7 +1398,7 @@
       });
       closeDialog(byId("debit-note-dialog"));
       state.debitNoteIdempotencyKey = null;
-      showAlert(`Nota de Débito ${result.series}-${result.number} emitida por ${result.currency} ${result.total}.`, "success");
+      showAlert(`Nota de Débito ${result.series}-${result.number} emitida por ${currencySymbol(result.currency)} ${result.total}.`, "success");
     } catch (error) {
       showAlert(error.message);
     } finally {
@@ -1326,7 +1424,7 @@
         const timestamp = record.completed_at || record.started_at;
         return `<button class="pos-ticket-row pos-ticket-row--button ${isDraft ? "is-draft" : ""}" type="button" ${isDraft ? `data-load-draft-id="${record.id}"` : `data-reprint-id="${record.id}"`}>
           <span><strong>${isDraft ? "BORRADOR" : `${escapeHtml(record.document_series)}-${escapeHtml(record.document_number)}`}</strong><small>${new Date(timestamp).toLocaleString("es-PE")} · ${escapeHtml(record.customer_name)} · ${escapeHtml(record.cashier_name || "")}</small></span>
-          <span><b>${escapeHtml(record.currency)} ${escapeHtml(record.total)}</b><small>${isDraft ? "Recuperar y editar" : escapeHtml(record.ticket_code)}</small></span>
+          <span><b>${escapeHtml(currencySymbol(record.currency))} ${escapeHtml(record.total)}</b><small>${isDraft ? "Recuperar y editar" : escapeHtml(record.ticket_code)}</small></span>
         </button>`;
       }).join("") : '<div class="pos-no-results">No hay ventas ni borradores recientes.</div>';
     } catch (error) {
@@ -1342,7 +1440,7 @@
       container.innerHTML = records.length ? records.map((record) => `
         <button class="pos-ticket-row pos-ticket-row--button" type="button" data-reprint-id="${record.id}">
           <span><strong>${escapeHtml(record.document_series)}-${escapeHtml(record.document_number)}</strong><small>${new Date(record.completed_at).toLocaleString("es-PE")} · ${escapeHtml(record.customer_name)}</small></span>
-          <strong>${escapeHtml(record.currency)} ${escapeHtml(record.total)}</strong>
+          <strong>${escapeHtml(currencySymbol(record.currency))} ${escapeHtml(record.total)}</strong>
         </button>`).join("") : '<div class="pos-no-results">No hay comprobantes recientes.</div>';
     } catch (error) {
       container.innerHTML = `<div class="pos-no-results">${escapeHtml(error.message)}</div>`;
@@ -1524,7 +1622,7 @@
     container.innerHTML = movements.length ? movements.map((item) => `
       <div class="pos-cash-ledger__row">
         <span><strong>${escapeHtml(item.movement_type_label)}</strong><small>${new Date(item.created_at).toLocaleString("es-PE")} · ${escapeHtml(item.description)}</small></span>
-        <strong class="${["PAY_OUT", "WITHDRAWAL", "DEPOSIT"].includes(item.movement_type) ? "is-out" : "is-in"}">${["PAY_OUT", "WITHDRAWAL", "DEPOSIT"].includes(item.movement_type) ? "-" : "+"} S/ ${escapeHtml(item.amount)}</strong>
+        <strong class="${["PAY_OUT", "WITHDRAWAL", "DEPOSIT"].includes(item.movement_type) ? "is-out" : "is-in"}">${["PAY_OUT", "WITHDRAWAL", "DEPOSIT"].includes(item.movement_type) ? "-" : "+"} ${currencySymbol()} ${escapeHtml(item.amount)}</strong>
       </div>`).join("") : '<div class="pos-no-results">Sin ingresos ni salidas registrados en esta sesión.</div>';
   }
 
@@ -1546,13 +1644,13 @@
     const movements = summary.movement_details || [];
     byId("cash-close-details").innerHTML = `
       <section><h3>Resumen por medio de pago</h3><div class="pos-cash-detail-table">
-        ${payments.length ? payments.map((item) => `<div><span>${escapeHtml(item.name)} <small>${item.operations} operación(es)</small></span><strong>S/ ${escapeHtml(item.expected_amount)}</strong></div>`).join("") : '<div><span>Sin pagos registrados</span><strong>S/ 0.00</strong></div>'}
+        ${payments.length ? payments.map((item) => `<div><span>${escapeHtml(item.name)} <small>${item.operations} operación(es)</small></span><strong>${currencySymbol()} ${escapeHtml(item.expected_amount)}</strong></div>`).join("") : `<div><span>Sin pagos registrados</span><strong>${currencySymbol()} 0.00</strong></div>`}
       </div></section>
       <section><h3>Ventas de la sesión</h3><div class="pos-cash-detail-list">
-        ${sales.length ? sales.map((item) => `<div><span><strong>${escapeHtml(item.document)}</strong><small>${item.completed_at ? new Date(item.completed_at).toLocaleString("es-PE") : "Pendiente"} · ${escapeHtml(item.customer)}</small></span><strong>${escapeHtml(item.currency)} ${escapeHtml(item.total)}</strong></div>`).join("") : '<div class="pos-no-results">Sin ventas en la sesión.</div>'}
+        ${sales.length ? sales.map((item) => `<div><span><strong>${escapeHtml(item.document)}</strong><small>${item.completed_at ? new Date(item.completed_at).toLocaleString("es-PE") : "Pendiente"} · ${escapeHtml(item.customer)}</small></span><strong>${escapeHtml(currencySymbol(item.currency))} ${escapeHtml(item.total)}</strong></div>`).join("") : '<div class="pos-no-results">Sin ventas en la sesión.</div>'}
       </div></section>
       <section><h3>Vales y movimientos de caja</h3><div class="pos-cash-detail-list">
-        ${movements.length ? movements.map((item) => `<div><span><strong>${escapeHtml(item.movement_type === "PAY_IN" ? "Vale de ingreso" : item.movement_type === "PAY_OUT" ? "Vale de salida" : item.movement_type_label)}</strong><small>${new Date(item.created_at).toLocaleString("es-PE")} · ${escapeHtml(item.description)}</small></span><strong>${["PAY_OUT", "WITHDRAWAL", "DEPOSIT"].includes(item.movement_type) ? "-" : "+"} S/ ${escapeHtml(item.amount)}</strong></div>`).join("") : '<div class="pos-no-results">Sin vales ni movimientos manuales.</div>'}
+        ${movements.length ? movements.map((item) => `<div><span><strong>${escapeHtml(item.movement_type === "PAY_IN" ? "Vale de ingreso" : item.movement_type === "PAY_OUT" ? "Vale de salida" : item.movement_type_label)}</strong><small>${new Date(item.created_at).toLocaleString("es-PE")} · ${escapeHtml(item.description)}</small></span><strong>${["PAY_OUT", "WITHDRAWAL", "DEPOSIT"].includes(item.movement_type) ? "-" : "+"} ${currencySymbol()} ${escapeHtml(item.amount)}</strong></div>`).join("") : '<div class="pos-no-results">Sin vales ni movimientos manuales.</div>'}
       </div></section>`;
   }
 
@@ -1566,13 +1664,13 @@
       : `<div class="pos-cash-warning">Hay ${transactions.pending || 0} venta(s) o ${transactions.pending_invoices || 0} factura(s) pendientes.</div>`;
     byId("cash-close-summary").innerHTML = `
       <div class="pos-cash-summary__range"><span>Rango del cierre</span><strong>${escapeHtml(openedAt)} — ${escapeHtml(closedAt)}</strong></div>
-      <div class="pos-cash-summary__metric"><span>Total cobrado</span><strong>S/ ${escapeHtml(summary.payment_total)}</strong><small>${transactions.completed || 0} venta(s)</small></div>
-      <div class="pos-cash-summary__metric"><span>Vales de ingreso</span><strong>S/ ${escapeHtml(summary.cash_in)}</strong><small>Entradas manuales</small></div>
-      <div class="pos-cash-summary__metric"><span>Vales de salida / retiros</span><strong>S/ ${escapeHtml(summary.cash_out)}</strong><small>Salidas de gaveta</small></div>
-      <div class="pos-cash-summary__metric is-total"><span>Efectivo esperado</span><strong>S/ ${escapeHtml(summary.expected_cash_total)}</strong><small>Incluye fondo S/ ${escapeHtml(summary.opening_total)}</small></div>
-      <div><span>Ventas en efectivo</span><strong>S/ ${escapeHtml(summary.cash_sales)}</strong></div>
-      <div><span>Otros medios</span><strong>S/ ${escapeHtml(summary.non_cash_sales)}</strong></div>
-      <div><span>Devoluciones</span><strong>- S/ ${escapeHtml(summary.refund_total)}</strong></div>
+      <div class="pos-cash-summary__metric"><span>Total cobrado</span><strong>${currencySymbol()} ${escapeHtml(summary.payment_total)}</strong><small>${transactions.completed || 0} venta(s)</small></div>
+      <div class="pos-cash-summary__metric"><span>Vales de ingreso</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_in)}</strong><small>Entradas manuales</small></div>
+      <div class="pos-cash-summary__metric"><span>Vales de salida / retiros</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_out)}</strong><small>Salidas de gaveta</small></div>
+      <div class="pos-cash-summary__metric is-total"><span>Efectivo esperado</span><strong>${currencySymbol()} ${escapeHtml(summary.expected_cash_total)}</strong><small>Incluye fondo ${currencySymbol()} ${escapeHtml(summary.opening_total)}</small></div>
+      <div><span>Ventas en efectivo</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_sales)}</strong></div>
+      <div><span>Otros medios</span><strong>${currencySymbol()} ${escapeHtml(summary.non_cash_sales)}</strong></div>
+      <div><span>Devoluciones</span><strong>- ${currencySymbol()} ${escapeHtml(summary.refund_total)}</strong></div>
       ${warning}`;
     renderCashCloseDetails(summary);
 
@@ -1580,7 +1678,7 @@
     byId("close-tender-counts").innerHTML = nonCashPayments.length
       ? `<h3>Conciliación de otros medios</h3>${nonCashPayments.map((item) => `
           <label class="pos-tender-row">
-            <span><strong>${escapeHtml(item.name)}</strong><small>Esperado: S/ ${escapeHtml(item.expected_amount)} · ${item.operations} operación(es)</small></span>
+            <span><strong>${escapeHtml(item.name)}</strong><small>Esperado: ${currencySymbol()} ${escapeHtml(item.expected_amount)} · ${item.operations} operación(es)</small></span>
             <input type="number" step="0.01" value="${escapeHtml(item.counted_amount ?? item.expected_amount)}" data-tender-id="${item.means_of_payment_id}" data-expected-amount="${escapeHtml(item.expected_amount)}">
           </label>`).join("")}`
       : "";
@@ -1610,19 +1708,19 @@
 
   function renderCashCloseReport(summary, closed) {
     const paymentRows = (summary.payments || []).map((item) => `
-      <div class="pos-receipt__row"><span>${escapeHtml(item.name)}</span><span>S/ ${escapeHtml(item.expected_amount)}</span></div>`).join("");
+      <div class="pos-receipt__row"><span>${escapeHtml(item.name)}</span><span>${currencySymbol()} ${escapeHtml(item.expected_amount)}</span></div>`).join("");
     byId("cash-close-report").innerHTML = `
       <div class="pos-receipt__header"><strong>${escapeHtml(state.register?.name || "Caja POS")}</strong><br><span>CIERRE DE CAJA</span></div>
-      <div class="pos-receipt__row"><span>Apertura</span><span>S/ ${escapeHtml(summary.opening_total)}</span></div>
-      <div class="pos-receipt__row"><span>Ingresos de caja</span><span>S/ ${escapeHtml(summary.cash_in)}</span></div>
-      <div class="pos-receipt__row"><span>Salidas de caja</span><span>S/ ${escapeHtml(summary.cash_out)}</span></div>
+      <div class="pos-receipt__row"><span>Apertura</span><span>${currencySymbol()} ${escapeHtml(summary.opening_total)}</span></div>
+      <div class="pos-receipt__row"><span>Ingresos de caja</span><span>${currencySymbol()} ${escapeHtml(summary.cash_in)}</span></div>
+      <div class="pos-receipt__row"><span>Salidas de caja</span><span>${currencySymbol()} ${escapeHtml(summary.cash_out)}</span></div>
       ${paymentRows}
-      <div class="pos-receipt__row pos-receipt__total"><span>Efectivo esperado</span><span>S/ ${escapeHtml(closed.expected_cash_total)}</span></div>
-      <div class="pos-receipt__row"><span>Efectivo contado</span><span>S/ ${escapeHtml(closed.counted_cash_total)}</span></div>
-      <div class="pos-receipt__row"><strong>Diferencia</strong><strong>S/ ${escapeHtml(closed.cash_difference)}</strong></div>
-      <div class="pos-receipt__row"><span>Queda en gaveta</span><span>S/ ${escapeHtml(closed.next_opening_total)}</span></div>
-      <div class="pos-receipt__row"><span>Guardado en caja fuerte</span><span>S/ ${escapeHtml(closed.safe_deposit_total)}</span></div>
-      <div class="pos-receipt__row"><span>Enviado al banco</span><span>S/ ${escapeHtml(closed.bank_deposit_total)}</span></div>
+      <div class="pos-receipt__row pos-receipt__total"><span>Efectivo esperado</span><span>${currencySymbol()} ${escapeHtml(closed.expected_cash_total)}</span></div>
+      <div class="pos-receipt__row"><span>Efectivo contado</span><span>${currencySymbol()} ${escapeHtml(closed.counted_cash_total)}</span></div>
+      <div class="pos-receipt__row"><strong>Diferencia</strong><strong>${currencySymbol()} ${escapeHtml(closed.cash_difference)}</strong></div>
+      <div class="pos-receipt__row"><span>Queda en gaveta</span><span>${currencySymbol()} ${escapeHtml(closed.next_opening_total)}</span></div>
+      <div class="pos-receipt__row"><span>Guardado en caja fuerte</span><span>${currencySymbol()} ${escapeHtml(closed.safe_deposit_total)}</span></div>
+      <div class="pos-receipt__row"><span>Enviado al banco</span><span>${currencySymbol()} ${escapeHtml(closed.bank_deposit_total)}</span></div>
       ${number(closed.bank_deposit_total) > 0 ? `<div class="pos-receipt__row"><span>Destino banco</span><span>${escapeHtml(closed.bank_deposit_destination)}</span></div>` : ""}`;
   }
 
@@ -1657,7 +1755,7 @@
       closeDialog(byId("close-session-dialog"));
       setSessionState();
       openDialog(byId("cash-close-report-dialog"));
-      showAlert(`Caja cerrada. Diferencia: S/ ${closed.cash_difference}.`, "success");
+      showAlert(`Caja cerrada. Diferencia: ${currencySymbol()} ${closed.cash_difference}.`, "success");
     } catch (error) {
       showAlert(error.message);
     } finally {
@@ -1670,7 +1768,7 @@
     byId("credit-collection-results").innerHTML = records.length ? records.map((item) => `
       <button class="pos-search-result" type="button" data-collection-document="${item.sales_document_id}">
         <span><strong>${escapeHtml(item.document)}</strong><small>${escapeHtml(item.customer)} · Vence ${escapeHtml(item.due_date || "sin fecha")}</small></span>
-        <span><small>Total ${escapeHtml(item.currency)} ${escapeHtml(item.total)}</small><strong>Saldo ${escapeHtml(item.currency)} ${escapeHtml(item.outstanding_total)}</strong></span>
+        <span><small>Total ${escapeHtml(currencySymbol(item.currency))} ${escapeHtml(item.total)}</small><strong>Saldo ${escapeHtml(currencySymbol(item.currency))} ${escapeHtml(item.outstanding_total)}</strong></span>
       </button>`).join("") : '<div class="pos-no-results">No hay ventas a crédito pendientes.</div>';
   }
 
@@ -1692,11 +1790,11 @@
     const item = state.creditCollections.find((record) => record.sales_document_id === documentId);
     if (!item) return;
     byId("collection-document-id").value = item.sales_document_id;
-    byId("collection-currency-symbol").textContent = item.currency === "USD" ? "$" : "S/";
+    byId("collection-currency-symbol").textContent = currencySymbol(item.currency);
     byId("collection-amount").value = item.outstanding_total;
     byId("collection-amount").max = item.outstanding_total;
     byId("collection-reference").value = "";
-    byId("collection-selected-sale").innerHTML = `<div><span>${escapeHtml(item.document)} · ${escapeHtml(item.customer)}</span><strong>Saldo ${escapeHtml(item.currency)} ${escapeHtml(item.outstanding_total)}</strong></div>`;
+    byId("collection-selected-sale").innerHTML = `<div><span>${escapeHtml(item.document)} · ${escapeHtml(item.customer)}</span><strong>Saldo ${escapeHtml(currencySymbol(item.currency))} ${escapeHtml(item.outstanding_total)}</strong></div>`;
     byId("collection-means").innerHTML = state.means.map((means) => `<option value="${means.id}">${escapeHtml(means.name)}</option>`).join("");
     byId("credit-collection-form").hidden = false;
     byId("collection-amount").focus();
@@ -1722,7 +1820,7 @@
         }),
       });
       byId("credit-collection-form").hidden = true;
-      showAlert(`Cobranza registrada. Saldo pendiente: S/ ${result.outstanding_total}.`, "success");
+      showAlert(`Cobranza registrada. Saldo pendiente: ${currencySymbol()} ${result.outstanding_total}.`, "success");
       await loadCreditCollections();
     } catch (error) {
       showAlert(error.message);
@@ -1775,7 +1873,7 @@
           <label class="pos-ticket-row">
             <input type="checkbox" value="${ticket.sales_document_id}" data-ticket-total="${ticket.total}">
             <span><strong>${escapeHtml(ticket.ticket_code)}</strong><small>${new Date(ticket.completed_at).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</small></span>
-            <strong>${escapeHtml(ticket.currency)} ${escapeHtml(ticket.total)}</strong>
+            <strong>${escapeHtml(currencySymbol(ticket.currency))} ${escapeHtml(ticket.total)}</strong>
           </label>`).join("")
         : '<div class="pos-no-results">No hay Notas de Venta pendientes para este cliente hoy.</div>';
       updateConsolidationTotal();
@@ -1813,7 +1911,7 @@
         }),
       });
       closeDialog(byId("consolidation-dialog"));
-      showAlert(`Factura ${invoice.series}-${invoice.number} emitida por ${invoice.currency} ${invoice.total}.`, "success");
+      showAlert(`Factura ${invoice.series}-${invoice.number} emitida por ${currencySymbol(invoice.currency)} ${invoice.total}.`, "success");
       await loadBootstrap(state.register.id);
     } catch (error) {
       showAlert(error.message);
@@ -1927,7 +2025,7 @@
       byId("customer-search").select();
     } else if (event.key === "F8" && !openDialogs.length) {
       event.preventDefault();
-      if (!byId("checkout-button").disabled) checkout();
+      if (!byId("checkout-button").disabled) prepareCheckoutReview();
       else showAlert(checkoutProblem() || "No puede cobrar esta venta.");
     } else if (event.key === "F7" && !openDialogs.length) {
       event.preventDefault();
@@ -2053,7 +2151,10 @@
     if (!taxed) byId("quick-product-includes-tax").checked = false;
   });
   byId("add-payment").addEventListener("click", () => {
-    const means = defaultMeans();
+    const usedMeans = new Set(state.payments.map((payment) => payment.meansId));
+    const means = state.means.find((item) => item.kind !== "CASH" && !usedMeans.has(item.id))
+      || state.means.find((item) => !usedMeans.has(item.id))
+      || defaultMeans();
     if (!means) return;
     const balance = Math.max(totals().total - paymentTotal(), 0);
     state.payments.push({
@@ -2079,11 +2180,7 @@
     if (action === "reference") payment.reference = event.target.value;
     payment.automatic = false;
     markSaleDirty();
-    const balance = totals().total - paymentTotal();
-    byId("payment-balance-label").textContent = balance < -0.005
-      ? "Exceso"
-      : (state.paymentCondition === "CREDIT" ? "Saldo a crédito" : "Por cobrar");
-    byId("payment-balance").textContent = fixed(Math.abs(balance));
+    refreshPaymentCalculations();
     updateCheckoutAvailability();
   });
   byId("payment-lines").addEventListener("change", (event) => {
@@ -2092,9 +2189,12 @@
     const payment = state.payments.find((item) => item.key === number(row.dataset.paymentKey));
     if (!payment) return;
     if (event.target.dataset.paymentAction === "means") {
+      const previousMeans = state.means.find((item) => item.id === payment.meansId);
       payment.meansId = event.target.value;
+      const nextMeans = state.means.find((item) => item.id === payment.meansId);
+      if (previousMeans?.kind === "CASH" && nextMeans?.kind !== "CASH") payment.amount = payment.received;
+      if (previousMeans?.kind !== "CASH" && nextMeans?.kind === "CASH") payment.received = payment.amount;
       payment.reference = "";
-      payment.received = payment.amount;
       markSaleDirty();
       renderPayments();
     }
@@ -2173,12 +2273,16 @@
   });
   byId("save-draft-button").addEventListener("click", saveDraft);
   byId("discard-draft-button").addEventListener("click", discardDraft);
-  byId("checkout-button").addEventListener("click", checkout);
+  byId("checkout-button").addEventListener("click", prepareCheckoutReview);
+  byId("checkout-review-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    checkout();
+  });
   byId("mobile-checkout-button").addEventListener("click", () => document.body.classList.add("pos-checkout-open"));
   byId("close-mobile-checkout").addEventListener("click", () => document.body.classList.remove("pos-checkout-open"));
   byId("open-session-form").addEventListener("submit", openCashSession);
   byId("opening-currency").addEventListener("change", (event) => {
-    byId("opening-currency-symbol").textContent = event.target.value === "USD" ? "$" : "S/";
+    byId("opening-currency-symbol").textContent = currencySymbol(event.target.value);
     byId("opening-total").value = fixed(state.suggestedOpeningTotals[event.target.value] || 0);
     renderDenominations("opening-denominations");
   });
