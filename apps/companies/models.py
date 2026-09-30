@@ -131,6 +131,10 @@ class CompanyDocumentSettings(TimeStampedModel):
 class CompanyOperationalSettings(TimeStampedModel):
     """Preferencias operativas que se aplican a todos los locales de una empresa."""
 
+    class PosProductSearchMode(models.TextChoices):
+        SEARCH = "SEARCH", "Buscador rápido"
+        CATALOG = "CATALOG", "Catálogo visual por tarjetas"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.OneToOneField(
         Company, on_delete=models.CASCADE, related_name="operational_settings"
@@ -145,6 +149,11 @@ class CompanyOperationalSettings(TimeStampedModel):
     purchases_value_unit_editable = models.BooleanField(default=True)
     purchases_price_unit_editable = models.BooleanField(default=True)
     purchases_total_editable = models.BooleanField(default=False)
+    pos_product_search_mode = models.CharField(
+        max_length=10,
+        choices=PosProductSearchMode.choices,
+        default=PosProductSearchMode.SEARCH,
+    )
     price_decimal_places = models.PositiveSmallIntegerField(default=2)
     default_igv_rate = models.DecimalField(
         max_digits=5, decimal_places=2, default=Decimal("18.00")

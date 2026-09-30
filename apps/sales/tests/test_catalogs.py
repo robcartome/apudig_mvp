@@ -5,9 +5,10 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from apps.companies.models import Company, Store
+from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.partners.models import DocumentType
-from apps.sales.models import DocumentSeries
+from apps.sales.models import DocumentSeries, MeansOfPayment
+from apps.users.models import UserStore
 
 User = get_user_model()
 
@@ -18,6 +19,17 @@ class CatalogViewsTest(TestCase):
         self.user = User.objects.create_user(email="ventas@demo.com", password="test1234")
         self.company = Company.objects.create(name="Empresa Test", ruc="20000000099")
         self.store = Store.objects.create(company=self.company, name="Sucursal 1")
+        UserCompanyAccess.objects.create(
+            user=self.user,
+            company=self.company,
+            store=self.store,
+        )
+        UserStore.objects.create(
+            user=self.user,
+            store=self.store,
+            role="ADMIN",
+            is_active=True,
+        )
         self.cot_type = DocumentType.objects.create(code="COT", name="CotizaciÃ³n", category="INTERNAL")
 
         self.client.login(username="ventas@demo.com", password="test1234")
@@ -84,6 +96,29 @@ class CatalogViewsTest(TestCase):
         self.assertRedirects(resp, reverse("sales:series_list"))
         obj.refresh_from_db()
         self.assertFalse(obj.active)
+
+    def test_means_of_payment_form_renders_and_creates_all_required_fields(self):
+        get_response = self.client.get(reverse("sales:means_of_payment_create"))
+
+        self.assertEqual(get_response.status_code, 200)
+        self.assertContains(get_response, 'name="kind"')
+        self.assertContains(get_response, 'name="requires_reference"')
+
+        response = self.client.post(reverse("sales:means_of_payment_create"), {
+            "name": "Yape",
+            "kind": "DIGITAL_WALLET",
+            "requires_reference": "on",
+            "active": "on",
+        })
+
+        self.assertRedirects(
+            response,
+            f"{reverse('users:configuracion')}?item=medios_pago",
+            fetch_redirect_response=False,
+        )
+        means = MeansOfPayment.objects.get(company=self.company, name="Yape")
+        self.assertEqual(means.kind, MeansOfPayment.Kind.DIGITAL_WALLET)
+        self.assertTrue(means.requires_reference)
 
     # â”€â”€ BusinessDocumentType â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

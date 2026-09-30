@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Punto de venta | APUDIG{% endblock %}
+{% block body_class %}pos-page{% endblock %}
+
+{% block extra_css %}
+  <link href="{% static 'css/pos.css' %}?v=20260929-7" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<main
+  id="pos-app"
+  class="pos-shell"
+  data-product-search-mode="{{ pos_product_search_mode|default:'SEARCH' }}"
+  data-bootstrap-url="{% url 'api_v1_pos_bootstrap' %}"
+  data-products-url="{% url 'api_v1_pos_products' %}"
+  data-product-create-url="{% url 'api_v1_pos_product_create' %}"
+  data-product-commercial-url="/api/v1/pos/products/{id}/commercial/"
+  data-customers-url="{% url 'api_v1_pos_customer_create' %}"
+  data-open-url="{% url 'api_v1_pos_session_open' %}"
+  data-checkout-url="{% url 'api_v1_pos_checkout' %}"
+  data-draft-url="{% url 'api_v1_pos_draft' %}"
+  data-invoiceable-url="{% url 'api_v1_pos_invoiceable_tickets' %}"
+  data-invoice-request-url="{% url 'api_v1_pos_invoice_request' %}"
+  data-consolidate-url="{% url 'api_v1_pos_consolidated_invoice' %}"
+  data-recent-sales-url="{% url 'api_v1_pos_recent_transactions' %}"
+  data-collections-url="{% url 'api_v1_pos_collections' %}"
+  data-config-url="{% url 'pos:register_list' %}"
+  data-sales-report-url="{% url 'pos:transaction_list' %}"
+  data-dashboard-url="{% url 'dashboard' %}"
+>
+  {% csrf_token %}
+  <div id="pos-live-region" class="visually-hidden" aria-live="polite"></div>
+
+  <header class="pos-header">
+    <div class="pos-header__identity">
+      <a class="pos-icon-button" href="{% url 'dashboard' %}" aria-label="Volver al dashboard">
+        <i class="ti ti-arrow-left"></i>
+      </a>
+      <div>
+        <h1>Nueva venta</h1>
+        <p>{{ active_company.name }} · {{ active_store.name }}</p>
+      </div>
+    </div>
+    <div class="pos-header__session">
+      <label class="visually-hidden" for="pos-register">Caja</label>
+      <select id="pos-register" class="form-select" aria-label="Caja de venta"></select>
+      <span id="session-state" class="pos-session-pill is-loading">
+        <span class="pos-session-dot"></span><span>Cargando caja…</span>
+      </span>
+      <div class="dropdown">
+        <button class="pos-icon-button" type="button" data-bs-toggle="dropdown" aria-label="Operaciones de caja">
+          <i class="ti ti-settings"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <button id="open-movement" class="dropdown-item" type="button">
+            <i class="ti ti-arrows-exchange me-2"></i>Ingreso o retiro
+          </button>
+          <button id="open-consolidation" class="dropdown-item" type="button">
+            <i class="ti ti-files me-2"></i>Consolidar tickets
+          </button>
+          <button id="open-reprints" class="dropdown-item" type="button">
+            <i class="ti ti-printer me-2"></i>Reimprimir comprobante
+          </button>
+          <button id="open-collections" class="dropdown-item" type="button">
+            <i class="ti ti-cash-register me-2"></i>Cobrar venta a crédito
+          </button>
+          <div class="dropdown-divider"></div>
+          <button id="open-close-session" class="dropdown-item text-danger" type="button">
+            <i class="ti ti-lock me-2"></i>Cerrar caja
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="pos-alert" class="pos-alert" role="alert" hidden>
+    <i class="ti ti-alert-circle"></i>
+    <span id="pos-alert-message"></span>
+    <button type="button" id="dismiss-alert" aria-label="Cerrar aviso"><i class="ti ti-x"></i></button>
+  </div>
+
+  <div id="pos-readiness" class="pos-readiness" hidden>
+    <div>
+      <i class="ti ti-settings-alert"></i>
+      <span id="pos-readiness-message">El punto de venta necesita configuración.</span>
+    </div>
+    {% if can_manage_pos %}<a class="btn btn-primary btn-sm" href="{% url 'pos:register_list' %}">Configurar POS</a>{% endif %}
+  </div>
+
+  <nav class="pos-command-bar" aria-label="Acciones rápidas del punto de venta">
+    <div class="pos-command-actions">
+      <button id="quick-sales-history" type="button"><i class="ti ti-receipt"></i><span>Ventas POS</span><kbd>F10</kbd></button>
+      <button id="quick-cash-movement" type="button"><i class="ti ti-arrows-exchange"></i><span>Vales de caja</span><kbd>F9</kbd></button>
+      <button id="quick-collections" type="button"><i class="ti ti-cash-register"></i><span>Cobranzas</span></button>
+      <button id="quick-close-session" type="button" class="is-danger"><i class="ti ti-lock"></i><span>Cerrar caja</span></button>
+    </div>
+    <div class="pos-keyboard-help" aria-label="Atajos de teclado">
+      <span><kbd>F2</kbd> Producto</span>
+      <span><kbd>F4</kbd> Cliente</span>
+      <span><kbd>Alt+1/2/3</kbd> Documento</span>
+      <span><kbd>F8</kbd> Cobrar</span>
+      <span><kbd>F7</kbd> Guardar borrador</span>
+      <span><kbd>Alt+Q/P/G/M</kbd> Cantidad / precio / descuento / memo</span>
+    </div>
+  </nav>
+
+  <div class="pos-workspace">
+    <section class="pos-sale-panel" aria-label="Productos de la venta">
+      <div class="pos-search-wrap">
+        <div class="pos-search">
+          <span class="pos-search__icon"><i class="ti ti-search"></i></span>
+          <label class="visually-hidden" for="product-search">Buscar producto</label>
+          <input
+            id="product-search"
+            type="search"
+            autocomplete="off"
+            placeholder="Buscar por nombre, código o escanear código de barras"
+            aria-controls="product-results"
+            aria-expanded="false"
+          >
+          <kbd>F2</kbd>
+        </div>
+        <div id="product-results" class="pos-search-results" role="listbox" hidden></div>
+      </div>
+
+      <div id="pos-catalog-browser" class="pos-catalog-browser"{% if pos_product_search_mode != 'CATALOG' %} hidden{% endif %}>
+        <div class="pos-catalog-toolbar">
+          <div id="category-filters" class="pos-category-filters" aria-label="Categorías de productos"></div>
+          <button id="refresh-catalog" class="pos-icon-button" type="button" aria-label="Actualizar catálogo" title="Actualizar catálogo">
+            <i class="ti ti-refresh"></i>
+          </button>
+        </div>
+        <div id="product-catalog" class="pos-product-catalog" aria-label="Catálogo de productos">
+          <div class="pos-catalog-empty">Seleccione una caja para cargar los productos.</div>
+        </div>
+      </div>
+
+      <div class="pos-cart-heading">
+        <div>
+          <h2>Productos</h2>
+          <span id="cart-count">0 artículos</span>
+        </div>
+        <button id="clear-cart" class="btn btn-ghost-secondary btn-sm" type="button" disabled>
+          <i class="ti ti-trash me-1"></i>Limpiar
+        </button>
+      </div>
+
+      <div id="cart-empty" class="pos-empty">
+        <div class="pos-empty__icon"><i class="ti ti-package"></i></div>
+        <h2>Agrega el primer producto</h2>
+        <p>Busca por nombre, SKU o usa el lector de código de barras.</p>
+      </div>
+
+      <div id="cart-table-wrap" class="pos-cart-table-wrap" hidden>
+        <table class="pos-cart-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Precio U.</th>
+              <th>Impuesto</th>
+              <th class="text-end">Total</th>
+              <th><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody id="cart-lines"></tbody>
+        </table>
+      </div>
+
+      <div class="pos-sale-footer">
+        <div class="pos-notes">
+          <label for="sale-notes">Observación de venta</label>
+          <textarea id="sale-notes" rows="2" maxlength="1000" placeholder="Información visible para la operación"></textarea>
+        </div>
+        <dl class="pos-totals" aria-label="Totales de la venta">
+          <div><dt>Subtotal</dt><dd><span class="currency-label">S/</span> <span id="subtotal">0.00</span></dd></div>
+          <div id="global-discount-row">
+            <dt><label for="global-discount">Descuento global</label></dt>
+            <dd><span class="currency-label">S/</span> <input id="global-discount" class="pos-global-discount" type="number" min="0" step="0.01" value="0.00" inputmode="decimal"></dd>
+          </div>
+          <div><dt>Descuento</dt><dd><span class="currency-label">S/</span> <span id="discount-total">0.00</span></dd></div>
+          <div><dt>IGV</dt><dd><span class="currency-label">S/</span> <span id="igv-total">0.00</span></dd></div>
+          <div class="pos-totals__grand"><dt>Total</dt><dd><span class="currency-label">S/</span> <span id="sale-total">0.00</span></dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <aside id="checkout-panel" class="pos-checkout-panel" aria-label="Cobro">
+      <div class="pos-mobile-sheet-handle" aria-hidden="true"></div>
+      <div class="pos-checkout-heading">
+        <div>
+          <span>Cobro</span>
+          <strong><span class="currency-label">S/</span> <span id="checkout-total">0.00</span></strong>
+        </div>
+        <button id="close-mobile-checkout" class="pos-icon-button pos-mobile-only" type="button" aria-label="Cerrar cobro">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+
+      <fieldset class="pos-document-types">
+        <legend>Documento</legend>
+        <div class="pos-segmented" role="group" aria-label="Tipo de documento">
+          <button type="button" data-document-type="NV" class="active">Nota de venta</button>
+          <button type="button" data-document-type="03">Boleta</button>
+          <button type="button" data-document-type="01">Factura</button>
+        </div>
+        <label for="document-series">Serie</label>
+        <select id="document-series" class="form-select"></select>
+      </fieldset>
+
+      <fieldset class="pos-payment-conditions">
+        <legend>Condición de pago</legend>
+        <div class="pos-segmented pos-segmented--two" role="group" aria-label="Condición de pago">
+          <button type="button" data-payment-condition="CASH" class="active">Contado</button>
+          <button type="button" data-payment-condition="CREDIT">Crédito</button>
+        </div>
+        <label for="payment-method">Condición comercial</label>
+        <select id="payment-method" class="form-select"></select>
+        <div id="credit-due-wrap" class="pos-credit-due" hidden>
+          <label for="credit-due-date">Fecha de vencimiento</label>
+          <input id="credit-due-date" class="form-control" type="date">
+          <small>El saldo se registrará pendiente de cobro.</small>
+        </div>
+      </fieldset>
+
+      <section class="pos-checkout-section">
+        <div class="pos-section-title">
+          <h2 id="payments-title">Pagos</h2>
+          <button id="add-payment" type="button"><i class="ti ti-plus"></i> Agregar</button>
+        </div>
+        <div id="payment-lines" class="pos-payment-lines"></div>
+        <div class="pos-payment-balance">
+          <span id="payment-balance-label">Por cobrar</span>
+          <strong><span class="currency-label">S/</span> <span id="payment-balance">0.00</span></strong>
+        </div>
+      </section>
+
+      <section class="pos-checkout-section pos-customer-section">
+        <div class="pos-section-title">
+          <h2>Cliente</h2>
+          <button id="new-customer" type="button"><i class="ti ti-user-plus"></i> Nuevo</button>
+        </div>
+        <div class="pos-customer-search">
+          <i class="ti ti-search"></i>
+          <label class="visually-hidden" for="customer-search">Buscar cliente</label>
+          <input id="customer-search" type="search" autocomplete="off" placeholder="Nombre, DNI o RUC">
+        </div>
+        <div id="customer-results" class="pos-customer-results" role="listbox" hidden></div>
+        <div id="selected-customer" class="pos-customer-card" hidden>
+          <div class="pos-customer-card__avatar"><i class="ti ti-user"></i></div>
+          <div>
+            <strong id="customer-name"></strong>
+            <span id="customer-document"></span>
+            <small id="customer-address"></small>
+          </div>
+          <button id="clear-customer" type="button" aria-label="Quitar cliente"><i class="ti ti-x"></i></button>
+        </div>
+      </section>
+
+      <section class="pos-checkout-section pos-sale-options">
+        <div>
+          <label for="sale-price-list">Lista de precios</label>
+          <select id="sale-price-list" class="form-select"></select>
+        </div>
+        <div>
+          <label for="sale-currency">Moneda</label>
+          <select id="sale-currency" class="form-select">
+            <option value="PEN">Soles (PEN)</option>
+            <option value="USD">Dólares (USD)</option>
+          </select>
+        </div>
+        <div id="exchange-rate-wrap" hidden>
+          <label for="exchange-rate">Tipo de cambio</label>
+          <input id="exchange-rate" class="form-control" type="number" min="0.000001" step="0.000001" value="1">
+        </div>
+      </section>
+
+      <div class="pos-checkout-action mb-2">
+        <button id="save-draft-button" class="btn btn-outline-primary mb-2" type="button" disabled>
+          <i class="ti ti-device-floppy me-1"></i>Guardar borrador <kbd>F7</kbd>
+        </button>
+        <button id="discard-draft-button" class="btn btn-outline-danger mb-2" type="button" hidden>
+          <i class="ti ti-trash me-1"></i>Descartar borrador
+        </button>
+        <button id="checkout-button" class="btn btn-primary" type="button" disabled>
+          <span>Guardar y cobrar</span>
+          <strong><span class="currency-label">S/</span> <span id="checkout-button-total">0.00</span></strong>
+        </button>
+        <p><i class="ti ti-lock"></i> La venta y el stock se registran en una sola operación.</p>
+      </div>
+    </aside>
+  </div>
+
+  <button id="mobile-checkout-button" class="pos-mobile-checkout-button" type="button" disabled>
+    <span><i class="ti ti-cash"></i> Cobrar</span>
+    <strong><span class="currency-label">S/</span> <span id="mobile-checkout-total">0.00</span></strong>
+  </button>
+
+  <dialog id="open-session-dialog" class="pos-dialog" data-static="true">
+    <form id="open-session-form" method="dialog">
+      <div class="pos-dialog__icon is-primary"><i class="ti ti-lock-open"></i></div>
+      <h2>Abrir caja</h2>
+      <p>Registra el fondo inicial antes de comenzar a vender.</p>
+      <label for="opening-currency">Moneda de la sesión</label>
+      <select id="opening-currency" class="form-select"><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option></select>
+      <label for="opening-total">Fondo inicial</label>
+      <div class="pos-money-input"><span id="opening-currency-symbol">S/</span><input id="opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
+      <details class="pos-cash-details">
+        <summary>Contar por denominaciones</summary>
+        <div id="opening-denominations" class="pos-denomination-grid"></div>
+      </details>
+      <label for="opening-note">Nota <span>(opcional)</span></label>
+      <textarea id="opening-note" rows="2" maxlength="500"></textarea>
+      <button class="btn btn-primary w-100" type="submit">Abrir caja</button>
+    </form>
+  </dialog>
+
+  <dialog id="cash-movement-dialog" class="pos-dialog pos-dialog--wide">
+    <form id="cash-movement-form" method="dialog">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Vale de caja</h2>
+      <p>Registra ingresos, salidas, depósitos o retiros ajenos a una venta. El movimiento queda auditado en el turno.</p>
+      <label for="movement-type">Tipo</label>
+      <select id="movement-type" class="form-select">
+        <option value="PAY_IN">Vale de ingreso</option>
+        <option value="PAY_OUT">Vale de salida</option>
+        <option value="WITHDRAWAL" data-requires-movement-authorization>Depósito en caja fuerte / retiro preventivo</option>
+        <option value="DEPOSIT" data-requires-movement-authorization>Depósito (requiere autorización)</option>
+      </select>
+      <label for="movement-amount">Importe</label>
+      <div class="pos-money-input"><span>S/</span><input id="movement-amount" type="number" min="0.01" step="0.01" required></div>
+      <label for="movement-description">Motivo</label>
+      <textarea id="movement-description" rows="2" maxlength="500" required></textarea>
+      <label for="movement-reason-code">Categoría <span>(opcional)</span></label>
+      <select id="movement-reason-code" class="form-select">
+        <option value="">Sin categoría</option>
+        <option value="CHANGE_FUND">Fondo de cambio</option>
+        <option value="MINOR_EXPENSE">Gasto menor</option>
+        <option value="SAFE_WITHDRAWAL">Depósito en caja fuerte (safe drop)</option>
+        <option value="BANK_DEPOSIT">Depósito bancario</option>
+        <option value="OTHER">Otro</option>
+      </select>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button class="btn btn-primary" type="submit">Registrar</button>
+      </div>
+      <section class="pos-dialog-history">
+        <h3>Vales y movimientos del turno</h3>
+        <div id="cash-movement-history" class="pos-cash-ledger"><div class="pos-no-results">Sin movimientos registrados.</div></div>
+      </section>
+    </form>
+  </dialog>
+
+  <dialog id="credit-collection-dialog" class="pos-dialog pos-dialog--wide">
+    <div>
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Cobranza de venta a crédito</h2>
+      <p>Busca una venta pendiente y registra el dinero recibido en la sesión actual.</p>
+      <div class="pos-search mb-3"><span class="pos-search__icon"><i class="ti ti-search"></i></span><input id="collection-search" type="search" placeholder="Documento, cliente o RUC"></div>
+      <div id="credit-collection-results" class="pos-dialog-history"><div class="pos-no-results">Busca una venta a crédito pendiente.</div></div>
+      <form id="credit-collection-form" hidden>
+        <input id="collection-document-id" type="hidden">
+        <div id="collection-selected-sale" class="pos-cash-summary"></div>
+        <label for="collection-means">Medio de pago</label><select id="collection-means" class="form-select" required></select>
+        <label for="collection-amount">Importe a cobrar</label><div class="pos-money-input"><span id="collection-currency-symbol">S/</span><input id="collection-amount" type="number" min="0.01" step="0.01" required></div>
+        <label for="collection-reference">Referencia <span>(según medio)</span></label><input id="collection-reference" class="form-control" maxlength="120">
+        <div class="pos-dialog__actions"><button class="btn btn-outline-secondary" type="button" data-cancel-collection>Cancelar selección</button><button class="btn btn-primary" type="submit">Registrar cobranza</button></div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="close-session-dialog" class="pos-dialog pos-dialog--cash-close">
+    <form id="close-session-form" method="dialog">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Cierre de caja</h2>
+      <p>Revisa el turno, los medios de pago y los vales antes de declarar el efectivo contado.</p>
+      <div id="cash-close-summary" class="pos-cash-summary" aria-live="polite">
+        <span>Cargando resumen de caja…</span>
+      </div>
+      <div id="cash-close-details" class="pos-cash-close-details"></div>
+      <label for="counted-cash">Efectivo contado</label>
+      <div class="pos-money-input"><span>S/</span><input id="counted-cash" type="number" min="0" step="0.01" required></div>
+      <div id="cash-difference-preview" class="pos-cash-difference"></div>
+      <details class="pos-cash-details">
+        <summary>Contar efectivo por denominaciones</summary>
+        <div id="closing-denominations" class="pos-denomination-grid"></div>
+      </details>
+      <div id="close-tender-counts" class="pos-tender-counts"></div>
+      <label for="next-opening-total">Fondo para la siguiente apertura</label>
+      <div class="pos-money-input"><span>S/</span><input id="next-opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
+      <div class="pos-closing-allocation">
+        <label for="safe-deposit-total"><span>Guardar en caja fuerte</span><small>Queda bajo custodia de la tienda</small></label>
+        <div class="pos-money-input"><span>S/</span><input id="safe-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
+        <label for="bank-deposit-total"><span>Enviar directamente al banco</span><small>Dinero separado para depósito</small></label>
+        <div class="pos-money-input"><span>S/</span><input id="bank-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
+        <label id="bank-deposit-destination-label" for="bank-deposit-destination" hidden><span>Banco / cuenta destino</span><small>Ej.: BCP cuenta corriente</small></label>
+        <input id="bank-deposit-destination" class="form-control" maxlength="200" placeholder="Banco y cuenta destino" hidden>
+      </div>
+      <div id="cash-allocation-preview" class="pos-cash-difference"></div>
+      <label for="closing-note">Observación <span id="closing-note-hint">(opcional)</span></label>
+      <textarea id="closing-note" rows="2" maxlength="500"></textarea>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button id="close-session-submit" class="btn btn-danger" type="submit">Cerrar caja</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="cash-close-report-dialog" class="pos-dialog pos-dialog--wide">
+    <div>
+      <button class="pos-dialog__close d-print-none" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <div class="pos-dialog__icon is-success"><i class="ti ti-check"></i></div>
+      <h2>Caja cerrada</h2>
+      <p>Resumen final de la sesión. Puedes imprimirlo para el control interno.</p>
+      <div id="cash-close-report" class="pos-receipt"></div>
+      <div class="pos-dialog__actions d-print-none">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cerrar</button>
+        <button class="btn btn-primary" type="button" onclick="window.print()"><i class="ti ti-printer me-1"></i>Imprimir</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="customer-dialog" class="pos-dialog pos-dialog--wide">
+    <form id="customer-form" method="dialog">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Nuevo cliente</h2>
+      <div class="pos-form-grid">
+        <div>
+          <label for="customer-document-type">Tipo de documento</label>
+          <select id="customer-document-type" class="form-select">
+            <option value="1">DNI</option>
+            <option value="6">RUC</option>
+            <option value="0">Sin documento</option>
+            <option value="4">Carné de extranjería</option>
+            <option value="7">Pasaporte</option>
+          </select>
+        </div>
+        <div>
+          <label for="customer-document-number">Número</label>
+          <input id="customer-document-number" class="form-control" maxlength="20" required>
+        </div>
+        <div class="pos-form-grid__full">
+          <label for="customer-legal-name">Nombre o razón social</label>
+          <input id="customer-legal-name" class="form-control" maxlength="300" required>
+        </div>
+        <div class="pos-form-grid__full">
+          <label for="customer-address-input">Dirección</label>
+          <input id="customer-address-input" class="form-control" maxlength="500">
+        </div>
+        <div>
+          <label for="customer-phone">Teléfono</label>
+          <input id="customer-phone" class="form-control" maxlength="30">
+        </div>
+        <div>
+          <label for="customer-email">Correo</label>
+          <input id="customer-email" class="form-control" type="email" maxlength="200">
+        </div>
+      </div>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button class="btn btn-primary" type="submit">Guardar cliente</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="product-commercial-dialog" class="pos-dialog pos-dialog--large">
+    <div>
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2 id="product-commercial-title">Información del producto</h2>
+      <p id="product-commercial-subtitle"></p>
+      <div id="product-commercial-content" class="pos-commercial-content"><div class="pos-no-results">Cargando…</div></div>
+      <div class="pos-dialog__actions"><button class="btn btn-outline-secondary" type="button" data-close-dialog>Cerrar</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="quick-product-dialog" class="pos-dialog pos-dialog--large">
+    <form id="quick-product-form">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Nuevo producto / servicio</h2>
+      <p>Registra los datos indispensables para incorporarlo inmediatamente a la venta.</p>
+      <div id="quick-product-error" class="pos-form-error" hidden><i class="ti ti-alert-circle"></i><span></span></div>
+      <label class="pos-product-kind"><input id="quick-product-stock" type="checkbox" checked><span><i class="ti ti-circle-check"></i> Controla stock</span></label>
+      <div class="pos-quick-product-grid">
+        <label for="quick-product-name">Nombre <b>*</b></label><input id="quick-product-name" class="form-control" maxlength="500" required>
+        <label for="quick-product-sku">Código <b>*</b></label><input id="quick-product-sku" class="form-control" maxlength="100" required>
+        <label for="quick-product-barcode">Código de barras</label><input id="quick-product-barcode" class="form-control" maxlength="100">
+        <label for="quick-product-price">Precio de venta <b>*</b></label><div class="input-group"><span class="input-group-text">S/</span><input id="quick-product-price" class="form-control text-end" type="number" min="0" step="0.01" required><span class="input-group-text"><label class="m-0"><input id="quick-product-includes-tax" type="checkbox" checked> Con IGV</label></span></div>
+        <label for="quick-product-tax">Impuesto <b>*</b></label><select id="quick-product-tax" class="form-select"><option value="10">Gravado · IGV 18%</option><option value="20">Exonerado · 0%</option><option value="30">Inafecto · 0%</option><option value="40">Exportación · 0%</option></select>
+        <label for="quick-product-unit">Unidad <b>*</b></label><select id="quick-product-unit" class="form-select" required></select>
+        <label for="quick-product-category">Categoría</label><select id="quick-product-category" class="form-select"><option value="">Sin categoría</option></select>
+      </div>
+      <div class="pos-dialog__actions"><button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button><button class="btn btn-primary" type="submit"><i class="ti ti-check me-1"></i>Guardar y agregar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="line-memo-dialog" class="pos-dialog pos-dialog--wide">
+    <form id="line-memo-form" method="dialog">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2><i class="ti ti-notes me-2"></i>Información adicional del ítem</h2>
+      <p id="line-memo-product" class="text-muted"></p>
+      <label for="line-memo-text">Memo del producto</label>
+      <textarea id="line-memo-text" class="form-control" rows="5" maxlength="500" placeholder="Ej.: color, medida, presentación, instrucciones u otra observación..."></textarea>
+      <div class="d-flex justify-content-between form-hint"><span>Máximo 500 caracteres.</span><span id="line-memo-count">0/500</span></div>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button class="btn btn-primary" type="submit"><i class="ti ti-check me-1"></i>Guardar información</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="consolidation-dialog" class="pos-dialog pos-dialog--large">
+    <form id="consolidation-form" method="dialog">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Consolidar tickets del día</h2>
+      <p id="consolidation-help">Selecciona primero un cliente con RUC en la venta para buscar sus Notas de Venta.</p>
+      <div id="invoiceable-tickets" class="pos-ticket-list"></div>
+      <div class="pos-consolidation-footer">
+        <label for="invoice-series">Serie de factura</label>
+        <select id="invoice-series" class="form-select"></select>
+        <div><span>Total seleccionado</span><strong>S/ <span id="consolidation-total">0.00</span></strong></div>
+      </div>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button id="consolidate-button" class="btn btn-primary" type="submit" disabled>Emitir factura consolidada</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="success-dialog" class="pos-dialog pos-dialog--receipt">
+    <div>
+      <button class="pos-dialog__close d-print-none" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <div class="pos-success d-print-none">
+        <div class="pos-dialog__icon is-success"><i class="ti ti-check"></i></div>
+        <h2>Venta registrada</h2>
+        <p>La operación se guardó correctamente.</p>
+      </div>
+      <article id="pos-receipt" class="pos-receipt"></article>
+      <div class="pos-dialog__actions d-print-none">
+        <button id="new-sale-button" class="btn btn-outline-secondary" type="button">Nueva venta</button>
+        <button id="return-sale-button" class="btn btn-outline-danger" type="button">
+          <i class="ti ti-arrow-back-up me-1"></i>Devolver
+        </button>
+        <button id="debit-note-button" class="btn btn-outline-secondary" type="button">
+          <i class="ti ti-file-plus me-1"></i>Nota de débito
+        </button>
+        <select id="receipt-width" class="form-select pos-receipt-width" aria-label="Ancho del ticket">
+          <option value="80">Ticket 80 mm</option>
+          <option value="58">Ticket 58 mm</option>
+        </select>
+        <a id="receipt-a4-button" class="btn btn-outline-secondary" href="#" target="_blank" rel="noopener">
+          <i class="ti ti-file-type-pdf me-1"></i>A4 / PDF
+        </a>
+        <button id="print-receipt-button" class="btn btn-primary" type="button"><i class="ti ti-printer me-1"></i>Imprimir</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="debit-note-dialog" class="pos-dialog">
+    <form id="debit-note-form">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Emitir Nota de Débito</h2>
+      <p>Registra un cargo adicional relacionado con la factura o boleta.</p>
+      <label for="debit-note-series">Serie</label>
+      <select id="debit-note-series" class="form-select" required></select>
+      <label for="debit-note-description">Concepto</label>
+      <input id="debit-note-description" class="form-control" maxlength="500" required>
+      <label for="debit-note-amount">Valor neto sin IGV</label>
+      <input id="debit-note-amount" class="form-control" type="number" min="0.01" step="0.01" required>
+      <label for="debit-note-reason">Motivo</label>
+      <textarea id="debit-note-reason" class="form-control" maxlength="500" rows="2" required></textarea>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button class="btn btn-primary" type="submit">Emitir Nota de Débito</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="return-dialog" class="pos-dialog">
+    <form id="return-form">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Registrar devolución</h2>
+      <p>Selecciona las cantidades recibidas. Esta operación devuelve stock y ajusta la caja actual.</p>
+      <div id="return-lines" class="pos-return-lines"></div>
+      <div id="return-credit-series-wrap">
+        <label for="return-credit-series">Serie de Nota de Crédito</label>
+        <select id="return-credit-series" class="form-select"></select>
+      </div>
+      <label for="return-reason">Motivo</label>
+      <textarea id="return-reason" class="form-control" maxlength="500" rows="2" required></textarea>
+      <label for="return-means">Medio de devolución</label>
+      <select id="return-means" class="form-select" required></select>
+      <label for="return-reference">Referencia de operación</label>
+      <input id="return-reference" class="form-control" maxlength="120">
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button class="btn btn-danger" type="submit">Confirmar devolución</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="reprint-dialog" class="pos-dialog">
+    <div>
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Historial de ventas POS</h2>
+      <p>Los borradores de la caja abierta se pueden recuperar y cobrar; los comprobantes emitidos se pueden reimprimir.</p>
+      <div class="row g-2 mb-3"><div class="col-7"><label for="recent-sales-scope" class="form-label">Mostrar</label><select id="recent-sales-scope" class="form-select"><option value="session">Sesión actual</option><option value="day">Ventas de hoy</option><option value="all">Últimas ventas</option></select></div><div class="col-5"><label for="recent-sales-date" class="form-label">Fecha</label><input id="recent-sales-date" class="form-control" type="date" disabled></div></div>
+      <div id="recent-sales" class="pos-ticket-list"></div>
+      <div class="pos-dialog__actions">
+        <a class="btn btn-outline-primary" href="{% url 'pos:transaction_list' %}">Reporte por caja</a>
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="pos-loading" class="pos-loading" hidden>
+    <span class="spinner-border" aria-hidden="true"></span>
+    <strong id="pos-loading-text">Procesando…</strong>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/pos.js' %}?v=20260929-8"></script>
+{% endblock %}

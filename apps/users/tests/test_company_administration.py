@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.companies.models import Company, Store, UserCompanyAccess
+from apps.companies.models import Company, CompanyOperationalSettings, Store, UserCompanyAccess
 from apps.users.models import Role, UserRole, UserStore
 
 
@@ -211,6 +211,28 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Admin tienda")
         self.assertContains(response, self.store_a.name)
+
+    def test_company_admin_can_enable_visual_pos_catalog(self):
+        self.activate(self.company_admin)
+
+        response = self.client.post(reverse("users:configuracion"), {
+            "settings_form": "operational",
+            "price_decimal_places": "2",
+            "default_igv_rate": "18.00",
+            "pos_product_search_mode": "CATALOG",
+            "inventory_quantity_editable": "on",
+            "inventory_unit_cost_editable": "on",
+            "sales_price_unit_editable": "on",
+            "purchases_value_unit_editable": "on",
+            "purchases_price_unit_editable": "on",
+        })
+
+        self.assertRedirects(response, reverse("users:configuracion"))
+        settings = CompanyOperationalSettings.objects.get(company=self.company)
+        self.assertEqual(
+            settings.pos_product_search_mode,
+            CompanyOperationalSettings.PosProductSearchMode.CATALOG,
+        )
 
     def test_spoofed_store_session_is_cleared(self):
         self.activate(self.seller, company=self.other_company, store=self.other_store)

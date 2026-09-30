@@ -1,5 +1,5 @@
 {% if status == "DRAFT" %}<span class="badge bg-secondary-lt text-secondary">{{ label }}</span>
-{% elif status == "REGISTERED" or status == "CONFIRMED" or status == "ISSUED" or status == "PAID" or status == "RECEIVED" %}<span class="badge bg-success-lt text-success">{{ label }}</span>
+{% elif status == "REGISTERED" or status == "CONFIRMED" or status == "ISSUED" or status == "PAID" or status == "RECEIVED" or status == "OPEN" %}<span class="badge bg-success-lt text-success">{{ label }}</span>
 {% elif status == "PARTIALLY_PAID" %}<span class="badge bg-info-lt text-info">{{ label }}</span>
 {% elif status == "PARTIALLY_RECEIVED" %}<span class="badge bg-info-lt text-info">{{ label }}</span>
 {% elif status == "UNPAID" %}<span class="badge bg-warning-lt text-warning">{{ label }}</span>

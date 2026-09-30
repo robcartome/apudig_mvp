@@ -76,10 +76,32 @@ class Permission(models.Model):
     ACTION_READ = "read"
     ACTION_MANAGE = "manage"
     ACTION_AUTHORIZE = "authorize"
+    ACTION_SELL = "sell"
+    ACTION_OPEN = "open"
+    ACTION_CLOSE = "close"
+    ACTION_CHANGE = "change"
+    ACTION_APPLY = "apply"
+    ACTION_CREATE = "create"
+    ACTION_ISSUE = "issue"
+    ACTION_CONSOLIDATE = "consolidate"
+    ACTION_VOID = "void"
+    ACTION_REFUND = "refund"
+    ACTION_REPRINT = "reprint"
     ACTION_CHOICES = [
         (ACTION_READ, "Leer"),
         (ACTION_MANAGE, "Gestionar"),
         (ACTION_AUTHORIZE, "Autorizar"),
+        (ACTION_SELL, "Vender"),
+        (ACTION_OPEN, "Abrir"),
+        (ACTION_CLOSE, "Cerrar"),
+        (ACTION_CHANGE, "Cambiar"),
+        (ACTION_APPLY, "Aplicar"),
+        (ACTION_CREATE, "Crear"),
+        (ACTION_ISSUE, "Emitir"),
+        (ACTION_CONSOLIDATE, "Consolidar"),
+        (ACTION_VOID, "Anular"),
+        (ACTION_REFUND, "Devolver"),
+        (ACTION_REPRINT, "Reimprimir"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

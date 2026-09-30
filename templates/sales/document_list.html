@@ -37,6 +37,7 @@
           {% sortable_header "customer" "Cliente" %}
           {% sortable_header "total" "Total" "text-end" %}
           {% sortable_header "status" "Estado" %}
+          <th>Origen</th>
           <th class="text-center">Operaciones</th>
         </tr>
       </thead>
@@ -53,6 +54,13 @@
           </td>
           <td class="text-end">{{ v.currency }} {{ v.total|floatformat:2 }}</td>
           <td>{% include "components/status_badge.html" with status=v.status label=v.get_status_display %}</td>
+          <td>
+            {% if v.pos_transaction %}
+              <span class="badge bg-azure-lt text-azure" title="{{ v.pos_transaction.register.name }}">POS · {{ v.pos_transaction.ticket_code }}</span>
+            {% elif v.sale_order_id %}<span class="badge bg-purple-lt text-purple">Orden de venta</span>
+            {% elif v.source_quotation_id %}<span class="badge bg-blue-lt text-blue">Cotización</span>
+            {% else %}<span class="badge bg-secondary-lt text-secondary">Ventas</span>{% endif %}
+          </td>
           <td class="text-center">
             <div class="d-inline-flex gap-1 align-items-center">
             <a href="{% url 'sales:document_detail' v.pk %}"
@@ -65,7 +73,7 @@
               <i class="ti ti-file-type-pdf"></i>
             </a>
             {% if v.status == "DRAFT" and can_manage_sales_documents %}
-            <a href="{% url 'sales:document_edit' v.pk %}" class="btn btn-sm btn-outline-primary" title="Editar documento">
+            <a href="{% if v.pos_transaction %}{% url 'pos:sale' %}?draft={{ v.pos_transaction.pk }}{% else %}{% url 'sales:document_edit' v.pk %}{% endif %}" class="btn btn-sm btn-outline-primary" title="Editar documento">
               <i class="ti ti-edit"></i>
             </a>
             {% endif %}
@@ -77,7 +85,7 @@
               </button>
             </form>
             {% endif %}
-            {% if v.status == "DRAFT" and can_authorize_sales_documents %}
+            {% if v.status == "DRAFT" and can_authorize_sales_documents and not v.pos_transaction %}
             <form method="post" action="{% url 'sales:document_issue' v.pk %}" class="d-inline"
                   onsubmit="return confirm('¿Aprobar y emitir el documento {{ v.series_code }}-{{ v.number }}?')">
               {% csrf_token %}
@@ -86,7 +94,7 @@
               </button>
             </form>
             {% endif %}
-            {% if v.status == "DRAFT" and can_manage_sales_documents %}
+            {% if v.status == "DRAFT" and can_manage_sales_documents and not v.pos_transaction %}
             <form method="post" action="{% url 'sales:document_delete' v.pk %}" class="d-inline"
                   onsubmit="return confirm('¿Eliminar definitivamente este documento borrador?')">
               {% csrf_token %}
@@ -100,11 +108,11 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
+          <td colspan="9" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot class="table-light"><tr><th colspan="8" class="text-end py-3">Total filtrado (no incluye anulados, cancelados ni rechazados):
+      <tfoot class="table-light"><tr><th colspan="9" class="text-end py-3">Total filtrado (no incluye anulados, cancelados ni rechazados):
         {% for item in filtered_totals %}<span class="ms-3">{{ item.currency }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
       </th></tr></tfoot>
     </table>

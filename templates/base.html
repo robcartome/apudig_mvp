@@ -65,7 +65,7 @@
   </style>
   {% block extra_css %}{% endblock %}
 </head>
-<body class="antialiased">
+<body class="antialiased {% block body_class %}{% endblock %}">
 <div class="app-layout">
   <!-- SIDEBAR -->
   {% include 'components/sidebar.html' %}

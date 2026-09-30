@@ -189,6 +189,11 @@ class CompanyOperationalSettingsForm(forms.ModelForm):
         max_digits=5, decimal_places=2,
         widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
     )
+    pos_product_search_mode = forms.ChoiceField(
+        label="Modo de búsqueda de productos en POS",
+        choices=CompanyOperationalSettings.PosProductSearchMode.choices,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
 
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)

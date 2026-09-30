@@ -48,7 +48,11 @@
 <div class="no-print">
   <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
   &nbsp;
+  {% if from_pos %}
+  <a href="{% url 'pos:sale' %}">← Volver al POS</a>
+  {% else %}
   <a href="{% url 'sales:document_detail' sales_document.pk %}">← Volver</a>
+  {% endif %}
 </div>
 
 <div class="doc-header">
@@ -171,6 +175,20 @@
 
 {% if sales_document.notes %}
 <div class="notes"><strong>Notas:</strong> {{ sales_document.notes }}</div>
+{% endif %}
+
+{% if sales_document.document_type.is_sunat %}
+<div class="notes">
+  <strong>Estado electrónico:</strong>
+  {% if sales_document.sunat_cdr_status %}
+    {{ sales_document.sunat_cdr_status }}
+  {% elif sales_document.sunat_response_message %}
+    Error: {{ sales_document.sunat_response_message }}
+  {% else %}
+    Pendiente de envío electrónico
+  {% endif %}
+  {% if sales_document.sunat_hash %}<br><strong>Hash:</strong> {{ sales_document.sunat_hash }}{% endif %}
+</div>
 {% endif %}
 
 <div class="footer">Documento generado por APUDIG — {{ sales_document.issue_date|date:"d/m/Y" }}</div>

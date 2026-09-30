@@ -891,6 +891,7 @@ def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
         lines=lines,
         created_by=copied_by,
         issue_date=timezone.now(),
+        due_date=source.due_date,
         currency=source.currency,
         exchange_rate=source.exchange_rate,
         global_discount_amount=source.global_discount_amount,
@@ -1150,6 +1151,7 @@ def create_credit_note(
     reason_description: str,
     series: DocumentSeries,
     lines: list[dict] | None = None,
+    global_discount_amount=None,
     created_by=None,
 ) -> SalesDocument:
     """
@@ -1167,7 +1169,8 @@ def create_credit_note(
     ):
         raise ValueError("La serie de nota de crédito no corresponde al documento original.")
 
-    if lines is None:
+    copies_full_document = lines is None
+    if copies_full_document:
         lines = [
             {
                 "product": line.product,
@@ -1185,6 +1188,11 @@ def create_credit_note(
             }
             for line in original.lines.all()
         ]
+    note_global_discount = (
+        original.global_discount_amount
+        if copies_full_document and global_discount_amount is None
+        else Decimal(str(global_discount_amount or 0)).quantize(Decimal("0.01"))
+    )
 
     note = create_sales_document_draft(
         store_id=str(original.store_id) if original.store_id else None,
@@ -1195,7 +1203,7 @@ def create_credit_note(
         created_by=created_by,
         issue_date=timezone.now(),
         currency=original.currency,
-        global_discount_amount=original.global_discount_amount,
+        global_discount_amount=note_global_discount,
         global_discount_before_tax=original.global_discount_before_tax,
         reference_document=original,
         reference_series=original.series_code,
@@ -1207,6 +1215,59 @@ def create_credit_note(
     _audit_sales_document(
         note,
         "CREATE_CREDIT_NOTE",
+        created_by,
+        reference_document_id=str(original.pk),
+        reason_code=reason_code,
+    )
+    return note
+
+
+@transaction.atomic
+def create_debit_note(
+    sales_document_id,
+    reason_code: str,
+    reason_description: str,
+    series: DocumentSeries,
+    lines: list[dict],
+    internal_reference: str = "",
+    created_by=None,
+) -> SalesDocument:
+    """Crea una nota de débito por cargos adicionales, sin movimiento de stock."""
+    original = SalesDocument.objects.select_related("customer", "store").get(
+        pk=sales_document_id
+    )
+    if original.status != "ISSUED" or original.document_type.code not in {"01", "03"}:
+        raise ValueError("La nota de débito requiere una factura o boleta emitida.")
+    if (
+        not series.active
+        or series.document_type.code != "08"
+        or series.company_id != original.store.company_id
+        or series.store_id != original.store_id
+    ):
+        raise ValueError("La serie de nota de débito no corresponde al documento original.")
+    if not lines:
+        raise ValueError("La nota de débito requiere al menos un cargo adicional.")
+
+    note = create_sales_document_draft(
+        store_id=str(original.store_id),
+        customer=original.customer,
+        document_type=DocumentType.objects.get(code="08"),
+        series=series,
+        lines=lines,
+        created_by=created_by,
+        issue_date=timezone.now(),
+        currency=original.currency,
+        reference_document=original,
+        reference_series=original.series_code,
+        reference_number=original.number,
+        note_reason_code=reason_code,
+        note_reason_description=reason_description,
+        internal_reference=internal_reference,
+        register_inventory_movement=False,
+    )
+    _audit_sales_document(
+        note,
+        "CREATE_DEBIT_NOTE",
         created_by,
         reference_document_id=str(original.pk),
         reason_code=reason_code,

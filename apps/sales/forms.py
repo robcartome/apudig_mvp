@@ -110,22 +110,55 @@ class DocumentTypeForm(forms.ModelForm):
 class PaymentMethodForm(forms.ModelForm):
     class Meta:
         model = PaymentMethod
-        fields = ("name", "is_cash", "active")
+        fields = (
+            "name", "is_cash", "receives_change", "immediate_payment",
+            "is_credit", "allows_advance", "credit_days", "active",
+        )
         widgets = {
             "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Contado, Crédito 30 días"}),
             "is_cash": forms.CheckboxInput(attrs=_check),
+            "receives_change": forms.CheckboxInput(attrs=_check),
+            "immediate_payment": forms.CheckboxInput(attrs=_check),
+            "is_credit": forms.CheckboxInput(attrs=_check),
+            "allows_advance": forms.CheckboxInput(attrs=_check),
+            "credit_days": forms.NumberInput(attrs={**_text, "min": "0", "step": "1"}),
             "active": forms.CheckboxInput(attrs=_check),
         }
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("is_credit") and cleaned.get("immediate_payment"):
+            raise forms.ValidationError("Una condición de crédito no puede ser pago inmediato.")
+        if not cleaned.get("is_credit"):
+            cleaned["credit_days"] = 0
+        if cleaned.get("receives_change") and not cleaned.get("is_cash"):
+            self.add_error("receives_change", "Solo una condición en efectivo puede recibir vuelto.")
+        return cleaned
 
 
 class MeansOfPaymentForm(forms.ModelForm):
     class Meta:
         model = MeansOfPayment
-        fields = ("name", "active")
+        fields = ("name", "kind", "requires_reference", "active")
         widgets = {
             "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Efectivo, Yape, Plin"}),
+            "kind": forms.Select(attrs=_select),
+            "requires_reference": forms.CheckboxInput(attrs=_check),
             "active": forms.CheckboxInput(attrs=_check),
         }
+
+    def __init__(self, *args, company_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company_id = company_id or self.instance.company_id
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if self.company_id and MeansOfPayment.objects.filter(
+            company_id=self.company_id,
+            name__iexact=name,
+        ).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("Ya existe un medio de pago con este nombre.")
+        return name
 
 
 # ── Cotizaciones ──────────────────────────────────────────────────────────────

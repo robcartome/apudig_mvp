@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Configuración POS | APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Configuración del Punto de Venta</h2>{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none mb-3">
+  <div class="row align-items-center">
+    <div class="col">
+      <p class="text-muted mb-0">{{ active_company.name }} · {{ active_store.name }}</p>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <a href="{% url 'pos:sale' %}" class="btn btn-outline-secondary"><i class="ti ti-cash-register me-1"></i>Abrir POS</a>
+      <a href="{% url 'pos:register_create' %}" class="btn btn-primary"><i class="ti ti-plus me-1"></i>Nueva caja</a>
+    </div>
+  </div>
+</div>
+
+<div class="row row-cards mb-3">
+  <div class="col-sm-6 col-lg"><div class="card card-sm"><div class="card-body"><div class="text-muted">Productos</div><div class="h2 mb-0">{{ readiness.products }}</div></div></div></div>
+  <div class="col-sm-6 col-lg"><div class="card card-sm"><div class="card-body"><div class="text-muted">Almacenes</div><div class="h2 mb-0">{{ readiness.warehouses }}</div></div></div></div>
+  <div class="col-sm-6 col-lg"><div class="card card-sm"><div class="card-body"><div class="text-muted">Clientes</div><div class="h2 mb-0">{{ readiness.customers }}</div></div></div></div>
+  <div class="col-sm-6 col-lg"><div class="card card-sm"><div class="card-body"><div class="text-muted">Series POS</div><div class="h2 mb-0">{{ readiness.series }}</div></div></div></div>
+  <div class="col-sm-6 col-lg"><div class="card card-sm"><div class="card-body"><div class="text-muted">Medios de pago</div><div class="h2 mb-0">{{ readiness.means }}</div></div></div></div>
+</div>
+
+{% if not readiness.ready %}
+<div class="alert alert-warning">
+  <div class="d-flex"><i class="ti ti-alert-triangle fs-2 me-2"></i><div>
+    <strong>El POS todavía no está listo para vender.</strong>
+    <div>Se requiere por lo menos una caja, un producto, un almacén, un cliente, una serie NV/boleta/factura y un medio de pago activos en esta empresa y sucursal.</div>
+  </div></div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-vcenter card-table">
+      <thead><tr><th>Código</th><th>Caja</th><th>Almacén</th><th>Lista de precios</th><th>Cliente</th><th>Documento</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        {% for register in registers %}
+        <tr>
+          <td class="fw-semibold">{{ register.code }}</td>
+          <td>{{ register.name }}</td>
+          <td>{{ register.default_warehouse|default:"—" }}</td>
+          <td>{{ register.default_price_list|default:"Precio base" }}</td>
+          <td>{{ register.default_customer|default:"—" }}</td>
+          <td>{{ register.default_document_type|default:"—" }}</td>
+          <td>{% if register.active %}<span class="badge bg-success-lt">Activa</span>{% else %}<span class="badge bg-secondary-lt">Inactiva</span>{% endif %}</td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'pos:register_update' register.pk %}"><i class="ti ti-edit me-1"></i>Editar</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-5">No hay cajas POS configuradas para esta sucursal.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

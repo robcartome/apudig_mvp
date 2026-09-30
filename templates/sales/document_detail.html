@@ -15,6 +15,11 @@
     </div>
     <div class="col-auto d-flex gap-2">
       {% if sales_document.status == "DRAFT" %}
+      {% if sales_document.pos_transaction %}
+      <a href="{% url 'pos:sale' %}?draft={{ sales_document.pos_transaction.pk }}" class="btn btn-primary btn-sm">
+        <i class="ti ti-device-desktop-dollar me-1"></i>Continuar en POS
+      </a>
+      {% else %}
       {% if can_manage_sales_documents %}
       <a href="{% url 'sales:document_edit' sales_document.pk %}" class="btn btn-primary btn-sm">
         <i class="ti ti-edit me-1"></i>Editar
@@ -37,6 +42,7 @@
           <i class="ti ti-x me-1"></i>Cancelar borrador
         </button>
       </form>
+      {% endif %}
       {% endif %}
       {% endif %}
 

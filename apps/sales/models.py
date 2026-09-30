@@ -68,6 +68,15 @@ class PaymentMethod(TimeStampedModel):
         help_text="Marcar si esta condición implica cobro inmediato (no crédito). "
                   "Cuando esté activo, se podrá seleccionar el Medio de Pago.",
     )
+    receives_change = models.BooleanField(
+        default=False,
+        verbose_name="Recibe vuelto",
+        help_text="Permite registrar un importe recibido mayor y calcular vuelto.",
+    )
+    immediate_payment = models.BooleanField(default=True, verbose_name="Pago inmediato")
+    is_credit = models.BooleanField(default=False, verbose_name="Es crédito")
+    allows_advance = models.BooleanField(default=False, verbose_name="Permite pago adelantado")
+    credit_days = models.PositiveIntegerField(default=0, verbose_name="Días de crédito")
     active = models.BooleanField(default=True)
 
     class Meta:
@@ -81,12 +90,21 @@ class PaymentMethod(TimeStampedModel):
 
 class MeansOfPayment(TimeStampedModel):
     """Medios de pago: Efectivo, Yape, Plin, etc."""
+    class Kind(models.TextChoices):
+        CASH = "CASH", "Efectivo"
+        CARD = "CARD", "Tarjeta"
+        TRANSFER = "TRANSFER", "Transferencia"
+        DIGITAL_WALLET = "DIGITAL_WALLET", "Billetera digital"
+        OTHER = "OTHER", "Otro"
+
     objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE, related_name="means_of_payments"
     )
     name = models.CharField(max_length=100, verbose_name="Nombre")
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.OTHER)
+    requires_reference = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
 
     class Meta:
@@ -310,6 +328,7 @@ class SalesDocument(TimeStampedModel):
     customer_address = models.CharField(max_length=500, blank=True)
     customer_ubigeo = models.CharField(max_length=6, blank=True)
     issue_date = models.DateTimeField()
+    due_date = models.DateField(null=True, blank=True)
     currency = models.CharField(max_length=3, default="PEN")
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=6, default=1)
     payment_method = models.ForeignKey(
