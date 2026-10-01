@@ -82,7 +82,7 @@
 <div class="section">
   <div class="section-title">Datos del documento</div>
   <div class="info-row"><span class="info-label">Tipo:</span><span>{{ order.document_type.name }}</span></div>
-  <div class="info-row"><span class="info-label">Moneda:</span><span>{{ order.currency }}</span></div>
+  <div class="info-row"><span class="info-label">Moneda:</span><span>{{ order.currency|currency_symbol }}</span></div>
   {% if order.payment_term_days %}
   <div class="info-row"><span class="info-label">Plazo pago:</span><span>{{ order.payment_term_days }} días</span></div>
   {% endif %}
@@ -131,15 +131,15 @@
   <tfoot>
     <tr>
       <td colspan="7" class="text-right">Subtotal:</td>
-      <td colspan="3" class="text-right">{{ order.currency }} {{ order.subtotal|floatformat:2 }}</td>
+      <td colspan="3" class="text-right">{{ order.currency|currency_symbol }} {{ order.subtotal|floatformat:2 }}</td>
     </tr>
     <tr>
       <td colspan="7" class="text-right">IGV:</td>
-      <td colspan="3" class="text-right">{{ order.currency }} {{ order.igv_total|floatformat:2 }}</td>
+      <td colspan="3" class="text-right">{{ order.currency|currency_symbol }} {{ order.igv_total|floatformat:2 }}</td>
     </tr>
     <tr>
       <td colspan="7" class="text-right">TOTAL:</td>
-      <td colspan="3" class="text-right">{{ order.currency }} {{ order.total|floatformat:2 }}</td>
+      <td colspan="3" class="text-right">{{ order.currency|currency_symbol }} {{ order.total|floatformat:2 }}</td>
     </tr>
   </tfoot>
 </table>

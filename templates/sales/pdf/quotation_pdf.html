@@ -114,15 +114,15 @@
     <tfoot>
       <tr>
         <td colspan="7" class="text-right">Subtotal:</td>
-        <td class="text-right">{{ quotation.currency }} {{ quotation.subtotal|floatformat:2 }}</td>
+        <td class="text-right">{{ quotation.currency|currency_symbol }} {{ quotation.subtotal|floatformat:2 }}</td>
       </tr>
       <tr>
-        <td colspan="7" class="text-right">IGV (18%):</td>
-        <td class="text-right">{{ quotation.currency }} {{ quotation.igv_total|floatformat:2 }}</td>
+        <td colspan="7" class="text-right">IGV:</td>
+        <td class="text-right">{{ quotation.currency|currency_symbol }} {{ quotation.igv_total|floatformat:2 }}</td>
       </tr>
       <tr>
         <td colspan="7" class="text-right">TOTAL:</td>
-        <td class="text-right">{{ quotation.currency }} {{ quotation.total|floatformat:2 }}</td>
+        <td class="text-right">{{ quotation.currency|currency_symbol }} {{ quotation.total|floatformat:2 }}</td>
       </tr>
     </tfoot>
   </table>

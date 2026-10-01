@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from apps.core.models import AuditLog
 from apps.inventory.models import MovementOrigin, ProductUnit, StockByWarehouse
+from apps.inventory.pricing import money
 from apps.inventory.services import (
     confirm_movement,
     register_entry,
@@ -154,15 +155,18 @@ def _calculate_line(line: dict) -> dict:
     quantity = Decimal(str(line["quantity"]))
     unit_price = Decimal(str(line["unit_price"]))
     discount = Decimal(str(line.get("discount_amount", 0)))
-    igv_rate = Decimal(str(line.get("igv_rate", 18)))
+    igv_rate = Decimal(str(line.get("igv_rate") or 0))
     tax_type = line.get("tax_type", "10")
 
     subtotal = unit_price * quantity - discount
+    if subtotal < 0:
+        raise ValueError("El descuento no puede superar el importe de la linea.")
     igv_amount = subtotal * igv_rate / Decimal("100") if tax_type == "10" else Decimal("0")
     return {
-        "subtotal": subtotal.quantize(Decimal("0.01")),
-        "igv_amount": igv_amount.quantize(Decimal("0.01")),
-        "total": (subtotal + igv_amount).quantize(Decimal("0.01")),
+        "subtotal": money(subtotal),
+        "igv_amount": money(igv_amount),
+        "total": money(subtotal + igv_amount),
+        "global_discount_amount": Decimal("0.00"),
     }
 
 
@@ -249,7 +253,7 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
             conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
+            igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
             memo=raw.get("memo", ""),
@@ -313,7 +317,7 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
             conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
+            igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
             memo=raw.get("memo", ""),
@@ -408,7 +412,7 @@ def create_sale_order(
             conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
+            igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
             subtotal=calc["subtotal"],
@@ -460,6 +464,7 @@ def create_order_from_quotation(
         created_by=created_by,
         issue_date=kwargs.pop("issue_date", timezone.now().date()),
         currency=quotation.currency,
+        price_list=quotation.price_list,
         notes=quotation.notes,
         internal_reference=quotation.internal_reference,
         **kwargs,
@@ -511,7 +516,7 @@ def update_sale_order(order_id, lines: list[dict], **kwargs) -> SaleOrder:
             conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
+            igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
             subtotal=calc["subtotal"],
@@ -575,7 +580,7 @@ def _calc_sales_document_totals(
         igv_total += calc["igv_amount"]
         total_discount += Decimal(str(raw.get("discount_amount", 0)))
 
-    global_discount = Decimal(str(global_discount_amount or 0)).quantize(Decimal("0.01"))
+    global_discount = money(global_discount_amount or 0)
     if global_discount < 0:
         raise ValueError("El descuento general no puede ser negativo.")
     if global_discount_before_tax and global_discount:
@@ -593,7 +598,7 @@ def _calc_sales_document_totals(
                 remaining_discount
                 if index == len(eligible) - 1
                 else min(
-                    (remaining_discount * calc["subtotal"] / remaining_base).quantize(Decimal("0.01")),
+                    money(remaining_discount * calc["subtotal"] / remaining_base),
                     remaining_discount,
                 )
             )
@@ -603,7 +608,8 @@ def _calc_sales_document_totals(
             if tax_type == "10":
                 taxable -= discount_part
                 rate = Decimal(str(raw.get("igv_rate") or 0))
-                adjusted_igv = ((calc["subtotal"] - discount_part) * rate / Decimal("100")).quantize(Decimal("0.01"))
+                adjusted_subtotal = calc["subtotal"] - discount_part
+                adjusted_igv = money(adjusted_subtotal * rate / Decimal("100"))
                 igv_total += adjusted_igv - calc["igv_amount"]
             elif tax_type == "20":
                 exempt -= discount_part
@@ -612,12 +618,30 @@ def _calc_sales_document_totals(
             elif tax_type == "40":
                 export -= discount_part
 
+            calc["global_discount_amount"] = discount_part
+            calc["subtotal"] -= discount_part
+            calc["igv_amount"] = adjusted_igv if tax_type == "10" else calc["igv_amount"]
+            calc["total"] = money(calc["subtotal"] + calc["igv_amount"])
+
     subtotal = taxable + exempt + unaffected + export
-    total = (subtotal + igv_total).quantize(Decimal("0.01"))
+    total = money(subtotal + igv_total)
     if not global_discount_before_tax:
         if global_discount > total:
             raise ValueError("El descuento general no puede superar el total del documento.")
         total -= global_discount
+        eligible = [calc for calc in calculated if calc["total"] > 0]
+        remaining_discount = global_discount
+        remaining_total = sum((calc["total"] for calc in eligible), Decimal("0"))
+        for index, calc in enumerate(eligible):
+            discount_part = (
+                remaining_discount
+                if index == len(eligible) - 1
+                else min(money(remaining_discount * calc["total"] / remaining_total), remaining_discount)
+            )
+            calc["global_discount_amount"] = discount_part
+            calc["total"] -= discount_part
+            remaining_discount -= discount_part
+            remaining_total -= calc["total"] + discount_part
     total_discount += global_discount
     return {
         "subtotal": subtotal,
@@ -664,8 +688,9 @@ def _replace_sales_document_lines(document: SalesDocument, lines, calculated_lin
             unit=raw["unit"], unit_code=raw["unit_code"],
             conversion_factor=raw["conversion_factor"], stock_quantity=raw["stock_quantity"],
             discount_amount=raw.get("discount_amount", Decimal("0")),
+            global_discount_amount=calc.get("global_discount_amount", Decimal("0")),
             tax_type=raw.get("tax_type", "10"),
-            igv_rate=raw.get("igv_rate", Decimal("18")),
+            igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
             memo=raw.get("memo", ""),
@@ -685,7 +710,8 @@ def _inventory_lines_for_document(document: SalesDocument) -> list[dict]:
             grouped[product_id] = {
                 "product_id": product_id,
                 "quantity": Decimal("0"),
-                "unit_price": line.unit_price,
+                "unit_price": line.product.inventory_unit_cost,
+                "cost_source": "AVERAGE",
             }
         grouped[product_id]["quantity"] += line.stock_quantity
     return list(grouped.values())
@@ -891,6 +917,7 @@ def copy_sales_document(sales_document_id, copied_by=None) -> SalesDocument:
         lines=lines,
         created_by=copied_by,
         issue_date=timezone.now(),
+        due_date=source.due_date,
         currency=source.currency,
         exchange_rate=source.exchange_rate,
         global_discount_amount=source.global_discount_amount,
@@ -978,6 +1005,7 @@ def create_document_from_quotation(
         created_by=created_by,
         issue_date=timezone.now(),
         currency=quotation.currency,
+        price_list=quotation.price_list,
         exchange_rate=quotation.exchange_rate,
         payment_method=quotation.payment_method,
         means_of_payment=quotation.means_of_payment,
@@ -1150,6 +1178,7 @@ def create_credit_note(
     reason_description: str,
     series: DocumentSeries,
     lines: list[dict] | None = None,
+    global_discount_amount=None,
     created_by=None,
 ) -> SalesDocument:
     """
@@ -1167,7 +1196,8 @@ def create_credit_note(
     ):
         raise ValueError("La serie de nota de crédito no corresponde al documento original.")
 
-    if lines is None:
+    copies_full_document = lines is None
+    if copies_full_document:
         lines = [
             {
                 "product": line.product,
@@ -1185,6 +1215,11 @@ def create_credit_note(
             }
             for line in original.lines.all()
         ]
+    note_global_discount = (
+        original.global_discount_amount
+        if copies_full_document and global_discount_amount is None
+        else Decimal(str(global_discount_amount or 0)).quantize(Decimal("0.01"))
+    )
 
     note = create_sales_document_draft(
         store_id=str(original.store_id) if original.store_id else None,
@@ -1195,7 +1230,7 @@ def create_credit_note(
         created_by=created_by,
         issue_date=timezone.now(),
         currency=original.currency,
-        global_discount_amount=original.global_discount_amount,
+        global_discount_amount=note_global_discount,
         global_discount_before_tax=original.global_discount_before_tax,
         reference_document=original,
         reference_series=original.series_code,
@@ -1207,6 +1242,59 @@ def create_credit_note(
     _audit_sales_document(
         note,
         "CREATE_CREDIT_NOTE",
+        created_by,
+        reference_document_id=str(original.pk),
+        reason_code=reason_code,
+    )
+    return note
+
+
+@transaction.atomic
+def create_debit_note(
+    sales_document_id,
+    reason_code: str,
+    reason_description: str,
+    series: DocumentSeries,
+    lines: list[dict],
+    internal_reference: str = "",
+    created_by=None,
+) -> SalesDocument:
+    """Crea una nota de débito por cargos adicionales, sin movimiento de stock."""
+    original = SalesDocument.objects.select_related("customer", "store").get(
+        pk=sales_document_id
+    )
+    if original.status != "ISSUED" or original.document_type.code not in {"01", "03"}:
+        raise ValueError("La nota de débito requiere una factura o boleta emitida.")
+    if (
+        not series.active
+        or series.document_type.code != "08"
+        or series.company_id != original.store.company_id
+        or series.store_id != original.store_id
+    ):
+        raise ValueError("La serie de nota de débito no corresponde al documento original.")
+    if not lines:
+        raise ValueError("La nota de débito requiere al menos un cargo adicional.")
+
+    note = create_sales_document_draft(
+        store_id=str(original.store_id),
+        customer=original.customer,
+        document_type=DocumentType.objects.get(code="08"),
+        series=series,
+        lines=lines,
+        created_by=created_by,
+        issue_date=timezone.now(),
+        currency=original.currency,
+        reference_document=original,
+        reference_series=original.series_code,
+        reference_number=original.number,
+        note_reason_code=reason_code,
+        note_reason_description=reason_description,
+        internal_reference=internal_reference,
+        register_inventory_movement=False,
+    )
+    _audit_sales_document(
+        note,
+        "CREATE_DEBIT_NOTE",
         created_by,
         reference_document_id=str(original.pk),
         reason_code=reason_code,

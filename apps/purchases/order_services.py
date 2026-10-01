@@ -29,6 +29,14 @@ def _replace_lines(order, lines, calculated):
     order.lines.all().delete()
     for position, (raw, calc) in enumerate(zip(lines, calculated), start=1):
         concept = raw["product"] or raw["purchase_category"]
+        # El prorrateo del descuento global solo existe en líneas de documentos
+        # de compra. Las órdenes reutilizan el cálculo base, pero su modelo no
+        # persiste este snapshot.
+        order_line_totals = {
+            key: value
+            for key, value in calc.items()
+            if key != "global_discount_amount"
+        }
         PurchaseOrderLine.objects.create(
             purchase_order=order, position=position,
             product=raw["product"], purchase_category=raw.get("purchase_category"),
@@ -37,7 +45,7 @@ def _replace_lines(order, lines, calculated):
             conversion_factor=raw["conversion_factor"], unit_price=raw["unit_price"],
             discount_amount=raw.get("discount_amount") or 0,
             tax_type=raw.get("tax_type", "10"), igv_rate=raw.get("igv_rate") or 0,
-            memo=raw.get("memo", ""), **calc,
+            memo=raw.get("memo", ""), **order_line_totals,
         )
 
 

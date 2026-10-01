@@ -173,7 +173,7 @@ class PurchaseOrderLine(models.Model):
     unit_price = models.DecimalField(max_digits=14, decimal_places=6)
     discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     tax_type = models.CharField(max_length=5, choices=PurchaseTaxType.choices, default=PurchaseTaxType.TAXED)
-    igv_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
+    igv_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     igv_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -452,10 +452,11 @@ class PurchaseDocumentLine(models.Model):
     stock_quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
     unit_price = models.DecimalField(max_digits=14, decimal_places=6)
     discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    global_discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     tax_type = models.CharField(
         max_length=5, choices=PurchaseTaxType.choices, default=PurchaseTaxType.TAXED
     )
-    igv_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
+    igv_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     igv_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)

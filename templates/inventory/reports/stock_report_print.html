@@ -25,7 +25,7 @@
   <div class="meta">
     {% if selected_warehouse %}Almacén: {{ selected_warehouse_name }}{% else %}Todos los almacenes{% endif %}
     {% if q %} | Búsqueda: "{{ q }}"{% endif %}
-    | {{ total_stock|floatformat:2 }} uds — Valorización: S/ {{ total_valuation|floatformat:2 }}
+    | {{ total_stock|floatformat:2 }} uds — Valorización: S/. {{ total_valuation|floatformat:2 }}
   </div>
 
   <table>
@@ -64,8 +64,8 @@
           <span class="badge-normal">NORMAL</span>
           {% endif %}
         </td>
-        <td class="text-right">S/ {{ row.price_purchase|floatformat:2 }}</td>
-        <td class="text-right">S/ {{ row.valuation|floatformat:2 }}</td>
+        <td class="text-right">S/. {{ row.price_purchase|floatformat:2 }}</td>
+        <td class="text-right">S/. {{ row.valuation|floatformat:2 }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -76,7 +76,7 @@
         <td class="text-right">{{ total_committed|floatformat:2 }}</td>
         <td class="text-right">{{ total_available|floatformat:2 }}</td>
         <td colspan="3"></td>
-        <td class="text-right">S/ {{ total_valuation|floatformat:2 }}</td>
+        <td class="text-right">S/. {{ total_valuation|floatformat:2 }}</td>
       </tr>
     </tfoot>
   </table>

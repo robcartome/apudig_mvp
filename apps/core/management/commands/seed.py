@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Brand, Category, PriceList, Unit
 from apps.partners.models import DocumentType
+from apps.pos.permissions import POS_PERMISSION_DEFINITIONS, POS_ROLE_ACTIONS
 from apps.purchases.models import PurchaseCategory
 from apps.sales.models import DocumentSeries
 from apps.users.models import Permission, Role, RolePermission, User, UserStore
@@ -104,6 +105,7 @@ class Command(BaseCommand):
         self._seed_price_lists()
         self._seed_roles()
         self._seed_sales_document_permissions()
+        self._seed_pos_permissions()
         company, store = self._seed_company(options["company"], options["ruc"])
         self._seed_purchase_expense_categories(company)
         user = self._seed_superuser(options["email"], options["password"])
@@ -209,6 +211,29 @@ class Command(BaseCommand):
                     role=role, permission=permissions[action]
                 )
         self.stdout.write("  Permisos ventas:       configurados")
+
+    def _seed_pos_permissions(self):
+        permissions = {}
+        for action, module, description in POS_PERMISSION_DEFINITIONS:
+            code = f"{action}.{module}"
+            permission, _ = Permission.objects.update_or_create(
+                code=code,
+                defaults={
+                    "action_name": action,
+                    "module": module,
+                    "description": description,
+                },
+            )
+            permissions[code] = permission
+
+        for role_name, codes in POS_ROLE_ACTIONS.items():
+            role = Role.objects.get(name=role_name)
+            selected_codes = permissions.keys() if codes == "*" else codes
+            for code in selected_codes:
+                RolePermission.objects.get_or_create(
+                    role=role, permission=permissions[code]
+                )
+        self.stdout.write("  Permisos POS:          configurados")
 
     def _seed_company(self, name: str, ruc: str):
         company, ok = Company.objects.get_or_create(ruc=ruc, defaults={"name": name})

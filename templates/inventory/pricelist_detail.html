@@ -81,7 +81,7 @@
           <td class="text-muted small">{{ pp.product.sku }}</td>
           <td class="text-muted small">{{ pp.product.unit.code }}</td>
           <td class="text-end fw-semibold">{{ pp.amount|floatformat:2 }}</td>
-          <td class="text-muted small">{{ pp.currency }}</td>
+          <td class="text-muted small">{{ pp.currency|currency_symbol }}</td>
           <td class="text-end">
             <form method="post" action="{% url 'inventory:pricelist_del_price' pl.pk %}">
               {% csrf_token %}

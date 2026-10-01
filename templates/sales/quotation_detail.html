@@ -67,7 +67,7 @@
           </div>
           <div class="col-6 mb-2">
             <div class="text-muted small">Moneda</div>
-            <div>{{ quotation.currency }}</div>
+            <div>{{ quotation.currency|currency_symbol }}</div>
           </div>
           <div class="col-6 mb-2">
             <div class="text-muted small">Emisión</div>
@@ -189,15 +189,15 @@
       <tfoot class="table-light fw-semibold">
         <tr>
           <td colspan="7" class="text-end">Subtotal:</td>
-          <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.subtotal|floatformat:2 }}</td>
+          <td colspan="3" class="text-end">{{ quotation.currency|currency_symbol }} {{ quotation.subtotal|floatformat:2 }}</td>
         </tr>
         <tr>
-          <td colspan="7" class="text-end">IGV (18%):</td>
-          <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.igv_total|floatformat:2 }}</td>
+          <td colspan="7" class="text-end">IGV:</td>
+          <td colspan="3" class="text-end">{{ quotation.currency|currency_symbol }} {{ quotation.igv_total|floatformat:2 }}</td>
         </tr>
         <tr class="fs-5">
           <td colspan="7" class="text-end">TOTAL:</td>
-          <td colspan="3" class="text-end">{{ quotation.currency }} {{ quotation.total|floatformat:2 }}</td>
+          <td colspan="3" class="text-end">{{ quotation.currency|currency_symbol }} {{ quotation.total|floatformat:2 }}</td>
         </tr>
       </tfoot>
     </table>

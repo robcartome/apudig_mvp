@@ -387,8 +387,8 @@
                 <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|smart_number }}</td>
                 {% else %}
                 <td class="text-end">{{ d.quantity|smart_number }}</td>
-                <td class="text-end">S/ {{ d.unit_price|floatformat:2 }}</td>
-                <td class="text-end movement-line-total">S/ 0.00</td>
+                <td class="text-end">S/. {{ d.unit_price|floatformat:2 }}</td>
+                <td class="text-end movement-line-total">S/. 0.00</td>
                 {% endif %}
               </tr>
               {% empty %}
@@ -406,7 +406,7 @@
         </div>
         {% else %}
         <div class="d-flex justify-content-end mt-3">
-          <div class="fs-5 fw-bold">Total General: <span class="movement-grand-total">S/ 0.00</span></div>
+          <div class="fs-5 fw-bold">Total General: <span class="movement-grand-total">S/. 0.00</span></div>
         </div>
         {% endif %}
       </div>
@@ -418,7 +418,7 @@
 <script>
 (function () {
   function formatCurrency(value) {
-    return `S/ ${value.toFixed(2)}`;
+    return `S/. ${value.toFixed(2)}`;
   }
 
   document.querySelectorAll('.movement-modal').forEach(function (modalEl) {

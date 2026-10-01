@@ -177,6 +177,10 @@
         <label class="form-label">Cliente predeterminado</label>{{ operational_form.default_customer }}
         <label class="form-label mt-2">Documento predeterminado</label>{{ operational_form.default_sales_document_type }}
         <label class="form-label mt-2">Condición de pago predeterminada</label>{{ operational_form.default_sales_payment_method }}
+        <hr class="my-3">
+        <h4 class="mb-2">Punto de venta</h4>
+        <label class="form-label">Modo de búsqueda de productos</label>{{ operational_form.pos_product_search_mode }}
+        <div class="form-hint">El buscador rápido muestra coincidencias en una lista. El catálogo visual muestra categorías y tarjetas, y filtra las tarjetas al escribir.</div>
       </div>
       <div class="col-12 col-xl-4"><h4>Compras</h4>
         <label class="form-check mb-2">{{ operational_form.purchases_value_unit_editable }}<span class="form-check-label">Valor unitario editable</span></label>
@@ -225,7 +229,7 @@
           {% elif item == "unidades" %}
           <th>Código</th><th>Nombre</th><th class="w-1">Acciones</th>
           {% elif item == "condiciones_pago" %}
-          <th>Nombre</th><th class="text-center">Efectivo (Contado)</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
+          <th>Nombre</th><th class="text-center">Modalidad</th><th class="text-center">Vuelto</th><th class="text-center">Días</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
           {% elif item == "medios_pago" %}
           <th>Nombre</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
           {% elif item == "categorias_gasto" %}
@@ -296,9 +300,12 @@
           {% elif item == "condiciones_pago" %}
           <td>{{ obj.name }}</td>
           <td class="text-center">
-            {% if obj.is_cash %}<span class="badge bg-green-lt text-green">Sí</span>
-            {% else %}<span class="badge bg-secondary-lt">No</span>{% endif %}
+            {% if obj.is_credit %}<span class="badge bg-orange-lt text-orange">Crédito</span>
+            {% elif obj.immediate_payment %}<span class="badge bg-green-lt text-green">Inmediato</span>
+            {% else %}<span class="badge bg-secondary-lt">Otro</span>{% endif %}
           </td>
+          <td class="text-center">{% if obj.receives_change %}<span class="badge bg-green-lt text-green">Sí</span>{% else %}—{% endif %}</td>
+          <td class="text-center">{{ obj.credit_days }}</td>
           <td class="text-center">
             {% if obj.active %}<span class="badge bg-success-lt text-success">Activo</span>
             {% else %}<span class="badge bg-secondary-lt text-secondary">Inactivo</span>{% endif %}

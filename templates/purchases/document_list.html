@@ -47,11 +47,11 @@
           <td>{{ doc.number|default:"Sin número" }}</td>
           <td>{{ doc.supplier_name }}<div class="small text-muted">{{ doc.supplier_document_number }}</div>
           </td>
-          <td class="text-end">{{ doc.currency }} {{ doc.total|floatformat:2 }}</td>
+          <td class="text-end">{{ doc.currency|currency_symbol }} {{ doc.total|floatformat:2 }}</td>
           <td>{{ doc.payment_method|default:"—" }}</td>
           <td>{% include "components/status_badge.html" with status=doc.payment_status label=doc.get_payment_status_display %}</td>
           <td>{{ doc.last_payment_date|date:"d/m/Y H:i"|default:"—" }}</td>
-          <td class="text-end fw-semibold">{{ doc.currency }} {{ doc.payment_balance|floatformat:2 }}</td>
+          <td class="text-end fw-semibold">{{ doc.currency|currency_symbol }} {{ doc.payment_balance|floatformat:2 }}</td>
           <td>{% include "components/status_badge.html" with status=doc.delivery_status label=doc.delivery_status_label %}</td>
           <td>{% include "components/status_badge.html" with status=doc.document_status label=doc.get_document_status_display %}</td>
           <td class="text-center">
@@ -107,7 +107,7 @@
           <td colspan="14" class="text-center text-muted py-4">No se encontraron documentos de compra.</td>
         </tr>{% endfor %}</tbody>
       <tfoot class="table-light"><tr><th colspan="14" class="text-end py-3">Total filtrado (no incluye cancelados):
-        {% for item in filtered_totals %}<span class="ms-3">{{ item.currency }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
+        {% for item in filtered_totals %}<span class="ms-3">{{ item.currency|currency_symbol }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
       </th></tr></tfoot>
     </table>
   </div>

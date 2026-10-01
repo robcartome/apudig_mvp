@@ -65,7 +65,7 @@
   </style>
   {% block extra_css %}{% endblock %}
 </head>
-<body class="antialiased">
+<body class="antialiased {% block body_class %}{% endblock %}">
 <div class="app-layout">
   <!-- SIDEBAR -->
   {% include 'components/sidebar.html' %}
@@ -167,6 +167,7 @@
 <script src="{% static 'js/components/sidebar.js' %}"></script>
 <script src="{% static 'js/components/alerts.js' %}"></script>
 <script src="{% static 'js/components/filter-toggle.js' %}"></script>
+<script src="{% static 'js/currency.js' %}?v=20260930-1"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

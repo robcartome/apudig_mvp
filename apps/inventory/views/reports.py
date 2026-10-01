@@ -110,8 +110,8 @@ def _stock_report_excel(rows, selected_warehouse, warehouses):
 
     headers = [
         "Almacén", "SKU", "Producto", "Categoría", "UM", "Stock real",
-        "Comprometido", "Disponible", "Mínimo", "Estado", "P. Compra (S/)",
-        "Valorización (S/)",
+        "Comprometido", "Disponible", "Mínimo", "Estado", "P. Compra (S/.)",
+        "Valorización (S/.)",
     ]
     ws.append(headers)
     for col_idx, _ in enumerate(headers, 1):
@@ -200,7 +200,7 @@ def _comparative_excel(warehouses, rows, summary):
     header_font = Font(bold=True, color="FFFFFF")
 
     wh_names = [wh.name for wh in warehouses]
-    headers = ["SKU", "Producto", "Categoría", "UM"] + wh_names + ["Stock Total", "P. Compra (S/)", "P. Venta (S/)", "Valorización (S/)"]
+    headers = ["SKU", "Producto", "Categoría", "UM"] + wh_names + ["Stock Total", "P. Compra (S/.)", "P. Venta (S/.)", "Valorización (S/.)"]
     ws.append(headers)
     for col_idx in range(1, len(headers) + 1):
         cell = ws.cell(row=1, column=col_idx)

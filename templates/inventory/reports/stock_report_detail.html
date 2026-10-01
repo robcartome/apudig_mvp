@@ -73,7 +73,7 @@
     <div class="card">
       <div class="card-body py-3 px-4">
         <div class="text-muted small mb-1">Valorización total (Stock × P.Compra)</div>
-        <div class="h4 mb-0 fw-bold">S/ {{ total_valuation|floatformat:2 }}</div>
+        <div class="h4 mb-0 fw-bold">S/. {{ total_valuation|floatformat:2 }}</div>
       </div>
     </div>
   </div>
@@ -121,8 +121,8 @@
             <span class="badge bg-green-lt">NORMAL</span>
             {% endif %}
           </td>
-          <td class="text-end text-muted small">S/ {{ row.price_purchase|floatformat:2 }}</td>
-          <td class="text-end fw-semibold">S/ {{ row.valuation|floatformat:2 }}</td>
+          <td class="text-end text-muted small">S/. {{ row.price_purchase|floatformat:2 }}</td>
+          <td class="text-end fw-semibold">S/. {{ row.valuation|floatformat:2 }}</td>
         </tr>
         {% empty %}
         <tr>
@@ -145,7 +145,7 @@
           <td class="text-end">{{ total_committed|floatformat:2 }}</td>
           <td class="text-end">{{ total_available|floatformat:2 }}</td>
           <td colspan="3"></td>
-          <td class="text-end">S/ {{ total_valuation|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ total_valuation|floatformat:2 }}</td>
         </tr>
       </tfoot>
       {% endif %}

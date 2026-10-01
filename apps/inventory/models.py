@@ -75,10 +75,22 @@ class PriceList(TimeStampedModel):
     description = models.CharField(max_length=500, blank=True)
     active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False, verbose_name="Lista por defecto")
+    prices_include_tax = models.BooleanField(
+        default=True,
+        help_text="Los importes de esta lista son precios comerciales finales.",
+    )
 
     class Meta:
         db_table = "price_lists"
         ordering = ["-is_default", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=("company", "name"), name="uniq_company_price_list_name"),
+            models.UniqueConstraint(
+                fields=("company",),
+                condition=models.Q(is_default=True),
+                name="uniq_default_price_list_per_company",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -101,6 +113,19 @@ class Product(TimeStampedModel):
     tertiary_image_key = models.CharField(max_length=500, blank=True)
     price_purchase = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price_sale = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_affectation = models.CharField(
+        max_length=5,
+        choices=[
+            ("10", "Gravado IGV"),
+            ("20", "Exonerado"),
+            ("30", "Inafecto"),
+            ("40", "Exportacion"),
+            ("11", "Operacion gratuita"),
+        ],
+        default="10",
+    )
+    last_purchase_unit_value = models.DecimalField(max_digits=14, decimal_places=6, default=0)
+    inventory_unit_cost = models.DecimalField(max_digits=14, decimal_places=6, default=0)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name="products")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="products")
@@ -268,6 +293,12 @@ class ProductPrice(models.Model):
     class Meta:
         db_table = "product_prices"
         unique_together = ("product", "price_list")
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.product_id and self.price_list_id and self.product.company_id != self.price_list.company_id:
+            raise ValidationError("El producto y la lista de precios deben pertenecer a la misma empresa.")
 
 
 # ── Operativo ─────────────────────────────────────────────────────────────────
@@ -582,6 +613,12 @@ class Movement(TimeStampedModel):
 
 
 class MovementDetail(models.Model):
+    class CostSource(models.TextChoices):
+        LEGACY = "LEGACY", "Historico sin clasificar"
+        MANUAL = "MANUAL", "Manual"
+        PURCHASE = "PURCHASE", "Compra"
+        AVERAGE = "AVERAGE", "Costo promedio"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     movement = models.ForeignKey(Movement, on_delete=models.CASCADE, related_name="details")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="movement_details")
@@ -590,7 +627,15 @@ class MovementDetail(models.Model):
     unit_code = models.CharField(max_length=10, default="NIU")
     conversion_factor = models.DecimalField(max_digits=18, decimal_places=6, default=1)
     stock_quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
-    unit_price = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    unit_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=6,
+        default=0,
+        help_text="Costo unitario de inventario en moneda base; nunca precio de venta.",
+    )
+    cost_source = models.CharField(
+        max_length=10, choices=CostSource.choices, default=CostSource.MANUAL,
+    )
     physical_quantity = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     location = models.ForeignKey(
         WarehouseLocation, on_delete=models.SET_NULL, null=True, blank=True,

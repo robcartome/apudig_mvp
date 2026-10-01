@@ -80,6 +80,26 @@
         </li>
 
         {# ─── Ventas ─── #}
+        {% if can_access_pos %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.namespace == 'pos' %}active{% endif %}"
+             href="#sidebar-pos" data-bs-toggle="collapse" data-section-url="{% url 'pos:sale' %}"
+             data-tooltip-label="Punto de venta">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-device-desktop-dollar fs-2"></i></span>
+            <span class="nav-link-title">Punto de venta</span>
+            <span class="nav-link-arrow"></span>
+          </a>
+          <div class="collapse {% if request.resolver_match.namespace == 'pos' %}show{% endif %}" id="sidebar-pos">
+            <ul class="navbar-nav ps-lg-3">
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'sale' %}active{% endif %}" href="{% url 'pos:sale' %}">Nueva venta</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'transaction_list' %}active{% endif %}" href="{% url 'pos:transaction_list' %}">Ventas por caja</a></li>
+              {% if can_view_cash_sessions %}<li class="nav-item"><a class="nav-link {% if 'cash_session_' in request.resolver_match.url_name|default:'' %}active{% endif %}" href="{% url 'pos:cash_session_list' %}">Sesiones de caja</a></li>{% endif %}
+              {% if can_manage_pos %}<li class="nav-item"><a class="nav-link {% if 'register_' in request.resolver_match.url_name|default:'' %}active{% endif %}" href="{% url 'pos:register_list' %}">Configuración</a></li>{% endif %}
+            </ul>
+          </div>
+        </li>
+        {% endif %}
+
         <li class="nav-item">
           <a class="nav-link {% if '/sales/' in request.path %}active{% endif %}"
              href="#sidebar-sales"

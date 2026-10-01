@@ -147,7 +147,7 @@ def get_active_document_types():
 def get_sales_documents_for_store(store_id: str, status: str | None = None):
     qs = (
         SalesDocument.objects.for_store(store_id)
-        .select_related("customer", "series", "document_type")
+        .select_related("customer", "series", "document_type", "pos_transaction__register")
         .order_by("-issue_date", "-created_at")
     )
     if status:
@@ -162,7 +162,7 @@ def search_sales_documents(
 ):
     qs = (
         SalesDocument.objects.for_store(store_id)
-        .select_related("customer", "series", "document_type")
+        .select_related("customer", "series", "document_type", "pos_transaction__register")
         .order_by("-issue_date", "-created_at")
     )
     if status:
@@ -206,7 +206,7 @@ def get_document_detail(pk, store_id=None):
             "customer", "series", "document_type", "store", "created_by",
             "sale_order", "reference_document", "source_quotation",
             "payment_method", "means_of_payment", "seller", "price_list",
-            "warehouse",
+            "warehouse", "pos_transaction__register",
         )
         .prefetch_related(
             "lines__product__unit", "lines__unit",

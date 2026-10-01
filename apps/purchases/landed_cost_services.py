@@ -4,6 +4,8 @@ from django.db import transaction
 from django.db.models import Sum
 
 from apps.core.models import AuditLog
+from apps.inventory.models import Product, StockByWarehouse
+from apps.inventory.pricing import unit_value
 
 from .models import (
     LandedCostAllocationMethod, LandedCostStatus, PurchaseDocument,
@@ -43,6 +45,24 @@ def _automatic_allocations(lines, amount, method):
         result.append((line, line_amount))
         allocated += line_amount
     return result
+
+
+def _apply_allocations_to_average_cost(document, allocations, direction=1):
+    """Incorpora cargos en moneda base al promedio del stock actualmente disponible."""
+    currency_factor = Decimal("1") if document.currency == "PEN" else Decimal(str(document.exchange_rate or 0))
+    for line, allocated in allocations:
+        current_stock = StockByWarehouse.objects.filter(
+            product_id=line.product_id,
+            warehouse__store__company_id=document.company_id,
+        ).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+        if current_stock <= 0:
+            continue
+        product = Product.objects.select_for_update().get(pk=line.product_id)
+        delta = Decimal(str(allocated)) * currency_factor / current_stock
+        product.inventory_unit_cost = unit_value(max(
+            Decimal("0"), Decimal(str(product.inventory_unit_cost)) + delta * direction,
+        ))
+        product.save(update_fields=("inventory_unit_cost", "updated_at"))
 
 
 @transaction.atomic
@@ -86,6 +106,7 @@ def allocate_landed_cost(*, document_id, company_id, description, amount,
             landed_cost=landed_cost, purchase_document_line=line, amount=line_amount
         ) for line, line_amount in allocations
     ])
+    _apply_allocations_to_average_cost(document, allocations)
     AuditLog.objects.create(
         user=created_by, action="ALLOCATE", entity="PurchaseLandedCost",
         entity_id=str(landed_cost.pk),
@@ -101,6 +122,11 @@ def cancel_landed_cost(landed_cost_id, *, company_id, cancelled_by=None):
     )
     if landed_cost.status == LandedCostStatus.CANCELLED:
         return landed_cost
+    allocations = [
+        (allocation.purchase_document_line, allocation.amount)
+        for allocation in landed_cost.allocations.select_related("purchase_document_line__product")
+    ]
+    _apply_allocations_to_average_cost(landed_cost.purchase_document, allocations, direction=-1)
     landed_cost.status = LandedCostStatus.CANCELLED
     landed_cost.save(update_fields=("status", "updated_at"))
     AuditLog.objects.create(

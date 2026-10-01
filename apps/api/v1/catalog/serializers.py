@@ -7,6 +7,8 @@ class ProductImageSerializerMixin(serializers.Serializer):
     image = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
     supplier_codes = serializers.SerializerMethodField()
+    price_includes_tax = serializers.SerializerMethodField()
+    tax_rate = serializers.SerializerMethodField()
 
     def get_image(self, obj):
         return obj.image
@@ -17,6 +19,19 @@ class ProductImageSerializerMixin(serializers.Serializer):
     def get_supplier_codes(self, obj):
         relations = getattr(obj, "active_supplier_code_relations", ())
         return list(dict.fromkeys(relation.supplier_code for relation in relations))
+
+    def get_price_includes_tax(self, obj):
+        return True
+
+    def get_tax_rate(self, obj):
+        if obj.tax_affectation != "10":
+            return "0.00"
+        cache = self.context.setdefault("_tax_rate_cache", {})
+        key = str(obj.company_id)
+        if key not in cache:
+            from apps.inventory.pricing import tax_rate_for_company
+            cache[key] = tax_rate_for_company(obj.company_id, affectation_type=obj.tax_affectation)
+        return str(cache[key])
 
 
 class CatalogProductListSerializer(ProductImageSerializerMixin, serializers.ModelSerializer):
@@ -29,7 +44,8 @@ class CatalogProductListSerializer(ProductImageSerializerMixin, serializers.Mode
         model = Product
         fields = (
             "id", "name", "sku", "unit", "brand", "category",
-            "price_sale", "price_purchase", "stock", "image", "images", "supplier_codes",
+            "price_sale", "price_purchase", "price_includes_tax", "tax_affectation", "tax_rate",
+            "stock", "image", "images", "supplier_codes",
         )
 
     def to_representation(self, instance):
@@ -43,6 +59,7 @@ class CatalogProductPriceListSerializer(serializers.Serializer):
     price_list_name = serializers.CharField(source="price_list.name")
     amount = serializers.CharField()
     currency = serializers.CharField()
+    price_includes_tax = serializers.BooleanField(source="price_list.prices_include_tax")
 
 
 class CatalogProductStockByWarehouseSerializer(serializers.Serializer):
@@ -74,6 +91,9 @@ class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.Mo
             "category",
             "price_sale",
             "price_purchase",
+            "price_includes_tax",
+            "tax_affectation",
+            "tax_rate",
             "price_list",
             "stock_total",
             "stock_by_warehouse",
@@ -86,7 +106,7 @@ class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.Mo
         return data
 
     def get_price_list(self, obj):
-        prices = obj.prices.filter(active=True).select_related("price_list").order_by("price_list__name")
+        prices = obj.prices.filter(active=True, price_list__active=True).select_related("price_list").order_by("price_list__name")
         return CatalogProductPriceListSerializer(prices, many=True).data
 
     def get_stock_total(self, obj):
