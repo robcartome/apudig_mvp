@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static formatters %}
 {% block title %}Movimientos de Almacén — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Movimientos de Almacén</h2>{% endblock %}
 
@@ -130,7 +130,7 @@
         <tr>
           <td>{{ item.type_label }}</td>
           <td class="text-end">{{ item.movements }}</td>
-          <td class="text-end {% if item.quantity_total < 0 %}text-danger{% endif %}">{{ item.quantity_total|floatformat:2 }}</td>
+          <td class="text-end {% if item.quantity_total < 0 %}text-danger{% endif %}">{{ item.quantity_total|smart_number }}</td>
           <td class="text-end">S/. {{ item.amount_total|floatformat:2 }}</td>
         </tr>
         {% endfor %}
@@ -139,7 +139,7 @@
         <tr>
           <td>TOTAL</td>
           <td class="text-end">{{ report.total_rows }}</td>
-          <td class="text-end {% if report.total_quantity < 0 %}text-danger{% endif %}">{{ report.total_quantity|floatformat:2 }}</td>
+          <td class="text-end {% if report.total_quantity < 0 %}text-danger{% endif %}">{{ report.total_quantity|smart_number }}</td>
           <td class="text-end">S/. {{ report.total_amount|floatformat:2 }}</td>
         </tr>
       </tfoot>
@@ -168,8 +168,8 @@
     </div>
     <div class="text-end small text-muted">
       <div>Movimientos: <strong>{{ product.movement_count }}</strong></div>
-      <div>Ingreso: <strong>{{ product.qty_in|floatformat:2 }}</strong> | Salida: <strong>{{ product.qty_out|floatformat:2 }}</strong></div>
-      <div>Saldo neto: <strong class="{% if product.closing_balance < 0 %}text-danger{% endif %}">{{ product.closing_balance|floatformat:2 }}</strong></div>
+      <div>Ingreso: <strong>{{ product.qty_in|smart_number }}</strong> | Salida: <strong>{{ product.qty_out|smart_number }}</strong></div>
+      <div>Saldo neto: <strong class="{% if product.closing_balance < 0 %}text-danger{% endif %}">{{ product.closing_balance|smart_number }}</strong></div>
     </div>
   </div>
   <div class="table-responsive">
@@ -239,7 +239,7 @@
           <td class="text-muted small">{{ entry.reference_doc }}</td>
           <td class="text-muted small">{{ entry.created_by }}</td>
           <td class="text-end fw-semibold {% if entry.signed_quantity < 0 %}text-danger{% else %}text-success{% endif %}">
-            {{ entry.signed_quantity|floatformat:2 }}
+            {{ entry.signed_quantity|smart_number }}
           </td>
           <td class="text-end">S/. {{ entry.unit_price|floatformat:2 }}</td>
           <td class="text-end">S/. {{ entry.amount|floatformat:2 }}</td>

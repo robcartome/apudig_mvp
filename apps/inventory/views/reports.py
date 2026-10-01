@@ -8,6 +8,7 @@ Rutas:
 """
 import io
 from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from django.db.models import Q
 from django.http import Http404, HttpResponse
@@ -17,7 +18,7 @@ from django.utils import timezone
 
 from apps.partners.models import Customer, Supplier
 
-from ..models import Category, Movement, Product
+from ..models import Brand, Category, Movement, Product
 from ..selectors import (
     get_movement_traceability_report,
     get_kardex_report,
@@ -66,7 +67,9 @@ def stock_report_detail(request):
     total_stock = sum(r["quantity"] for r in rows)
     total_committed = sum(r["committed"] for r in rows)
     total_available = sum(r["available"] for r in rows)
-    total_valuation = sum(r["valuation"] for r in rows)
+    total_valuation = sum((r["valuation"] for r in rows if r["valuation"] is not None), Decimal("0"))
+    products_pending_cost = sum(1 for r in rows if r["quantity"] > 0 and not r["has_valid_cost"])
+    products_valued = sum(1 for r in rows if r["quantity"] > 0 and r["has_valid_cost"])
 
     if fmt == "excel":
         return _stock_report_excel(rows, selected_warehouse, warehouses)
@@ -81,6 +84,8 @@ def stock_report_detail(request):
             "total_committed": total_committed,
             "total_available": total_available,
             "total_valuation": total_valuation,
+            "products_pending_cost": products_pending_cost,
+            "products_valued": products_valued,
         })
 
     return render(request, "inventory/reports/stock_report_detail.html", {
@@ -92,6 +97,8 @@ def stock_report_detail(request):
         "total_committed": total_committed,
         "total_available": total_available,
         "total_valuation": total_valuation,
+        "products_pending_cost": products_pending_cost,
+        "products_valued": products_valued,
         "total": len(rows),
         "should_run": should_run,
     })
@@ -109,9 +116,10 @@ def _stock_report_excel(rows, selected_warehouse, warehouses):
     header_font = Font(bold=True, color="FFFFFF")
 
     headers = [
-        "Almacén", "SKU", "Producto", "Categoría", "UM", "Stock real",
-        "Comprometido", "Disponible", "Mínimo", "Estado", "P. Compra (S/.)",
-        "Valorización (S/.)",
+        "Almacén", "SKU", "Producto", "Categoría", "Marca", "UM", "Stock real",
+        "Comprometido", "Disponible", "Mínimo", "Estado", "P. compra referencia (S/.)",
+        "Último costo compra (S/.)",
+        "Costo promedio (S/.)", "Valorización a costo (S/.)",
     ]
     ws.append(headers)
     for col_idx, _ in enumerate(headers, 1):
@@ -122,10 +130,13 @@ def _stock_report_excel(rows, selected_warehouse, warehouses):
 
     for row in rows:
         ws.append([
-            row["warehouse"], row["sku"], row["product"], row["category"], row["unit"],
+            row["warehouse"], row["sku"], row["product"], row["category"], row["brand"], row["unit"],
             float(row["quantity"]), float(row["committed"]), float(row["available"]),
             float(row["min_stock"]), row["status"],
-            float(row["price_purchase"]), float(row["valuation"]),
+            float(row["price_purchase"]),
+            float(row["last_purchase_unit_value"]) if row["last_purchase_unit_value"] > 0 else "Costo no disponible",
+            float(row["inventory_unit_cost"]) if row["has_valid_cost"] else "Costo no disponible",
+            float(row["valuation"]) if row["valuation"] is not None else "Pendiente de valorización",
         ])
 
     # Auto column widths
@@ -156,12 +167,38 @@ def stock_comparative_report(request):
     all_warehouses = get_warehouses_for_store(store_id, active_only=True) if store_id else []
     selected_ids = request.GET.getlist("warehouse")
     search_query = request.GET.get("q", "").strip()
+    category_id = request.GET.get("category", "")
+    brand_id = request.GET.get("brand", "")
+    stock_status = request.GET.get("stock_status", "")
+    cost_status = request.GET.get("cost_status", "")
+    valuation_min = _optional_decimal(request.GET.get("valuation_min", ""))
+    valuation_max = _optional_decimal(request.GET.get("valuation_max", ""))
     fmt = request.GET.get("format", "")
     should_run = request.GET.get("run") == "1" or fmt in {"excel", "print"}
 
-    warehouses, rows, summary = ([], [], {"by_warehouse": {}, "grand_total": 0, "grand_valuation": 0})
+    summary_empty = {
+        "by_warehouse": {}, "valuation_by_warehouse": {}, "warehouse_rows": [],
+        "grand_total": 0, "grand_valuation": 0, "products_with_stock": 0,
+        "products_valued": 0, "products_pending_cost": 0, "is_partial": False,
+    }
+    warehouses, rows, summary = ([], [], summary_empty)
     if store_id and should_run:
-        warehouses, rows, summary = get_stock_comparative(store_id, selected_ids or None, search_query)
+        warehouses, rows, summary = get_stock_comparative(
+            store_id, selected_ids or None, search_query,
+            category_id=category_id, brand_id=brand_id,
+            stock_status=stock_status, cost_status=cost_status,
+            valuation_min=valuation_min, valuation_max=valuation_max,
+        )
+
+    company_id = _get_company_id(request)
+    categories = Category.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else []
+    brands = Brand.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else []
+    filter_context = {
+        "category_id": category_id, "brand_id": brand_id,
+        "stock_status": stock_status, "cost_status": cost_status,
+        "valuation_min": request.GET.get("valuation_min", ""),
+        "valuation_max": request.GET.get("valuation_max", ""),
+    }
 
     if fmt == "excel":
         return _comparative_excel(warehouses, rows, summary)
@@ -173,6 +210,7 @@ def stock_comparative_report(request):
             "all_warehouses": all_warehouses,
             "selected_ids": selected_ids,
             "q": search_query,
+            **filter_context,
         })
 
     return render(request, "inventory/reports/stock_comparative.html", {
@@ -182,9 +220,22 @@ def stock_comparative_report(request):
         "all_warehouses": all_warehouses,
         "selected_ids": selected_ids,
         "q": search_query,
+        "categories": categories,
+        "brands": brands,
+        **filter_context,
         "total": len(rows),
         "should_run": should_run,
     })
+
+
+def _optional_decimal(value):
+    if value in (None, ""):
+        return None
+    try:
+        parsed = Decimal(str(value))
+        return parsed if parsed.is_finite() else None
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def _comparative_excel(warehouses, rows, summary):
@@ -200,7 +251,10 @@ def _comparative_excel(warehouses, rows, summary):
     header_font = Font(bold=True, color="FFFFFF")
 
     wh_names = [wh.name for wh in warehouses]
-    headers = ["SKU", "Producto", "Categoría", "UM"] + wh_names + ["Stock Total", "P. Compra (S/.)", "P. Venta (S/.)", "Valorización (S/.)"]
+    headers = ["SKU", "Producto", "Categoría", "Marca", "UM"] + wh_names + [
+        "Stock Total", "P. compra referencia (S/.)", "Último costo compra (S/.)", "Costo promedio (S/.)",
+        "P. Venta (S/.)", "Valorización a costo (S/.)",
+    ]
     ws.append(headers)
     for col_idx in range(1, len(headers) + 1):
         cell = ws.cell(row=1, column=col_idx)
@@ -210,22 +264,24 @@ def _comparative_excel(warehouses, rows, summary):
 
     wh_ids = [str(wh.id) for wh in warehouses]
     for row in rows:
-        data = [row["sku"], row["product"], row["category"], row["unit"]]
+        data = [row["sku"], row["product"], row["category"], row["brand"], row["unit"]]
         for wid in wh_ids:
             data.append(float(row["stocks"].get(wid, 0)))
         data += [
             float(row["total_stock"]),
             float(row["price_purchase"]),
+            float(row["last_purchase_unit_value"]) if row["last_purchase_unit_value"] > 0 else "Costo no disponible",
+            float(row["inventory_unit_cost"]) if row["has_valid_cost"] else "Costo no disponible",
             float(row["price_sale"]),
-            float(row["total_valuation"]),
+            float(row["total_valuation"]) if row["total_valuation"] is not None else "Pendiente de valorización",
         ]
         ws.append(data)
 
     # Totals row
-    total_row = ["", "TOTAL", "", ""]
+    total_row = ["", "TOTAL", "", "", ""]
     for wid in wh_ids:
         total_row.append(float(summary["by_warehouse"].get(wid, 0)))
-    total_row += [float(summary["grand_total"]), "", "", float(summary["grand_valuation"])]
+    total_row += [float(summary["grand_total"]), "", "", "", "", float(summary["grand_valuation"])]
     ws.append(total_row)
     for col_idx in range(1, len(headers) + 1):
         ws.cell(row=ws.max_row, column=col_idx).font = Font(bold=True)

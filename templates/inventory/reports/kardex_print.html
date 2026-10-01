@@ -1,3 +1,4 @@
+{% load formatters %}
 <!doctype html>
 <html lang="es">
 <head>
@@ -56,9 +57,9 @@
         <td>{{ entry.document }}</td>
         <td>{{ entry.reference }}</td>
         <td>{{ entry.partner }}</td>
-        <td class="text-right">{% if entry.ingreso is not None %}{{ entry.ingreso|floatformat:3 }}{% endif %}</td>
-        <td class="text-right">{% if entry.salida is not None %}{{ entry.salida|floatformat:3 }}{% endif %}</td>
-        <td class="text-right {% if entry.saldo < 0 %}neg{% endif %}">{{ entry.saldo|floatformat:3 }}</td>
+        <td class="text-right">{% if entry.ingreso is not None %}{{ entry.ingreso|smart_number }}{% endif %}</td>
+        <td class="text-right">{% if entry.salida is not None %}{{ entry.salida|smart_number }}{% endif %}</td>
+        <td class="text-right {% if entry.saldo < 0 %}neg{% endif %}">{{ entry.saldo|smart_number }}</td>
         <td class="text-right">{% if entry.unit_value is not None %}{{ entry.unit_value|floatformat:3 }}{% endif %}</td>
         <td class="text-right">{% if entry.avg_cost is not None %}{{ entry.avg_cost|floatformat:3 }}{% endif %}</td>
         <td class="text-right">{% if entry.value_ingreso is not None %}{{ entry.value_ingreso|floatformat:2 }}{% endif %}</td>

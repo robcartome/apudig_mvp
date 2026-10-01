@@ -1,3 +1,4 @@
+{% load formatters %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -102,7 +103,7 @@
           <strong>{{ line.product.name }}</strong>
           {% if line.description %}<br><span style="color:#666">{{ line.description }}</span>{% endif %}
         </td>
-        <td class="text-right">{{ line.quantity|floatformat:2 }}</td>
+        <td class="text-right">{{ line.quantity|smart_number }}</td>
         <td class="text-right">{{ line.unit_price|floatformat:2 }}</td>
         <td class="text-right">{{ line.discount_amount|floatformat:2 }}</td>
         <td class="text-right">{{ line.subtotal|floatformat:2 }}</td>

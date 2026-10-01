@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load formatters %}
 {% block title %}{{ movement }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Movimiento {{ movement.operation_code }}</h2>{% endblock %}
 
@@ -135,17 +136,17 @@
               <td class="text-muted small">{{ d.product.sku }}</td>
               <td>{{ d.product.name }}</td>
               {% if movement.type == "ADJUSTMENT" %}
-              <td class="text-end fw-semibold">{{ d.system_quantity|floatformat:3 }}</td>
-              <td class="text-end fw-semibold">{{ d.physical_quantity|floatformat:3 }}</td>
-              <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|floatformat:3 }}</td>
+              <td class="text-end fw-semibold">{{ d.system_quantity|smart_number }}</td>
+              <td class="text-end fw-semibold">{{ d.physical_quantity|smart_number }}</td>
+              <td class="text-end fw-semibold {% if d.quantity < 0 %}text-danger{% elif d.quantity > 0 %}text-success{% else %}text-muted{% endif %}">{{ d.quantity|smart_number }}</td>
               {% else %}
-              <td class="text-end fw-semibold">{{ d.quantity|floatformat:3 }}</td>
+              <td class="text-end fw-semibold">{{ d.quantity|smart_number }}</td>
               {% endif %}
               <td class="small">{% include "components/unit_equivalence.html" with item=d %}</td>
               <td class="text-muted small">{{ d.location.name|default:"—" }}</td>
               {% if movement.type != "ADJUSTMENT" %}
               <td class="text-end text-muted small">{{ d.unit_price|floatformat:2 }}</td>
-              <td class="text-end fw-semibold">{{ d.quantity|floatformat:2 }}</td>
+              <td class="text-end fw-semibold">{{ d.quantity|smart_number }}</td>
               {% endif %}
             </tr>
             {% endfor %}

@@ -7,6 +7,7 @@ from django.db.models import Exists, OuterRef, Q, Sum
 from django.utils import timezone
 
 from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductSupplier, StockByWarehouse, StoreProductConfig, Unit, Warehouse
+from .valuation import inventory_valuation
 
 
 # ── Maestros ──────────────────────────────────────────────────────────────────
@@ -299,7 +300,7 @@ def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str 
 
     qs = (
         StockByWarehouse.objects
-        .select_related("product__unit", "product__category", "warehouse")
+        .select_related("product__unit", "product__category", "product__brand", "warehouse")
         .filter(warehouse__store_id=store_id)
         .order_by("warehouse__name", "product__name")
     )
@@ -341,12 +342,13 @@ def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str 
             (str(s.warehouse_id), str(s.product_id)), Decimal("0")
         )
         available = s.quantity - committed
-        valuation = s.quantity * s.product.price_purchase
+        valuation = inventory_valuation(s.quantity, s.product.inventory_unit_cost)
         rows.append({
             "warehouse": s.warehouse.name,
             "sku": s.product.sku,
             "product": s.product.name,
             "category": s.product.category.name if s.product.category else "-",
+            "brand": s.product.brand.name if s.product.brand else "-",
             "unit": s.product.unit.code if s.product.unit else "-",
             "quantity": s.quantity,
             "committed": committed,
@@ -354,6 +356,9 @@ def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str 
             "min_stock": min_stock,
             "status": "BAJO" if available <= min_stock else "NORMAL",
             "price_purchase": s.product.price_purchase,
+            "last_purchase_unit_value": s.product.last_purchase_unit_value,
+            "inventory_unit_cost": s.product.inventory_unit_cost,
+            "has_valid_cost": valuation is not None,
             "valuation": valuation,
         })
     return rows
@@ -361,15 +366,24 @@ def get_stock_report_enhanced(store_id: str, warehouse_id: str = "", query: str 
 
 # ── Reporte: Stock comparativo por almacén ────────────────────────────────────
 
-def get_stock_comparative(store_id: str, warehouse_ids: list = None, query: str = ""):
+def get_stock_comparative(
+    store_id: str,
+    warehouse_ids: list = None,
+    query: str = "",
+    *,
+    category_id: str = "",
+    brand_id: str = "",
+    stock_status: str = "",
+    cost_status: str = "",
+    valuation_min=None,
+    valuation_max=None,
+):
     """
     Returns (warehouses, rows, summary) where each row has stock keyed by warehouse id.
 
     warehouses — list of Warehouse objects for the selected warehouses.
-    rows       — list of dicts: {product_id, sku, product, category, unit,
-                                  stocks: {wh_id: qty}, total_stock, price_purchase,
-                                  price_sale, total_valuation}
-    summary    — {by_warehouse: {wh_id: total}, grand_total, grand_valuation}
+    rows       — products with stock, reference prices, average cost and valuation.
+    summary    — stock and partial valuation totals, including warehouse breakdown.
     """
     wh_qs = Warehouse.objects.filter(store_id=store_id, active=True).order_by("name")
     if warehouse_ids:
@@ -380,17 +394,19 @@ def get_stock_comparative(store_id: str, warehouse_ids: list = None, query: str 
     # Fetch stock records for selected warehouses
     sbw_qs = (
         StockByWarehouse.objects
-        .select_related("product__unit", "product__category")
-        .filter(warehouse__store_id=store_id)
+        .select_related("product__unit", "product__category", "product__brand")
+        .filter(warehouse__store_id=store_id, warehouse_id__in=wh_ids)
     )
-    if wh_ids:
-        sbw_qs = sbw_qs.filter(warehouse_id__in=wh_ids)
     if query:
         sbw_qs = sbw_qs.filter(
             Q(product__name__icontains=query)
             | Q(product__sku__icontains=query)
             | Q(product__barcode__icontains=query)
         )
+    if category_id:
+        sbw_qs = sbw_qs.filter(product__category_id=category_id)
+    if brand_id:
+        sbw_qs = sbw_qs.filter(product__brand_id=brand_id)
 
     # Build product map
     product_map: dict = {}
@@ -402,8 +418,10 @@ def get_stock_comparative(store_id: str, warehouse_ids: list = None, query: str 
                 "sku": s.product.sku,
                 "product": s.product.name,
                 "category": s.product.category.name if s.product.category else "-",
+                "brand": s.product.brand.name if s.product.brand else "-",
                 "unit": s.product.unit.code if s.product.unit else "-",
                 "price_purchase": s.product.price_purchase,
+                "last_purchase_unit_value": s.product.last_purchase_unit_value,
                 "inventory_unit_cost": s.product.inventory_unit_cost,
                 "price_sale": s.product.price_sale,
                 "stocks": {},
@@ -413,22 +431,78 @@ def get_stock_comparative(store_id: str, warehouse_ids: list = None, query: str 
     # Build rows
     rows = []
     for row in sorted(product_map.values(), key=lambda r: r["product"]):
-        total_stock = sum(row["stocks"].get(wid, Decimal("0")) for wid in wh_ids) if wh_ids else sum(row["stocks"].values(), Decimal("0"))
+        total_stock = sum(row["stocks"].get(wid, Decimal("0")) for wid in wh_ids)
         row["total_stock"] = total_stock
-        row["total_valuation"] = total_stock * row["inventory_unit_cost"]
+        row["total_valuation"] = inventory_valuation(total_stock, row["inventory_unit_cost"])
+        row["has_valid_cost"] = row["total_valuation"] is not None
+        if stock_status == "positive" and total_stock <= 0:
+            continue
+        if stock_status == "zero" and total_stock != 0:
+            continue
+        if cost_status == "valued" and (total_stock <= 0 or not row["has_valid_cost"]):
+            continue
+        if cost_status == "pending" and not (total_stock > 0 and not row["has_valid_cost"]):
+            continue
+        if valuation_min is not None and (row["total_valuation"] is None or row["total_valuation"] < valuation_min):
+            continue
+        if valuation_max is not None and (row["total_valuation"] is None or row["total_valuation"] > valuation_max):
+            continue
         rows.append(row)
 
     # Summary
     by_warehouse: dict = {}
+    valuation_by_warehouse: dict = {}
+    products_by_warehouse: dict = {}
+    pending_by_warehouse: dict = {}
     grand_total = Decimal("0")
     grand_valuation = Decimal("0")
+    products_with_stock = 0
+    products_valued = 0
+    products_pending_cost = 0
     for row in rows:
         for wid in wh_ids:
-            by_warehouse[wid] = by_warehouse.get(wid, Decimal("0")) + row["stocks"].get(wid, Decimal("0"))
+            quantity = row["stocks"].get(wid, Decimal("0"))
+            by_warehouse[wid] = by_warehouse.get(wid, Decimal("0")) + quantity
+            warehouse_value = inventory_valuation(quantity, row["inventory_unit_cost"])
+            if warehouse_value is not None:
+                valuation_by_warehouse[wid] = valuation_by_warehouse.get(wid, Decimal("0")) + warehouse_value
+            if quantity > 0:
+                products_by_warehouse[wid] = products_by_warehouse.get(wid, 0) + 1
+                if warehouse_value is None:
+                    pending_by_warehouse[wid] = pending_by_warehouse.get(wid, 0) + 1
         grand_total += row["total_stock"]
-        grand_valuation += row["total_valuation"]
+        if row["total_stock"] > 0:
+            products_with_stock += 1
+            if row["total_valuation"] is None:
+                products_pending_cost += 1
+            else:
+                products_valued += 1
+        if row["total_valuation"] is not None:
+            grand_valuation += row["total_valuation"]
 
-    summary = {"by_warehouse": by_warehouse, "grand_total": grand_total, "grand_valuation": grand_valuation}
+    warehouse_rows = []
+    for warehouse in warehouses:
+        wid = str(warehouse.pk)
+        value = valuation_by_warehouse.get(wid, Decimal("0"))
+        warehouse_rows.append({
+            "warehouse": warehouse,
+            "products": products_by_warehouse.get(wid, 0),
+            "stock": by_warehouse.get(wid, Decimal("0")),
+            "valuation": value,
+            "pending_cost": pending_by_warehouse.get(wid, 0),
+            "participation": (value / grand_valuation * Decimal("100")) if grand_valuation else Decimal("0"),
+        })
+    summary = {
+        "by_warehouse": by_warehouse,
+        "valuation_by_warehouse": valuation_by_warehouse,
+        "warehouse_rows": warehouse_rows,
+        "grand_total": grand_total,
+        "grand_valuation": grand_valuation,
+        "products_with_stock": products_with_stock,
+        "products_valued": products_valued,
+        "products_pending_cost": products_pending_cost,
+        "is_partial": products_pending_cost > 0,
+    }
     return warehouses, rows, summary
 
 
@@ -607,18 +681,19 @@ def _kardex_delta(movement, detail, warehouse_id: str) -> Decimal:
     """Returns +qty for inbound, -qty for outbound at the given warehouse."""
     t = movement.type
     wh = str(warehouse_id)
+    quantity = detail.stock_quantity
     if t == MovementType.ENTRY:
-        return detail.quantity if str(movement.warehouse_id) == wh else Decimal("0")
+        return quantity if str(movement.warehouse_id) == wh else Decimal("0")
     if t == MovementType.EXIT:
-        return -detail.quantity if str(movement.warehouse_id) == wh else Decimal("0")
+        return -quantity if str(movement.warehouse_id) == wh else Decimal("0")
     if t == MovementType.TRANSFER:
         if str(movement.warehouse_dest_id) == wh:
-            return detail.quantity
+            return quantity
         if str(movement.warehouse_origin_id) == wh:
-            return -detail.quantity
+            return -quantity
         return Decimal("0")
     if t == MovementType.ADJUSTMENT:
-        return detail.quantity if str(movement.warehouse_id) == wh else Decimal("0")
+        return quantity if str(movement.warehouse_id) == wh else Decimal("0")
     return Decimal("0")
 
 

@@ -1,3 +1,4 @@
+{% load formatters %}
 <div class="row g-3 mb-3">
   <div class="col-12 col-md-8">
     <div class="fw-semibold fs-4">{{ quotation.series_code }}-{{ quotation.number|stringformat:"08d" }}</div>
@@ -36,7 +37,7 @@
           {% if line.memo %}<div class="text-muted small">{{ line.memo }}</div>{% endif %}
         </td>
         <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
-        <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
+        <td class="text-end">{{ line.quantity|smart_number }}</td>
         <td class="text-end">{{ item.unit_price_ex|floatformat:2 }}</td>
         <td class="text-end">{{ item.unit_price_inc|floatformat:2 }}</td>
         <td class="text-end">{{ line.subtotal|floatformat:2 }}</td>

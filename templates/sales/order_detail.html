@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load formatters %}
 {% block title %}Orden {{ order.series_code }}-{{ order.number }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Orden {{ order.series_code }}-{{ order.number }}</h2>{% endblock %}
 
@@ -145,7 +146,7 @@
             <div class="small">{% include "components/unit_equivalence.html" with item=line %}</div>
           </td>
           <td class="text-muted small">{{ line.description|default:"—" }}</td>
-          <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
+          <td class="text-end">{{ line.quantity|smart_number }}</td>
           <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
           <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>
           <td class="text-end">{{ line.subtotal|floatformat:2 }}</td>

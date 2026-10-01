@@ -1,5 +1,6 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django import template
+from django.utils.formats import number_format
 
 from apps.core.currency import currency_symbol as get_currency_symbol
 
@@ -7,15 +8,21 @@ register = template.Library()
 
 @register.filter
 def smart_number(value):
+    """Display quantities with the standard two decimal places for the UI.
+
+    Storage precision is intentionally untouched. ``number_format`` keeps the
+    configured locale's decimal separator while presenting a fixed precision.
+    """
     if value is None:
         return ""
     try:
         value = Decimal(value)
-    except InvalidOperation:
+    except (InvalidOperation, TypeError, ValueError):
         return value
-    if value == value.to_integral_value():
-        return f"{int(value)}"
-    return f"{value.normalize()}"
+    if not value.is_finite():
+        return ""
+    rounded = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return number_format(rounded, decimal_pos=2, use_l10n=True)
 
 
 @register.filter
