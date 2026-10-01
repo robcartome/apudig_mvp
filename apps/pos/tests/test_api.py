@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.companies.models import Company, Store
+from apps.companies.models import Company, CompanyBranding, Store
 from apps.core.models import AuditLog
 from apps.inventory.models import (
     Category,
@@ -27,8 +27,22 @@ from apps.users.models import Permission, Role, RolePermission, User, UserStore
 
 class PosApiTest(TestCase):
     def setUp(self):
-        self.company = Company.objects.create(name="Ferreteria API", ruc="20111112222")
-        self.store = Store.objects.create(company=self.company, name="Tienda principal")
+        self.company = Company.objects.create(
+            name="Ferreteria API",
+            ruc="20111112222",
+            address="Av. Principal 123",
+            phone="999111222",
+            email="ventas@ferreteria.test",
+        )
+        CompanyBranding.objects.create(
+            company=self.company,
+            pdf_logo_url="https://cdn.example.test/logo-pos.png",
+        )
+        self.store = Store.objects.create(
+            company=self.company,
+            name="Tienda principal",
+            address="Mostrador principal",
+        )
         self.user = User.objects.create_user(email="cashier@pos.test", password="test")
         self._grant_role(self.user, "CASHIER")
         self._activate_context(self.user)
@@ -505,6 +519,49 @@ class PosApiTest(TestCase):
         stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
         self.assertEqual(stock.quantity, Decimal("9.000"))
 
+    def test_checkout_accepts_manual_line_without_inventory_movement(self):
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload["lines"] = [{
+            "line_type": "MANUAL",
+            "product_id": None,
+            "unit_id": str(self.unit.pk),
+            "description": "Flete y descarga especial",
+            "product_code": "SIN CODIGO",
+            "quantity": "2.000",
+            "unit_price": "10.000000",
+            "discount_amount": "0.00",
+            "tax_type": "10",
+            "igv_rate": "18.00",
+            "memo": "Entrega en segundo piso",
+        }]
+        payload["payments"][0].update({
+            "amount": "23.60",
+            "received_amount": "23.60",
+        })
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["total"], "23.60")
+        self.assertTrue(response.json()["lines"][0]["is_manual"])
+        document = SalesDocument.objects.get(pk=response.json()["sales_document_id"])
+        line = document.lines.select_related("product").get()
+        self.assertEqual(line.product.sku, "VARIOS-POS")
+        self.assertFalse(line.product.tracks_inventory)
+        self.assertEqual(line.product_code, "SIN CODIGO")
+        self.assertEqual(line.description, "Flete y descarga especial")
+        self.assertEqual(line.memo, "Entrega en segundo piso")
+        self.assertFalse(document.inventory_movements.exists())
+
+        search = self.client.get("/api/v1/pos/products/", {
+            "register_id": str(self.register.pk),
+            "search": "VARIOS-POS",
+            "currency": "PEN",
+        })
+        self.assertEqual(search.status_code, 200, search.content)
+        self.assertEqual(search.json(), [])
+
     def test_stock_failure_rolls_back_document_ticket_and_correlatives(self):
         stock = StockByWarehouse.objects.get(product=self.product, warehouse=self.warehouse)
         stock.quantity = Decimal("0.000")
@@ -760,9 +817,15 @@ class PosApiTest(TestCase):
         self.assertEqual(data["electronic_status"], "PENDING")
         self.assertIsNone(data["qr_payload"])
         self.assertEqual(len(data["lines"]), 1)
+        self.assertEqual(data["company_name"], "Ferreteria API")
+        self.assertEqual(data["company_ruc"], "20111112222")
+        self.assertEqual(data["company_logo_url"], "https://cdn.example.test/logo-pos.png")
+        self.assertEqual(data["store_name"], "Tienda principal")
         self.assertTrue(data["document_pdf_url"].endswith("/a4/"))
         a4 = self.client.get(data["document_pdf_url"])
         self.assertEqual(a4.status_code, 200, a4.content)
+        self.assertContains(a4, "https://cdn.example.test/logo-pos.png")
+        self.assertContains(a4, "Datos de la operación POS")
 
     def test_sunat_hash_enables_official_qr_payload(self):
         session_id = self._open_session()

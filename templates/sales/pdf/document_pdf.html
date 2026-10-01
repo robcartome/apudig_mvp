@@ -17,6 +17,7 @@
     .no-print button { padding: 8px 20px; font-size: 13px; cursor: pointer; }
 
     .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 2px solid #333; padding-bottom: 12px; }
+    .company-logo { display: block; max-width: 210px; max-height: 72px; object-fit: contain; margin-bottom: 8px; }
     .company-info h1 { font-size: 16px; margin: 0 0 4px; }
     .company-info p { margin: 2px 0; }
     .doc-box { border: 2px solid #333; padding: 10px 16px; text-align: center; min-width: 180px; }
@@ -41,6 +42,7 @@
 
     .notes { background: #fafafa; border: 1px solid #ddd; padding: 8px; font-size: 10px; margin-top: 8px; }
     .footer { margin-top: 24px; font-size: 10px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 8px; }
+    .payment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 18px; }
   </style>
 </head>
 <body>
@@ -58,11 +60,13 @@
 <div class="doc-header">
   <div class="company-info">
     {% if company %}
+    {% if company_logo_url %}<img class="company-logo" src="{{ company_logo_url }}" alt="Logo de {{ company.name }}">{% endif %}
     <h1>{{ company.name }}</h1>
     <p>RUC: {{ company.ruc }}</p>
     {% if company.address %}<p>{{ company.address }}</p>{% endif %}
     {% if company.phone %}<p>Tel: {{ company.phone }}</p>{% endif %}
     {% if company.email %}<p>{{ company.email }}</p>{% endif %}
+    {% if sales_document.store %}<p><strong>Sede:</strong> {{ sales_document.store.name }}{% if sales_document.store.address %} · {{ sales_document.store.address }}{% endif %}</p>{% endif %}
     {% else %}
     <h1>EMPRESA</h1>
     {% endif %}
@@ -81,6 +85,15 @@
     </div>
   </div>
 </div>
+
+{% if pos_transaction %}
+<div class="section">
+  <div class="section-title">Datos de la operación POS</div>
+  <div class="info-row"><span class="info-label">Ticket:</span><span>{{ pos_transaction.ticket_code }}</span></div>
+  <div class="info-row"><span class="info-label">Caja:</span><span>{{ pos_transaction.register.name }}</span></div>
+  <div class="info-row"><span class="info-label">Cajero(a):</span><span>{{ pos_transaction.cashier.display_name }}</span></div>
+</div>
+{% endif %}
 
 <div class="section">
   <div class="section-title">Cliente</div>
@@ -141,6 +154,10 @@
 <table class="totals-box">
   <tbody>
     <tr>
+      <td>Subtotal</td>
+      <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.subtotal|floatformat:2 }}</td>
+    </tr>
+    <tr>
       <td>Op. Gravadas</td>
       <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.taxable_amount|floatformat:2 }}</td>
     </tr>
@@ -156,10 +173,10 @@
       <td class="text-right">{{ sales_document.currency|currency_symbol }} {{ sales_document.unaffected_amount|floatformat:2 }}</td>
     </tr>
     {% endif %}
-    {% if sales_document.global_discount_amount %}
+    {% if sales_document.total_discount %}
     <tr>
-      <td>Descuento general{% if sales_document.global_discount_before_tax %} antes del IGV{% endif %}</td>
-      <td class="text-right">- {{ sales_document.currency|currency_symbol }} {{ sales_document.global_discount_amount|floatformat:2 }}</td>
+      <td>Descuentos totales</td>
+      <td class="text-right">- {{ sales_document.currency|currency_symbol }} {{ sales_document.total_discount|floatformat:2 }}</td>
     </tr>
     {% endif %}
     <tr>
@@ -172,6 +189,22 @@
     </tr>
   </tbody>
 </table>
+
+{% if pos_transaction and sales_document.pos_payments.all %}
+<div class="section" style="margin-top:14px;">
+  <div class="section-title">Medios de pago</div>
+  <div class="payment-grid">
+  {% for payment in sales_document.pos_payments.all %}
+    <div><strong>{{ payment.means_of_payment.name }}</strong></div>
+    <div class="text-right">
+      {{ sales_document.currency|currency_symbol }} {{ payment.amount_in_sale_currency|floatformat:2 }}
+      {% if payment.operation_reference %}<br><small>Operación: {{ payment.operation_reference }}</small>{% endif %}
+      {% if payment.change_amount %}<br><small>Vuelto: {{ sales_document.currency|currency_symbol }} {{ payment.change_amount|floatformat:2 }}</small>{% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 {% if sales_document.notes %}
 <div class="notes"><strong>Notas:</strong> {{ sales_document.notes }}</div>

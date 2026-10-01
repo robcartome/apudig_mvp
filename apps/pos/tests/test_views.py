@@ -58,6 +58,8 @@ class PosWorkspaceViewTest(TestCase):
         self.assertContains(response, 'id="checkout-review-dialog"')
         self.assertContains(response, "Esta es una precuenta")
         self.assertContains(response, "Confirmar y cobrar")
+        self.assertContains(response, 'id="add-manual-line"')
+        self.assertNotContains(response, 'id="manual-line-dialog"')
         self.assertContains(response, 'data-product-search-mode="SEARCH"')
         self.assertContains(response, 'id="pos-catalog-browser" class="pos-catalog-browser" hidden')
 

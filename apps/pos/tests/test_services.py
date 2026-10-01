@@ -341,20 +341,19 @@ class PosServiceTest(TestCase):
         self.assertEqual(completed.status, PosTransaction.Status.COMPLETED)
         self.assertEqual(document.pos_payments.count(), 2)
 
-    def test_payment_reference_is_required_for_configured_tender(self):
+    def test_payment_reference_is_optional_for_configured_tender(self):
         session = self._session()
         document = self._document()
 
-        with self.assertRaises(PosDomainError) as error:
-            register_sales_payment(
-                sales_document_id=document.pk,
-                cash_session_id=session.pk,
-                means_of_payment_id=self.wallet.pk,
-                amount=document.total,
-                created_by=self.user,
-            )
+        payment = register_sales_payment(
+            sales_document_id=document.pk,
+            cash_session_id=session.pk,
+            means_of_payment_id=self.wallet.pk,
+            amount=document.total,
+            created_by=self.user,
+        )
 
-        self.assertEqual(error.exception.code, "PAYMENT_REFERENCE_REQUIRED")
+        self.assertEqual(payment.operation_reference, "")
 
     def test_payment_cannot_exceed_document_total(self):
         session = self._session()

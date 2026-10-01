@@ -230,6 +230,12 @@ class PosBootstrapAPIView(PosAPIView):
                 {"id": str(item.pk), "code": item.code, "name": item.name}
                 for item in Unit.objects.all().order_by("code")
             ],
+            "tax_rates": {
+                affectation: str(tax_rate_for_company(
+                    company_id, affectation_type=affectation
+                ))
+                for affectation in ("10", "20", "30", "40")
+            },
             "readiness": {
                 "registers": registers.count(),
                 "products": Product.objects.filter(company_id=company_id, active=True).count(),
@@ -282,6 +288,8 @@ class PosProductSearchAPIView(PosAPIView):
         )
         if product_ids:
             products_query = products_query.filter(pk__in=product_ids)
+        else:
+            products_query = products_query.exclude(sku="VARIOS-POS")
         category_id = request.query_params.get("category_id")
         if category_id:
             category = get_object_or_404(

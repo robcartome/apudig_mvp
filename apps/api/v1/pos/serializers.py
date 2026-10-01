@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Sum
 from django.urls import reverse
 from rest_framework import serializers
@@ -71,6 +72,7 @@ class SalesPaymentSerializer(serializers.ModelSerializer):
 
 class PosReceiptLineSerializer(serializers.ModelSerializer):
     returned_quantity = serializers.SerializerMethodField()
+    is_manual = serializers.SerializerMethodField()
     product_id = serializers.UUIDField(read_only=True)
     unit_id = serializers.UUIDField(read_only=True, allow_null=True)
 
@@ -79,7 +81,7 @@ class PosReceiptLineSerializer(serializers.ModelSerializer):
         fields = (
             "id", "product_id", "description", "product_code", "unit_id", "unit_code",
             "quantity", "unit_price", "discount_amount", "tax_type", "igv_rate",
-            "memo", "total", "returned_quantity",
+            "memo", "total", "returned_quantity", "is_manual",
         )
 
     def get_returned_quantity(self, obj):
@@ -87,6 +89,9 @@ class PosReceiptLineSerializer(serializers.ModelSerializer):
             pos_return__status=PosReturn.Status.COMPLETED
         ).aggregate(total=Sum("quantity"))["total"] or Decimal("0")
         return str(value)
+
+    def get_is_manual(self, obj):
+        return obj.product.sku == "VARIOS-POS"
 
 
 class PosTransactionSerializer(serializers.ModelSerializer):
@@ -134,6 +139,14 @@ class PosTransactionSerializer(serializers.ModelSerializer):
     notes = serializers.CharField(source="sales_document.notes", read_only=True)
     cashier_name = serializers.SerializerMethodField()
     register_name = serializers.CharField(source="register.name", read_only=True)
+    company_name = serializers.SerializerMethodField()
+    company_ruc = serializers.SerializerMethodField()
+    company_address = serializers.SerializerMethodField()
+    company_phone = serializers.SerializerMethodField()
+    company_email = serializers.SerializerMethodField()
+    company_logo_url = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+    store_address = serializers.SerializerMethodField()
 
     class Meta:
         model = PosTransaction
@@ -141,6 +154,8 @@ class PosTransactionSerializer(serializers.ModelSerializer):
             "id", "idempotency_key", "ticket_code", "ticket_number", "status", "billing_status",
             "payment_condition", "payment_status", "due_date",
             "cash_session", "register", "register_name", "cashier", "cashier_name", "started_at", "completed_at",
+            "company_name", "company_ruc", "company_address", "company_phone",
+            "company_email", "company_logo_url", "store_name", "store_address",
             "sales_document_id", "document_type", "document_series", "document_number",
             "customer_id", "customer_name", "customer_document_type",
             "customer_document_number", "customer_address", "currency", "subtotal", "igv_total",
@@ -165,6 +180,48 @@ class PosTransactionSerializer(serializers.ModelSerializer):
         if obj.cashier is None:
             return ""
         return obj.cashier.display_name
+
+    def _company(self, obj):
+        store = getattr(obj.sales_document, "store", None)
+        return getattr(store, "company", None)
+
+    def get_company_name(self, obj):
+        company = self._company(obj)
+        return company.name if company else ""
+
+    def get_company_ruc(self, obj):
+        company = self._company(obj)
+        return company.ruc if company else ""
+
+    def get_company_address(self, obj):
+        company = self._company(obj)
+        return company.address if company else ""
+
+    def get_company_phone(self, obj):
+        company = self._company(obj)
+        return company.phone if company else ""
+
+    def get_company_email(self, obj):
+        company = self._company(obj)
+        return company.email if company else ""
+
+    def get_company_logo_url(self, obj):
+        company = self._company(obj)
+        if company is None:
+            return ""
+        try:
+            branding = company.branding
+        except ObjectDoesNotExist:
+            return ""
+        return branding.pdf_logo_url or branding.app_logo_url or ""
+
+    def get_store_name(self, obj):
+        store = getattr(obj.sales_document, "store", None)
+        return store.name if store else ""
+
+    def get_store_address(self, obj):
+        store = getattr(obj.sales_document, "store", None)
+        return store.address if store else ""
 
     def get_outstanding_amount(self, obj):
         paid = Decimal(self.get_paid_amount(obj))
@@ -274,7 +331,8 @@ class CreditCollectionRequestSerializer(serializers.Serializer):
 
 
 class PosSaleLineInputSerializer(serializers.Serializer):
-    product_id = serializers.UUIDField()
+    product_id = serializers.UUIDField(required=False, allow_null=True)
+    line_type = serializers.ChoiceField(choices=("PRODUCT", "MANUAL"), default="PRODUCT")
     unit_id = serializers.UUIDField(required=False, allow_null=True)
     description = serializers.CharField(max_length=500, required=False, allow_blank=True)
     quantity = serializers.DecimalField(max_digits=14, decimal_places=3, min_value=Decimal("0.001"))
@@ -293,6 +351,18 @@ class PosSaleLineInputSerializer(serializers.Serializer):
     sunat_product_code = serializers.CharField(max_length=20, required=False, allow_blank=True)
     product_code = serializers.CharField(max_length=100, required=False, allow_blank=True)
     memo = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs["line_type"] == "PRODUCT" and not attrs.get("product_id"):
+            raise serializers.ValidationError({"product_id": "Seleccione un producto."})
+        if attrs["line_type"] == "MANUAL":
+            if not (attrs.get("description") or "").strip():
+                raise serializers.ValidationError({"description": "Ingrese una descripción."})
+            if not attrs.get("unit_id"):
+                raise serializers.ValidationError({"unit_id": "Seleccione una unidad."})
+            if "unit_price" not in attrs:
+                raise serializers.ValidationError({"unit_price": "Ingrese el precio de venta."})
+        return attrs
 
 
 class PosPaymentInputSerializer(serializers.Serializer):

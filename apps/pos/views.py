@@ -393,16 +393,30 @@ def receipt_a4(request, transaction_id):
     transaction = get_object_or_404(
         PosTransaction.objects.select_related(
             "sales_document__store__company",
+            "sales_document__store__company__branding",
             "sales_document__document_type",
-        ).prefetch_related("sales_document__lines"),
+            "cashier",
+            "register",
+        ).prefetch_related(
+            "sales_document__lines",
+            "sales_document__pos_payments__means_of_payment",
+        ),
         pk=transaction_id,
         company_id=company_id,
         store_id=store_id,
     )
     sales_document = transaction.sales_document
     company = sales_document.store.company if sales_document.store_id else None
+    branding = company.branding if company and hasattr(company, "branding") else None
+    logo_url = (branding.pdf_logo_url or branding.app_logo_url) if branding else ""
     return render(
         request,
         "sales/pdf/document_pdf.html",
-        {"sales_document": sales_document, "company": company, "from_pos": True},
+        {
+            "sales_document": sales_document,
+            "company": company,
+            "company_logo_url": logo_url,
+            "pos_transaction": transaction,
+            "from_pos": True,
+        },
     )

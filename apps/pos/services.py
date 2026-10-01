@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.core.models import AuditLog
 from apps.core.currency import currency_symbol
-from apps.inventory.models import MovementOrigin, PriceList, Product, ProductPrice, ProductUnit, Warehouse
+from apps.inventory.models import MovementOrigin, PriceList, Product, ProductPrice, ProductUnit, Unit, Warehouse
 from apps.inventory.pricing import split_final_price, tax_rate_for_company
 from apps.inventory.services import confirm_movement, register_entry
 from apps.partners.models import Customer, DocumentType
@@ -40,6 +40,7 @@ from .selectors import calculate_cash_session_totals
 
 
 MONEY_QUANTUM = Decimal("0.01")
+POS_MANUAL_PRODUCT_SKU = "VARIOS-POS"
 
 
 class PosDomainError(ValueError):
@@ -56,6 +57,57 @@ def _money(value, field_name="importe") -> Decimal:
     if not amount.is_finite():
         raise PosDomainError("INVALID_AMOUNT", f"El {field_name} no es valido.")
     return amount
+
+
+def _manual_pos_product(company_id, unit_id) -> Product:
+    """Devuelve el único artículo técnico usado por líneas libres del POS."""
+    unit = Unit.objects.filter(pk=unit_id).first()
+    if unit is None:
+        raise PosDomainError("INVALID_PRODUCT_UNIT", "Seleccione una unidad válida.")
+    product, created = Product.objects.get_or_create(
+        company_id=company_id,
+        sku=POS_MANUAL_PRODUCT_SKU,
+        defaults={
+            "name": "Línea libre POS",
+            "description": "Artículo técnico para conceptos manuales no inventariables.",
+            "unit": unit,
+            "price_sale": Decimal("0.00"),
+            "tax_affectation": "10",
+            "tracks_inventory": False,
+            "active": True,
+        },
+    )
+    if created:
+        AuditLog.objects.create(
+            action="CREATE",
+            entity="Product",
+            entity_id=str(product.pk),
+            meta_data={
+                "source": "POS_MANUAL_LINE",
+                "company_id": str(company_id),
+                "sku": POS_MANUAL_PRODUCT_SKU,
+            },
+        )
+    update_fields = []
+    if product.tracks_inventory:
+        product.tracks_inventory = False
+        update_fields.append("tracks_inventory")
+    if not product.active:
+        product.active = True
+        update_fields.append("active")
+    if update_fields:
+        product.save(update_fields=(*update_fields, "updated_at"))
+    ProductUnit.objects.get_or_create(
+        product=product,
+        unit=unit,
+        defaults={
+            "conversion_factor": 1,
+            "is_default_sale": created or product.unit_id == unit.pk,
+            "is_default_purchase": created or product.unit_id == unit.pk,
+            "active": True,
+        },
+    )
+    return product
 
 
 def _audit(entity, action: str, user=None, **metadata) -> None:
@@ -788,9 +840,10 @@ def register_sales_payment(
             "El importe aplicado debe coincidir con el pago cuando usan la misma moneda.",
         )
 
+    # En el POS la referencia facilita la conciliación de billeteras y
+    # transferencias, pero no debe impedir una venta rápida si el cajero aún
+    # no dispone del número de operación.
     reference = (operation_reference or "").strip()
-    if means.requires_reference and not reference:
-        raise PosDomainError("PAYMENT_REFERENCE_REQUIRED", "El medio de pago requiere referencia.")
 
     received = _money(received_amount if received_amount is not None else amount, "importe recibido")
     change = _money(change_amount if change_amount is not None else 0, "vuelto")
@@ -893,7 +946,11 @@ def _resolve_pos_lines(
     if not line_items:
         raise PosDomainError("SALE_LINES_REQUIRED", "Debe agregar al menos un producto.")
 
-    product_ids = [str(item["product_id"]) for item in line_items]
+    product_ids = [
+        str(item["product_id"])
+        for item in line_items
+        if item.get("line_type", "PRODUCT") == "PRODUCT" and item.get("product_id")
+    ]
     products = {
         str(product.pk): product
         for product in Product.objects.select_related("unit").filter(
@@ -923,7 +980,12 @@ def _resolve_pos_lines(
 
     resolved = []
     for item in line_items:
-        product = products[str(item["product_id"])]
+        is_manual = item.get("line_type", "PRODUCT") == "MANUAL"
+        product = (
+            _manual_pos_product(company_id, item.get("unit_id"))
+            if is_manual
+            else products[str(item["product_id"])]
+        )
         quantity = Decimal(str(item["quantity"]))
         if not quantity.is_finite() or quantity <= 0:
             raise PosDomainError("INVALID_QUANTITY", "La cantidad debe ser mayor que cero.")
@@ -972,18 +1034,22 @@ def _resolve_pos_lines(
             expected_commercial_price = Decimal(str(expected_commercial_price)) * Decimal(
                 str(conversion.conversion_factor)
             )
-        if expected_commercial_price is None:
+        if expected_commercial_price is None and not is_manual:
             raise PosDomainError(
                 "PRICE_NOT_CONFIGURED",
                 f"No existe un precio en {currency_symbol(currency)} para {product.name}.",
             )
         tax_type = item.get("tax_type") or product.tax_affectation
         effective_rate = tax_rate_for_company(company_id, affectation_type=tax_type)
-        expected_price = split_final_price(
-            expected_commercial_price,
-            affectation_type=tax_type,
-            tax_rate=effective_rate,
-        ).unit_value
+        expected_price = (
+            Decimal(str(item.get("unit_price"))).quantize(Decimal("0.000001"))
+            if is_manual
+            else split_final_price(
+                expected_commercial_price,
+                affectation_type=tax_type,
+                tax_rate=effective_rate,
+            ).unit_value
+        )
         submitted_price = item.get("unit_price")
         unit_price = (
             expected_price
@@ -992,7 +1058,7 @@ def _resolve_pos_lines(
         )
         if not unit_price.is_finite() or unit_price < 0:
             raise PosDomainError("INVALID_PRICE", "El precio unitario no es valido.")
-        if unit_price != expected_price and not allow_price_change:
+        if unit_price != expected_price and not is_manual and not allow_price_change:
             raise PosDomainError(
                 "PRICE_CHANGE_NOT_AUTHORIZED",
                 f"No tiene permiso para modificar el precio de {product.name}.",
@@ -1017,7 +1083,9 @@ def _resolve_pos_lines(
             "tax_type": tax_type,
             "igv_rate": effective_rate,
             "sunat_product_code": (item.get("sunat_product_code") or "").strip(),
-            "product_code": (item.get("product_code") or product.sku).strip(),
+            "product_code": (
+                item.get("product_code") or ("SIN CODIGO" if is_manual else product.sku)
+            ).strip(),
             "memo": (item.get("memo") or "").strip(),
         })
     return resolved

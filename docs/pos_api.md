@@ -135,3 +135,14 @@ Django activa, conserva los calculos autoritativos en el servidor y adapta el
 flujo a escritorio, tablet y movil. En pantallas pequenas, el panel de cobro se
 presenta como una bandeja inferior y todos los controles operativos mantienen
 un area tactil minima.
+
+# Líneas libres
+
+El checkout admite líneas `line_type: "MANUAL"` para productos no registrados y
+servicios ocasionales. Requieren `description`, `unit_id`, `quantity` y
+`unit_price`; `product_id` debe omitirse o enviarse como `null`.
+
+El servidor las vincula al artículo técnico no inventariable `VARIOS-POS`, pero
+congela en el documento el código, descripción, unidad, precio, impuesto y memo
+informados por el cajero. Estas líneas no generan movimientos de stock ni
+Kardex. El artículo técnico se excluye de las búsquedas normales del POS.

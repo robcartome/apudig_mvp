@@ -5,7 +5,7 @@
 {% block body_class %}pos-page{% endblock %}
 
 {% block extra_css %}
-  <link href="{% static 'css/pos.css' %}?v=20260930-2" rel="stylesheet">
+  <link href="{% static 'css/pos.css' %}?v=20261001-1" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -102,6 +102,7 @@
       <span><kbd>Alt+1/2/3</kbd> Documento</span>
       <span><kbd>F8</kbd> Cobrar</span>
       <span><kbd>F7</kbd> Guardar borrador</span>
+      <span><kbd>Alt+L</kbd> Línea libre</span>
       <span><kbd>Alt+Q/P/G/M</kbd> Cantidad / precio / descuento / memo</span>
     </div>
   </nav>
@@ -122,6 +123,9 @@
           >
           <kbd>F2</kbd>
         </div>
+        <button id="add-manual-line" class="btn btn-outline-primary pos-manual-line-button" type="button" title="Agregar producto no registrado o servicio (Alt+L)">
+          <i class="ti ti-file-plus me-1"></i><span>Línea libre</span><kbd>Alt+L</kbd>
+        </button>
         <div id="product-results" class="pos-search-results" role="listbox" hidden></div>
       </div>
 
@@ -636,5 +640,5 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/pos.js' %}?v=20260930-3"></script>
+  <script src="{% static 'js/pos.js' %}?v=20261001-1"></script>
 {% endblock %}

@@ -17,6 +17,7 @@
     categories: [],
     productCategories: [],
     units: [],
+    taxRates: { "10": 18, "20": 0, "30": 0, "40": 0 },
     catalogProducts: [],
     catalogRequest: 0,
     productSearchMode: app.dataset.productSearchMode === "CATALOG" ? "CATALOG" : "SEARCH",
@@ -372,6 +373,7 @@
       state.categories = data.categories || [];
       state.productCategories = data.product_categories || [];
       state.units = data.units || [];
+      state.taxRates = data.tax_rates || state.taxRates;
       state.permissions = new Set(data.permissions || []);
       state.suggestedOpeningTotals = data.suggested_opening_totals || { PEN: "0.00", USD: "0.00" };
       updateCashMovementPermissions();
@@ -552,18 +554,32 @@
     byId("cart-count").textContent = `${fixed(quantity, quantity % 1 ? 3 : 0)} ${lines.length === 1 ? "artículo" : "artículos"}`;
     byId("cart-lines").innerHTML = lines.map((line) => {
       const values = lineTotals(line);
-      const canChangePrice = hasPermission("change.pos.price");
+      const canChangePrice = line.manual || hasPermission("change.pos.price");
       const canDiscount = hasPermission("apply.pos.discount");
       const unitControl = line.units.length > 1
         ? `<select class="pos-unit-select" data-action="unit" aria-label="Unidad de ${escapeHtml(line.name)}">
             ${line.units.map((unit) => `<option value="${unit.id}" ${unit.id === line.unitId ? "selected" : ""} ${unit.unit_price === null ? "disabled" : ""}>${escapeHtml(unit.code)}</option>`).join("")}
           </select>`
         : `<span>${escapeHtml(line.unit)}</span>`;
+      const productControl = line.manual
+        ? `<div class="pos-manual-product-fields">
+            <input class="pos-manual-description" data-action="description" type="text" maxlength="500" value="${escapeHtml(line.name)}" placeholder="Descripción del producto o servicio" aria-label="Descripción de la línea libre">
+            <input class="pos-manual-code" data-action="code" type="text" maxlength="100" value="${escapeHtml(line.sku)}" placeholder="SIN CÓDIGO" aria-label="Código de la línea libre">
+          </div>`
+        : `<span class="pos-product-name">${escapeHtml(line.name)}</span>`;
+      const taxControl = line.manual
+        ? `<select class="pos-manual-tax" data-action="tax" aria-label="Impuesto de ${escapeHtml(line.name)}">
+            <option value="10" ${line.taxType === "10" ? "selected" : ""}>IGV ${fixed(state.taxRates["10"] || 18, 0)}%</option>
+            <option value="20" ${line.taxType === "20" ? "selected" : ""}>Exonerado</option>
+            <option value="30" ${line.taxType === "30" ? "selected" : ""}>Inafecto</option>
+            <option value="40" ${line.taxType === "40" ? "selected" : ""}>Exportación</option>
+          </select>`
+        : `<span class="pos-tax-label">${line.taxType === "10" ? `IGV ${fixed(line.igvRate, 0)}%` : "Sin IGV"}</span>`;
       return `
         <tr data-line-id="${line.id}" class="${state.activeCartLineId === line.id ? "is-selected" : ""}">
           <td>
-            <span class="pos-product-name">${escapeHtml(line.name)}</span>
-            <span class="pos-product-meta">${escapeHtml(line.sku)} · ${unitControl} · Stock ${fixed(line.stock, 3)} ${escapeHtml(line.unit)}</span>
+            ${productControl}
+            <span class="pos-product-meta">${escapeHtml(line.sku)} · ${unitControl} · ${line.manual ? '<b class="pos-manual-badge">Línea libre · Sin stock</b>' : `Stock ${fixed(line.stock, 3)} ${escapeHtml(line.unit)}`}</span>
             ${canDiscount ? `<label class="pos-line-discount">Desc. neto <span class="currency-label">${currencySymbol()}</span><input class="pos-discount-input" data-action="discount" type="number" min="0" step="0.01" value="${fixed(line.discount)}" aria-label="Descuento de ${escapeHtml(line.name)}"></label>` : ""}
             ${line.memo ? `<span class="pos-line-memo"><i class="ti ti-notes"></i>${escapeHtml(line.memo)}</span>` : ""}
           </td>
@@ -575,9 +591,9 @@
             </div>
           </td>
           <td><input class="pos-price-input" data-action="price" type="number" min="0" step="0.01" inputmode="decimal" value="${fixed(grossUnitPrice(line))}" ${canChangePrice ? "" : "disabled"} aria-label="Precio unitario de ${escapeHtml(line.name)}"></td>
-          <td><span class="pos-tax-label">${line.taxType === "10" ? `IGV ${fixed(line.igvRate, 0)}%` : "Sin IGV"}</span></td>
+          <td>${taxControl}</td>
           <td class="text-end"><span class="pos-line-total">${currencySymbol()} ${fixed(values.total)}</span></td>
-          <td><div class="pos-line-actions"><button class="pos-line-info" data-action="prices" type="button" aria-label="Ver listas de precios de ${escapeHtml(line.name)}" title="Listas de precios"><i class="ti ti-tags"></i></button><button class="pos-line-info" data-action="stock" type="button" aria-label="Ver stock por almacén de ${escapeHtml(line.name)}" title="Stock por almacén"><i class="ti ti-building-warehouse"></i></button><button class="pos-memo-line ${line.memo ? "has-value" : ""}" data-action="memo" type="button" aria-label="Información adicional de ${escapeHtml(line.name)}" title="Información adicional"><i class="ti ti-notes"></i></button><button class="pos-remove-line" data-action="remove" type="button" aria-label="Quitar ${escapeHtml(line.name)}"><i class="ti ti-trash"></i></button></div></td>
+          <td><div class="pos-line-actions">${line.manual ? "" : `<button class="pos-line-info" data-action="prices" type="button" aria-label="Ver listas de precios de ${escapeHtml(line.name)}" title="Listas de precios"><i class="ti ti-tags"></i></button><button class="pos-line-info" data-action="stock" type="button" aria-label="Ver stock por almacén de ${escapeHtml(line.name)}" title="Stock por almacén"><i class="ti ti-building-warehouse"></i></button>`}<button class="pos-memo-line ${line.memo ? "has-value" : ""}" data-action="memo" type="button" aria-label="Información adicional de ${escapeHtml(line.name)}" title="Información adicional"><i class="ti ti-notes"></i></button><button class="pos-remove-line" data-action="remove" type="button" aria-label="Quitar ${escapeHtml(line.name)}"><i class="ti ti-trash"></i></button></div></td>
         </tr>`;
     }).join("");
     updateTotals();
@@ -710,7 +726,7 @@
             <label class="pos-payment-field"><span>${isCash ? "Monto recibido" : "Monto pagado"}</span><input data-payment-action="${isCash ? "received" : "amount"}" type="number" min="0" step="0.01" value="${fixed(isCash ? payment.received : payment.amount)}" aria-label="${isCash ? "Efectivo recibido" : "Monto pagado"}"></label>
             <button class="pos-payment-remove" data-payment-action="remove" type="button" aria-label="Quitar pago" ${state.paymentCondition === "CASH" && state.payments.length === 1 ? "disabled" : ""}><i class="ti ti-x"></i></button>
             ${isCash ? `<div class="pos-payment-change"><span>Vuelto</span><strong>${currencySymbol()} ${fixed(row?.change || 0)}</strong></div>` : ""}
-            ${requiresReference ? `<label class="pos-payment-field pos-payment-reference"><span>N.º de operación / voucher</span><input data-payment-action="reference" maxlength="120" value="${escapeHtml(payment.reference)}" placeholder="Ej.: OP003457" aria-label="Número de operación o voucher"></label>` : ""}
+            ${requiresReference ? `<label class="pos-payment-field pos-payment-reference ${payment.reference.trim() ? "" : "has-warning"}"><span>N.º de operación / voucher <em>Recomendado</em></span><input class="${payment.reference.trim() ? "" : "is-warning"}" data-payment-action="reference" maxlength="120" value="${escapeHtml(payment.reference)}" placeholder="Ej.: OP003457" aria-label="Número de operación o voucher" aria-describedby="payment-reference-warning-${payment.key}"><small id="payment-reference-warning-${payment.key}" class="pos-payment-reference-warning" role="status" ${payment.reference.trim() ? "hidden" : ""}><i class="ti ti-alert-triangle"></i> Puedes continuar, pero el pago quedará sin referencia para su conciliación.</small></label>` : ""}
           </div>`;
       }).join("");
     }
@@ -762,7 +778,6 @@
       const means = state.means.find((item) => item.id === payment.meansId);
       const entered = means?.kind === "CASH" ? number(payment.received) : number(payment.amount);
       if (!means || entered <= 0) return "Revise los importes de pago.";
-      if (means.kind !== "CASH" && !payment.reference.trim()) return `Ingrese el número de operación o voucher de ${means.name}.`;
     }
     if (state.documentType === "01") {
       if (!state.selectedCustomer || state.selectedCustomer.document_number?.length !== 11) {
@@ -787,7 +802,7 @@
     const container = byId("product-results");
     if (!products.length) {
       const canCreate = hasPermission("create.pos.product");
-      container.innerHTML = `<div class="pos-no-results">No se encontraron productos.${canCreate ? `<button class="btn btn-sm btn-primary ms-2" type="button" data-create-product><i class="ti ti-plus me-1"></i>Crear producto</button>` : ""}</div>`;
+      container.innerHTML = `<div class="pos-no-results">No se encontraron productos.${canCreate ? `<button class="btn btn-sm btn-primary ms-2" type="button" data-create-product><i class="ti ti-plus me-1"></i>Crear producto</button>` : ""}<button class="btn btn-sm btn-outline-primary ms-2" type="button" data-create-manual-line><i class="ti ti-file-plus me-1"></i>Agregar línea libre</button></div>`;
     } else {
       container.innerHTML = products.map((product, index) => {
         const net = number(product.unit_price);
@@ -845,14 +860,21 @@
     const params = productQuery();
     params.delete("search");
     params.delete("category_id");
-    params.set("product_ids", [...state.cart.keys()].join(","));
+    const catalogLines = [...state.cart.values()].filter((line) => !line.manual);
+    if (!catalogLines.length) {
+      state.selectedPriceList = priceListId || null;
+      markSaleDirty();
+      if (state.productSearchMode === "CATALOG") await loadCatalog();
+      return;
+    }
+    params.set("product_ids", catalogLines.map((line) => line.productId || line.id).join(","));
     if (priceListId) params.set("price_list_id", priceListId);
     else params.delete("price_list_id");
     const products = await api(`${endpoints.products}?${params}`);
     const productsById = new Map(products.map((item) => [item.id, item]));
     const changes = [];
-    for (const line of state.cart.values()) {
-      const product = productsById.get(line.id);
+    for (const line of catalogLines) {
+      const product = productsById.get(line.productId || line.id);
       const unit = product?.units?.find((item) => item.id === line.unitId);
       if (!product || !unit || unit.unit_price === null) {
         throw new Error(`No existe precio para ${line.name} en la lista seleccionada.`);
@@ -998,6 +1020,46 @@
     }
   }
 
+  function addManualLine() {
+    if (!state.session) return showAlert("Abra una sesión de caja antes de agregar una línea libre.");
+    const unit = state.units.find((item) => item.code === "NIU") || state.units[0];
+    if (!unit) return showAlert("Configure al menos una unidad de medida antes de agregar una línea libre.");
+    const search = byId("product-search").value.trim();
+    const description = search || "Producto o servicio sin registrar";
+    const quantity = 1;
+    const finalPrice = 0;
+    const taxType = "10";
+    const igvRate = number(state.taxRates[taxType] || 0);
+    const lineId = `manual-${uuid()}`;
+    const netPrice = taxType === "10" ? finalPrice / (1 + igvRate / 100) : finalPrice;
+    state.cart.set(lineId, {
+      id: lineId, productId: null, manual: true,
+      manualKind: "PRODUCT",
+      sku: "SIN CODIGO",
+      name: description,
+      unitId: unit.id, unit: unit.code,
+      units: [{ id: unit.id, code: unit.code, conversion_factor: "1", unit_price: fixed(netPrice, 6), is_default_sale: true }],
+      conversionFactor: 1,
+      netPrice: number(netPrice.toFixed(6)),
+      originalNetPrice: number(netPrice.toFixed(6)),
+      priceChanged: false, quantity, discount: 0,
+      memo: "",
+      taxType, igvRate, baseStock: 0, stock: 0,
+      stockUnit: unit.code, tracksInventory: false,
+    });
+    state.activeCartLineId = lineId;
+    markSaleDirty();
+    byId("product-search").value = "";
+    hideProductResults();
+    renderCart();
+    requestAnimationFrame(() => {
+      const selector = search ? '[data-action="price"]' : '[data-action="description"]';
+      const input = byId("cart-lines").querySelector(`[data-line-id="${lineId}"] ${selector}`);
+      input?.focus();
+      input?.select();
+    });
+  }
+
   async function openProductCommercial(productId, view) {
     const line = state.cart.get(productId);
     if (!line) return;
@@ -1090,7 +1152,8 @@
       notes: byId("sale-notes").value.trim(),
       device_identifier: `web-${navigator.userAgentData?.mobile ? "mobile" : "desktop"}`,
       lines: lines.map((line) => ({
-        product_id: line.id,
+        product_id: line.productId || (line.manual ? null : line.id),
+        line_type: line.manual ? "MANUAL" : "PRODUCT",
         unit_id: line.unitId,
         description: line.name,
         quantity: fixed(line.quantity, 3),
@@ -1212,7 +1275,10 @@
     const payments = paymentBreakdown().rows.map((row) => {
       const { payment, means } = row;
       const isCash = means?.kind === "CASH";
-      return `<tr><td><strong>${escapeHtml(means?.name || "Medio de pago")}</strong>${payment.reference ? `<small>Operación: ${escapeHtml(payment.reference)}</small>` : ""}</td><td>${currencySymbol()} ${fixed(row.applied)}</td><td>${currencySymbol()} ${fixed(row.entered)}</td><td>${isCash ? `${currencySymbol()} ${fixed(row.change)}` : "—"}</td></tr>`;
+      const referenceDetail = payment.reference
+        ? `<small>Operación: ${escapeHtml(payment.reference)}</small>`
+        : (!isCash ? '<small class="pos-review-warning"><i class="ti ti-alert-triangle"></i> Sin número de operación / voucher</small>' : "");
+      return `<tr><td><strong>${escapeHtml(means?.name || "Medio de pago")}</strong>${referenceDetail}</td><td>${currencySymbol()} ${fixed(row.applied)}</td><td>${currencySymbol()} ${fixed(row.entered)}</td><td>${isCash ? `${currencySymbol()} ${fixed(row.change)}` : "—"}</td></tr>`;
     }).join("");
     const customer = state.selectedCustomer
       ? `${escapeHtml(state.selectedCustomer.legal_name)} · ${escapeHtml(state.selectedCustomer.document_number || "Sin documento")}`
@@ -1236,13 +1302,60 @@
 
   function renderReceipt(result, lines) {
     state.currentReceipt = result;
-    const documentLabels = { NV: "NOTA DE VENTA", "03": "BOLETA", "01": "FACTURA" };
-    const sourceLines = lines?.length ? lines : (result.lines || []);
-    const receiptLines = sourceLines.map((line) => {
-      const lineName = line.name || line.description || line.product_code || "Producto";
-      const lineTotal = line.total === undefined ? lineTotals(line).total : line.total;
-      return `<div class="pos-receipt__row"><span>${escapeHtml(lineName)} × ${fixed(line.quantity, number(line.quantity) % 1 ? 3 : 0)}</span><strong>${fixed(lineTotal)}</strong></div>`;
-    }).join("");
+    const documentLabels = {
+      NV: "NOTA DE VENTA",
+      "03": "BOLETA",
+      "01": "FACTURA",
+    };
+    // Prefer the persisted snapshot: it contains the definitive description and memo.
+    const sourceLines = result.lines?.length ? result.lines : lines || [];
+    const symbol = currencySymbol(result.currency);
+    const receiptLines = sourceLines
+      .map((line) => {
+        const lineName =
+          line.name || line.description || line.product_code || "Producto";
+        const lineTotal =
+          line.total === undefined ? lineTotals(line).total : line.total;
+        const code = line.sku || line.product_code || "SIN CÓDIGO";
+        const unit = line.unit || line.unit_code || "NIU";
+        const unitPrice =
+          line.netPrice === undefined ? line.unit_price : line.netPrice;
+        const memo = String(line.memo || "").trim();
+        const discount = number(line.discount_amount ?? line.discountAmount);
+        return `<div class="pos-receipt__item">
+        <div class="pos-receipt__item-name">${escapeHtml(lineName)}</div>
+        <div class="pos-receipt__item-code">${escapeHtml(code)} · ${escapeHtml(unit)}</div>
+        ${memo ? `<div class="pos-receipt__item-memo">Detalle: ${escapeHtml(memo)}</div>` : ""}
+        <div class="pos-receipt__row pos-receipt__item-values">
+          <span>${fixed(line.quantity, number(line.quantity) % 1 ? 3 : 0)} × ${symbol} ${fixed(unitPrice)}</span>
+          <strong>${symbol} ${fixed(lineTotal)}</strong>
+        </div>
+        ${discount > 0 ? `<div class="pos-receipt__row pos-receipt__discount"><span>Descuento del ítem</span><span>- ${symbol} ${fixed(discount)}</span></div>` : ""}
+      </div>`;
+      })
+      .join("");
+    const companyLogo = result.company_logo_url
+      ? `<img class="pos-receipt__logo" src="${escapeHtml(result.company_logo_url)}" alt="${escapeHtml(result.company_name || "Empresa")}">`
+      : `<div class="pos-receipt__company-name">${escapeHtml(result.company_name || "EMPRESA")}</div>`;
+    const companyContact = [result.company_phone, result.company_email]
+      .filter(Boolean)
+      .join(" · ");
+    const customerDocument = [
+      result.customer_document_type,
+      result.customer_document_number,
+    ]
+      .filter(Boolean)
+      .join(": ");
+    const paymentLines = (result.payments || [])
+      .map(
+        (payment) => `
+      <div class="pos-receipt__payment">
+        <div class="pos-receipt__row"><span>${escapeHtml(payment.means_of_payment_name || "Pago")}</span><strong>${symbol} ${fixed(payment.amount_in_sale_currency ?? payment.amount)}</strong></div>
+        ${payment.operation_reference ? `<div class="pos-receipt__meta">Operación: ${escapeHtml(payment.operation_reference)}</div>` : ""}
+        ${number(payment.change_amount) > 0 ? `<div class="pos-receipt__row"><span>Vuelto</span><span>${symbol} ${fixed(payment.change_amount)}</span></div>` : ""}
+      </div>`,
+      )
+      .join("");
     const electronicLabels = {
       ACCEPTED: "Aceptado por SUNAT",
       REJECTED: "Rechazado por SUNAT",
@@ -1254,32 +1367,54 @@
       : "";
     byId("pos-receipt").innerHTML = `
       <div class="pos-receipt__header">
-        <strong>${escapeHtml(documentLabels[result.document_type] || "COMPROBANTE")}</strong><br>
-        <span>${escapeHtml(result.document_series)}-${escapeHtml(result.document_number)}</span><br>
-        <span>Ticket ${escapeHtml(result.ticket_code)}</span>
+        ${companyLogo}
+        ${result.company_logo_url && result.company_name ? `<div class="pos-receipt__company-name">${escapeHtml(result.company_name)}</div>` : ""}
+        ${result.company_ruc ? `<div>RUC ${escapeHtml(result.company_ruc)}</div>` : ""}
+        ${result.company_address ? `<div>${escapeHtml(result.company_address)}</div>` : ""}
+        ${companyContact ? `<div>${escapeHtml(companyContact)}</div>` : ""}
+        ${result.store_name ? `<div class="pos-receipt__store">${escapeHtml(result.store_name)}${result.store_address ? ` · ${escapeHtml(result.store_address)}` : ""}</div>` : ""}
       </div>
-      <hr>
+      <div class="pos-receipt__document">
+        <strong>${escapeHtml(documentLabels[result.document_type] || "COMPROBANTE")}</strong>
+        <span>${escapeHtml(result.document_series)}-${escapeHtml(result.document_number)}</span>
+        <small>Ticket ${escapeHtml(result.ticket_code || "")}</small>
+      </div>
+      <div class="pos-receipt__section">
       <div class="pos-receipt__row"><span>Cliente</span><span>${escapeHtml(result.customer_name || "VARIOS")}</span></div>
+      ${customerDocument ? `<div class="pos-receipt__row"><span>Documento</span><span>${escapeHtml(customerDocument)}</span></div>` : ""}
+      ${result.customer_address ? `<div class="pos-receipt__row"><span>Dirección</span><span>${escapeHtml(result.customer_address)}</span></div>` : ""}
       <div class="pos-receipt__row"><span>Fecha</span><span>${new Date(result.completed_at || Date.now()).toLocaleString("es-PE")}</span></div>
+      ${result.cashier_name ? `<div class="pos-receipt__row"><span>Cajero(a)</span><span>${escapeHtml(result.cashier_name)}</span></div>` : ""}
+      ${result.register_name ? `<div class="pos-receipt__row"><span>Caja</span><span>${escapeHtml(result.register_name)}</span></div>` : ""}
       <div class="pos-receipt__row"><span>Condición</span><span>${result.payment_condition === "CREDIT" ? "CRÉDITO" : "CONTADO"}</span></div>
       ${result.due_date ? `<div class="pos-receipt__row"><span>Vencimiento</span><span>${escapeHtml(result.due_date)}</span></div>` : ""}
-      <hr>
+      </div>
+      <div class="pos-receipt__items">
       ${receiptLines}
-      <div class="pos-receipt__row"><span>Subtotal</span><span>${escapeHtml(result.subtotal)}</span></div>
-      <div class="pos-receipt__row"><span>IGV</span><span>${escapeHtml(result.igv_total)}</span></div>
-      <div class="pos-receipt__row pos-receipt__total"><span>TOTAL ${escapeHtml(currencySymbol(result.currency))}</span><span>${escapeHtml(result.total)}</span></div>
-      ${number(result.outstanding_amount) > 0 ? `<div class="pos-receipt__row"><strong>SALDO PENDIENTE</strong><strong>${escapeHtml(result.outstanding_amount)}</strong></div>` : ""}
-      ${electronicNotice}`;
+      </div>
+      <div class="pos-receipt__totals">
+        <div class="pos-receipt__row"><span>Subtotal</span><span>${symbol} ${escapeHtml(result.subtotal)}</span></div>
+        <div class="pos-receipt__row"><span>Descuentos</span><span>- ${symbol} ${fixed(result.total_discount)}</span></div>
+        <div class="pos-receipt__row"><span>IGV</span><span>${symbol} ${escapeHtml(result.igv_total)}</span></div>
+        <div class="pos-receipt__row pos-receipt__total"><span>TOTAL</span><span>${symbol} ${escapeHtml(result.total)}</span></div>
+        ${number(result.outstanding_amount) > 0 ? `<div class="pos-receipt__row pos-receipt__outstanding"><strong>SALDO PENDIENTE</strong><strong>${symbol} ${escapeHtml(result.outstanding_amount)}</strong></div>` : ""}
+      </div>
+      ${paymentLines ? `<div class="pos-receipt__payments"><div class="pos-receipt__caption">PAGOS</div>${paymentLines}</div>` : ""}
+      ${result.notes ? `<div class="pos-receipt__notes"><strong>Observaciones</strong><br>${escapeHtml(result.notes)}</div>` : ""}
+      ${electronicNotice}
+      <div class="pos-receipt__footer">${["01", "03"].includes(result.document_type) ? "Representación impresa del comprobante electrónico.<br>" : ""}Gracias por su compra.</div>
+      <div class="text-center small">Powered by APUDIG</div>`;
     byId("receipt-a4-button").href = result.document_pdf_url || "#";
     byId("return-sale-button").hidden = !(
-      hasPermission("refund.pos.sale")
-      && result.status === "COMPLETED"
-      && result.payment_status === "PAID"
+      hasPermission("refund.pos.sale") &&
+      result.status === "COMPLETED" &&
+      result.payment_status === "PAID"
     );
     byId("debit-note-button").hidden = !(
-      hasPermission("issue.pos.invoice")
-      && result.status === "COMPLETED"
-      && (["01", "03"].includes(result.document_type) || result.billing_status === "INVOICED")
+      hasPermission("issue.pos.invoice") &&
+      result.status === "COMPLETED" &&
+      (["01", "03"].includes(result.document_type) ||
+        result.billing_status === "INVOICED")
     );
   }
 
@@ -1469,8 +1604,10 @@
         const units = product.units?.length ? product.units : [];
         const unit = units.find((item) => item.id === saved.unit_id) || units[0];
         const conversionFactor = Math.max(number(unit?.conversion_factor || 1), 0.000001);
-        state.cart.set(product.id, {
-          id: product.id, sku: saved.product_code || product.sku,
+        const lineId = saved.is_manual ? `manual-${saved.id}` : product.id;
+        state.cart.set(lineId, {
+          id: lineId, productId: saved.product_id, manual: Boolean(saved.is_manual),
+          sku: saved.product_code || product.sku,
           name: saved.description || product.name, unitId: saved.unit_id || unit?.id,
           unit: saved.unit_code || unit?.code || product.unit, units,
           conversionFactor, netPrice: number(saved.unit_price),
@@ -1970,6 +2107,10 @@
     }
   });
   byId("product-results").addEventListener("click", (event) => {
+    if (event.target.closest("[data-create-manual-line]")) {
+      addManualLine();
+      return;
+    }
     if (event.target.closest("[data-create-product]")) {
       openQuickProduct();
       return;
@@ -2040,6 +2181,9 @@
     } else if (event.altKey && ["1", "2", "3"].includes(event.key) && !openDialogs.length) {
       event.preventDefault();
       setDocumentType({ "1": "NV", "2": "03", "3": "01" }[event.key]);
+    } else if (event.altKey && event.key.toLowerCase() === "l" && !openDialogs.length) {
+      event.preventDefault();
+      addManualLine();
     } else if (event.altKey && ["q", "p", "g", "m"].includes(event.key.toLowerCase()) && !openDialogs.length) {
       event.preventDefault();
       if (event.key.toLowerCase() === "g") {
@@ -2112,7 +2256,20 @@
     }
     if (action === "quantity") line.quantity = Math.max(number(event.target.value), 0.001);
     if (action === "discount") line.discount = Math.max(number(event.target.value), 0);
-    if (action === "price" && hasPermission("change.pos.price")) {
+    if (action === "description" && line.manual) {
+      line.name = event.target.value.trim().slice(0, 500) || "Producto o servicio sin registrar";
+    }
+    if (action === "code" && line.manual) {
+      line.sku = event.target.value.trim().slice(0, 100) || "SIN CODIGO";
+    }
+    if (action === "tax" && line.manual) {
+      const gross = grossUnitPrice(line);
+      line.taxType = event.target.value;
+      line.igvRate = number(state.taxRates[line.taxType] || 0);
+      line.netPrice = number((line.taxType === "10" ? gross / (1 + line.igvRate / 100) : gross).toFixed(6));
+      line.originalNetPrice = line.netPrice;
+    }
+    if (action === "price" && (line.manual || hasPermission("change.pos.price"))) {
       const gross = Math.max(number(event.target.value), 0);
       line.netPrice = number((
         line.taxType === "10" ? gross / (1 + line.igvRate / 100) : gross
@@ -2123,7 +2280,7 @@
     renderCart();
   });
   byId("cart-lines").addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && ["quantity", "price", "discount"].includes(event.target.dataset.action)) {
+    if (event.key === "Enter" && ["description", "code", "quantity", "price", "discount"].includes(event.target.dataset.action)) {
       event.preventDefault();
       event.target.blur();
     }
@@ -2145,6 +2302,7 @@
   });
   byId("line-memo-form").addEventListener("submit", saveLineMemo);
   byId("quick-product-form").addEventListener("submit", createQuickProduct);
+  byId("add-manual-line").addEventListener("click", addManualLine);
   byId("quick-product-tax").addEventListener("change", (event) => {
     const taxed = event.target.value === "10";
     byId("quick-product-includes-tax").disabled = !taxed;
@@ -2177,7 +2335,15 @@
     const action = event.target.dataset.paymentAction;
     if (action === "amount") payment.amount = Math.max(number(event.target.value), 0);
     if (action === "received") payment.received = Math.max(number(event.target.value), 0);
-    if (action === "reference") payment.reference = event.target.value;
+    if (action === "reference") {
+      payment.reference = event.target.value;
+      const referenceField = event.target.closest(".pos-payment-reference");
+      const missingReference = !payment.reference.trim();
+      referenceField?.classList.toggle("has-warning", missingReference);
+      event.target.classList.toggle("is-warning", missingReference);
+      const warning = referenceField?.querySelector(".pos-payment-reference-warning");
+      if (warning) warning.hidden = !missingReference;
+    }
     payment.automatic = false;
     markSaleDirty();
     refreshPaymentCalculations();
