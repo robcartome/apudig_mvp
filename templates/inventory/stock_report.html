@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load list_sorting %}
+{% load list_sorting formatters %}
 {% block title %}Stock por almacén — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Stock por almacén</h2>{% endblock %}
 
@@ -98,7 +98,7 @@
           <td>{{ s.product.name }}</td>
           <td class="text-muted small">{{ s.product.unit }}</td>
           <td class="text-end fw-semibold {% if s.quantity <= 0 %}text-danger{% endif %}">
-            {{ s.quantity|floatformat:3 }}
+            {{ s.quantity|smart_number }}
           </td>
         </tr>
         {% empty %}

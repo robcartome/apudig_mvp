@@ -64,6 +64,48 @@
                    placeholder="Ej: plancha, 0204008...">
           </div>
         </div>
+        <div class="col-md-2">
+          <label class="form-label small">Categoría</label>
+          <select name="category" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            {% for category in categories %}
+            <option value="{{ category.pk }}" {% if category_id == category.pk|stringformat:'s' %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Marca</label>
+          <select name="brand" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            {% for brand in brands %}
+            <option value="{{ brand.pk }}" {% if brand_id == brand.pk|stringformat:'s' %}selected{% endif %}>{{ brand.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Stock</label>
+          <select name="stock_status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="positive" {% if stock_status == 'positive' %}selected{% endif %}>Con stock</option>
+            <option value="zero" {% if stock_status == 'zero' %}selected{% endif %}>Sin stock</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Valorización</label>
+          <select name="cost_status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="valued" {% if cost_status == 'valued' %}selected{% endif %}>Con costo válido</option>
+            <option value="pending" {% if cost_status == 'pending' %}selected{% endif %}>Pendiente de costo</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Valor mínimo</label>
+          <input type="number" name="valuation_min" value="{{ valuation_min }}" min="0" step="0.01" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Valor máximo</label>
+          <input type="number" name="valuation_max" value="{{ valuation_max }}" min="0" step="0.01" class="form-control form-control-sm">
+        </div>
         <div class="col-auto">
           <button type="submit" class="btn btn-sm btn-primary">
             <i class="ti ti-eye me-1"></i>Ver reporte
@@ -81,37 +123,82 @@
 </div>
 
 {% if should_run and warehouses and rows %}
-{# ─── Summary table ─── #}
+{# ─── Summary cards and warehouse table ─── #}
 <div class="row g-3 mb-3">
-  <div class="col-lg-5">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Valorización total</div>
+      <div class="h3 mb-1">S/. {{ summary.grand_valuation|floatformat:2 }}</div>
+      <div class="text-muted small">Valor del stock actual a costo promedio.</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Stock total</div>
+      <div class="h3 mb-1">{{ summary.grand_total|floatformat:2 }}</div>
+      <div class="text-muted small">Unidades base en los almacenes seleccionados.</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Productos con stock</div>
+      <div class="h3 mb-1">{{ summary.products_with_stock }}</div>
+      <div class="text-muted small">{{ summary.products_valued }} con costo válido.</div>
+    </div></div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100 {% if summary.products_pending_cost %}border-warning{% endif %}"><div class="card-body">
+      <div class="text-muted small">Pendientes de valorización</div>
+      <div class="h3 mb-1 {% if summary.products_pending_cost %}text-warning{% endif %}">{{ summary.products_pending_cost }}</div>
+      <div class="text-muted small">Productos con stock sin costo promedio válido.</div>
+    </div></div>
+  </div>
+  <div class="col-12">
     <div class="card h-100">
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
           <thead class="table-success">
             <tr>
               <th>Almacén</th>
+              <th class="text-end">Productos</th>
               <th class="text-end">Stock total</th>
+              <th class="text-end">Valorización</th>
+              <th class="text-end">Participación</th>
+              <th class="text-end">Sin costo</th>
             </tr>
           </thead>
           <tbody>
-            {% for wh in warehouses %}
+            {% for item in summary.warehouse_rows %}
             <tr>
-              <td class="fw-semibold">{{ wh.name }}</td>
-              <td class="text-end">{{ summary.by_warehouse|get_item:wh.pk|default:0|floatformat:2 }}</td>
+              <td class="fw-semibold">{{ item.warehouse.name }}</td>
+              <td class="text-end">{{ item.products }}</td>
+              <td class="text-end">{{ item.stock|smart_number }}</td>
+              <td class="text-end">S/. {{ item.valuation|floatformat:2 }}</td>
+              <td class="text-end">{{ item.participation|floatformat:2 }}%</td>
+              <td class="text-end {% if item.pending_cost %}text-warning{% endif %}">{{ item.pending_cost }}</td>
             </tr>
             {% endfor %}
             <tr class="table-light fw-bold">
               <td>TOTAL</td>
-              <td class="text-end">{{ summary.grand_total|floatformat:2 }}</td>
+              <td class="text-end">{{ summary.products_with_stock }}</td>
+              <td class="text-end">{{ summary.grand_total|smart_number }}</td>
+              <td class="text-end">S/. {{ summary.grand_valuation|floatformat:2 }}</td>
+              <td class="text-end">{% if summary.grand_valuation %}100.00%{% else %}0.00%{% endif %}</td>
+              <td class="text-end">{{ summary.products_pending_cost }}</td>
             </tr>
           </tbody>
         </table>
-        <p class="text-muted small px-3 py-2 mb-0">
-          Valorización total (Stock × P.Compra): <strong>S/. {{ summary.grand_valuation|floatformat:2 }}</strong>
-        </p>
       </div>
     </div>
   </div>
+</div>
+{% if summary.is_partial %}
+<div class="alert alert-warning py-2" role="alert">
+  La valorización es parcial: existen {{ summary.products_pending_cost }} producto{{ summary.products_pending_cost|pluralize }} con stock y sin costo promedio válido.
+</div>
+{% endif %}
+<div class="alert alert-info py-2" role="note">
+  <strong>Valorización de inventario:</strong> stock actual × costo promedio registrado. No corresponde al valor potencial de venta.
 </div>
 {% endif %}
 
@@ -124,14 +211,17 @@
           <th>SKU</th>
           <th>Producto</th>
           <th>Categoría</th>
+          <th>Marca</th>
           <th>UM</th>
           {% for wh in warehouses %}
           <th class="text-end">{{ wh.name }}</th>
           {% endfor %}
           <th class="text-end fw-bold">Stock Total</th>
-          <th class="text-end">P. Compra</th>
-          <th class="text-end">P. Venta</th>
-          <th class="text-end">Valorización</th>
+          <th class="text-end" title="Precio comercial de referencia; puede modificarse manualmente o desde una compra">P. compra ref. <i class="ti ti-info-circle"></i></th>
+          <th class="text-end" title="Último valor unitario neto registrado por una compra">Último costo <i class="ti ti-info-circle"></i></th>
+          <th class="text-end" title="Costo promedio usado para valorizar el inventario">Costo promedio <i class="ti ti-info-circle"></i></th>
+          <th class="text-end" title="Precio comercial; no interviene en la valorización">P. Venta <i class="ti ti-info-circle"></i></th>
+          <th class="text-end">Valorización a costo</th>
         </tr>
       </thead>
       <tbody>
@@ -142,18 +232,21 @@
             <a href="{% url 'inventory:product_readonly' row.product_id %}" target="_blank" class="text-decoration-none">{{ row.product }}</a>
           </td>
           <td class="text-muted small">{{ row.category }}</td>
+          <td class="text-muted small">{{ row.brand }}</td>
           <td class="text-muted small">{{ row.unit }}</td>
           {% for wh in warehouses %}
-          <td class="text-end">{{ row.stocks|get_item:wh.pk|default:0|floatformat:2 }}</td>
+          <td class="text-end">{{ row.stocks|get_item:wh.pk|default:0|smart_number }}</td>
           {% endfor %}
-          <td class="text-end fw-bold">{{ row.total_stock|floatformat:2 }}</td>
+          <td class="text-end fw-bold">{{ row.total_stock|smart_number }}</td>
           <td class="text-end text-muted small">S/. {{ row.price_purchase|floatformat:2 }}</td>
+          <td class="text-end text-muted small">{% if row.last_purchase_unit_value > 0 %}S/. {{ row.last_purchase_unit_value|floatformat:2 }}{% else %}<span class="text-muted">No disponible</span>{% endif %}</td>
+          <td class="text-end text-muted small">{% if row.has_valid_cost %}S/. {{ row.inventory_unit_cost|floatformat:2 }}{% else %}<span class="text-warning">No disponible</span>{% endif %}</td>
           <td class="text-end text-muted small">S/. {{ row.price_sale|floatformat:2 }}</td>
-          <td class="text-end">S/. {{ row.total_valuation|floatformat:2 }}</td>
+          <td class="text-end">{% if row.total_valuation is not None %}S/. {{ row.total_valuation|floatformat:2 }}{% else %}<span class="text-warning">Pendiente</span>{% endif %}</td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="{{ warehouses|length|add:8 }}" class="text-center text-muted py-5">
+          <td colspan="{{ warehouses|length|add:11 }}" class="text-center text-muted py-5">
             Usa los filtros y pulsa <strong>Ver reporte</strong> para consultar.
           </td>
         </tr>
@@ -162,12 +255,12 @@
       {% if rows %}
       <tfoot class="table-light fw-bold">
         <tr>
-          <td colspan="4" class="text-end text-muted small">TOTALES:</td>
+          <td colspan="5" class="text-end text-muted small">TOTALES:</td>
           {% for wh in warehouses %}
-          <td class="text-end">{{ summary.by_warehouse|get_item:wh.pk|default:0|floatformat:2 }}</td>
+          <td class="text-end">{{ summary.by_warehouse|get_item:wh.pk|default:0|smart_number }}</td>
           {% endfor %}
-          <td class="text-end">{{ summary.grand_total|floatformat:2 }}</td>
-          <td colspan="2"></td>
+          <td class="text-end">{{ summary.grand_total|smart_number }}</td>
+          <td colspan="4"></td>
           <td class="text-end">S/. {{ summary.grand_valuation|floatformat:2 }}</td>
         </tr>
       </tfoot>

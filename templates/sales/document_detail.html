@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load formatters %}
 {% block title %}Documento {{ sales_document.series_code }}-{{ sales_document.number|default:"Borrador" }} — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Documento de venta</h2>{% endblock %}
 
@@ -182,7 +183,7 @@
             {% if line.memo %}<div class="mt-1"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
           </td>
           <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
-          <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
+          <td class="text-end">{{ line.quantity|smart_number }}</td>
           <td class="text-end">{{ line.unit_price|floatformat:4 }}</td>
           <td class="text-end">{{ line.price_unit|floatformat:4 }}</td>
           <td class="text-end">{{ line.discount_amount|floatformat:2 }}</td>

@@ -1,3 +1,4 @@
+{% load formatters %}
 <div class="card border-0 bg-light mb-3">
   <div class="card-body py-3">
     <div class="d-flex justify-content-between gap-3 flex-wrap">
@@ -73,7 +74,7 @@
             {% if line.memo %}<div class="text-muted small"><i class="ti ti-notes me-1"></i>{{ line.memo }}</div>{% endif %}
           </td>
           <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
-          <td class="text-end">{{ line.quantity|floatformat:2 }}</td>
+          <td class="text-end">{{ line.quantity|smart_number }}</td>
           <td class="text-end">{{ line.unit_price|floatformat:2 }}</td>
           <td class="text-end">{{ line.price_unit|floatformat:2 }}</td>
           <td class="text-end">{{ line.igv_amount|floatformat:2 }}</td>

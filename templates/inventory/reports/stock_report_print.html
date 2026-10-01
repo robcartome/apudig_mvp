@@ -1,4 +1,4 @@
-{% load static %}
+{% load static formatters %}
 <!doctype html>
 <html lang="es">
 <head>
@@ -25,7 +25,8 @@
   <div class="meta">
     {% if selected_warehouse %}Almacén: {{ selected_warehouse_name }}{% else %}Todos los almacenes{% endif %}
     {% if q %} | Búsqueda: "{{ q }}"{% endif %}
-    | {{ total_stock|floatformat:2 }} uds — Valorización: S/. {{ total_valuation|floatformat:2 }}
+    | {{ total_stock|smart_number }} uds — Valorización a costo promedio: S/. {{ total_valuation|floatformat:2 }}
+    {% if products_pending_cost %} | Valorización parcial: {{ products_pending_cost }} registro(s) pendiente(s) de costo{% endif %}
   </div>
 
   <table>
@@ -35,14 +36,17 @@
         <th>SKU</th>
         <th>Producto</th>
         <th>Categoría</th>
+        <th>Marca</th>
         <th>UM</th>
         <th class="text-right">Stock real</th>
         <th class="text-right">Comprometido</th>
         <th class="text-right">Disponible</th>
         <th class="text-right">Mínimo</th>
         <th class="text-center">Estado</th>
-        <th class="text-right">P. Compra</th>
-        <th class="text-right">Valorización</th>
+        <th class="text-right">P. compra ref.</th>
+        <th class="text-right">Último costo</th>
+        <th class="text-right">Costo promedio</th>
+        <th class="text-right">Valorización a costo</th>
       </tr>
     </thead>
     <tbody>
@@ -52,11 +56,12 @@
         <td>{{ row.sku }}</td>
         <td>{{ row.product }}</td>
         <td>{{ row.category }}</td>
+        <td>{{ row.brand }}</td>
         <td>{{ row.unit }}</td>
-        <td class="text-right">{{ row.quantity|floatformat:3 }}</td>
-        <td class="text-right">{{ row.committed|floatformat:3 }}</td>
-        <td class="text-right">{{ row.available|floatformat:3 }}</td>
-        <td class="text-right">{{ row.min_stock|floatformat:0 }}</td>
+        <td class="text-right">{{ row.quantity|smart_number }}</td>
+        <td class="text-right">{{ row.committed|smart_number }}</td>
+        <td class="text-right">{{ row.available|smart_number }}</td>
+        <td class="text-right">{{ row.min_stock|smart_number }}</td>
         <td class="text-center">
           {% if row.status == "BAJO" %}
           <span class="badge-bajo">BAJO</span>
@@ -65,17 +70,19 @@
           {% endif %}
         </td>
         <td class="text-right">S/. {{ row.price_purchase|floatformat:2 }}</td>
-        <td class="text-right">S/. {{ row.valuation|floatformat:2 }}</td>
+        <td class="text-right">{% if row.last_purchase_unit_value > 0 %}S/. {{ row.last_purchase_unit_value|floatformat:2 }}{% else %}No disponible{% endif %}</td>
+        <td class="text-right">{% if row.has_valid_cost %}S/. {{ row.inventory_unit_cost|floatformat:2 }}{% else %}No disponible{% endif %}</td>
+        <td class="text-right">{% if row.valuation is not None %}S/. {{ row.valuation|floatformat:2 }}{% else %}Pendiente{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="5" class="text-right">TOTAL:</td>
-        <td class="text-right">{{ total_stock|floatformat:2 }}</td>
-        <td class="text-right">{{ total_committed|floatformat:2 }}</td>
-        <td class="text-right">{{ total_available|floatformat:2 }}</td>
-        <td colspan="3"></td>
+        <td colspan="6" class="text-right">TOTAL:</td>
+        <td class="text-right">{{ total_stock|smart_number }}</td>
+        <td class="text-right">{{ total_committed|smart_number }}</td>
+        <td class="text-right">{{ total_available|smart_number }}</td>
+        <td colspan="5"></td>
         <td class="text-right">S/. {{ total_valuation|floatformat:2 }}</td>
       </tr>
     </tfoot>

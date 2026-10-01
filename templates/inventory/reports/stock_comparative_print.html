@@ -23,7 +23,8 @@
     Almacenes: {% for wh in warehouses %}{{ wh.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
     {% if q %} | Búsqueda: "{{ q }}"{% endif %}
     | {{ rows|length }} producto{{ rows|length|pluralize }}
-    | Valorización total: S/. {{ summary.grand_valuation|floatformat:2 }}
+    | Valorización a costo promedio: S/. {{ summary.grand_valuation|floatformat:2 }}
+    {% if summary.is_partial %} | Parcial: {{ summary.products_pending_cost }} producto(s) pendiente(s) de costo{% endif %}
   </div>
 
   <table>
@@ -32,14 +33,17 @@
         <th>SKU</th>
         <th>Producto</th>
         <th>Categoría</th>
+        <th>Marca</th>
         <th>UM</th>
         {% for wh in warehouses %}
         <th class="text-right">{{ wh.name }}</th>
         {% endfor %}
         <th class="text-right">Stock Total</th>
-        <th class="text-right">P. Compra</th>
+        <th class="text-right">P. compra ref.</th>
+        <th class="text-right">Último costo</th>
+        <th class="text-right">Costo promedio</th>
         <th class="text-right">P. Venta</th>
-        <th class="text-right">Valorización</th>
+        <th class="text-right">Valorización a costo</th>
       </tr>
     </thead>
     <tbody>
@@ -48,25 +52,28 @@
         <td>{{ row.sku }}</td>
         <td>{{ row.product }}</td>
         <td>{{ row.category }}</td>
+        <td>{{ row.brand }}</td>
         <td>{{ row.unit }}</td>
         {% for wh in warehouses %}
-        <td class="text-right">{{ row.stocks|get_item:wh.pk|default:0|floatformat:2 }}</td>
+        <td class="text-right">{{ row.stocks|get_item:wh.pk|default:0|smart_number }}</td>
         {% endfor %}
-        <td class="text-right"><strong>{{ row.total_stock|floatformat:2 }}</strong></td>
+        <td class="text-right"><strong>{{ row.total_stock|smart_number }}</strong></td>
         <td class="text-right">S/. {{ row.price_purchase|floatformat:2 }}</td>
+        <td class="text-right">{% if row.last_purchase_unit_value > 0 %}S/. {{ row.last_purchase_unit_value|floatformat:2 }}{% else %}No disponible{% endif %}</td>
+        <td class="text-right">{% if row.has_valid_cost %}S/. {{ row.inventory_unit_cost|floatformat:2 }}{% else %}No disponible{% endif %}</td>
         <td class="text-right">S/. {{ row.price_sale|floatformat:2 }}</td>
-        <td class="text-right">S/. {{ row.total_valuation|floatformat:2 }}</td>
+        <td class="text-right">{% if row.total_valuation is not None %}S/. {{ row.total_valuation|floatformat:2 }}{% else %}Pendiente{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="4" class="text-right">TOTAL:</td>
+        <td colspan="5" class="text-right">TOTAL:</td>
         {% for wh in warehouses %}
-        <td class="text-right">{{ summary.by_warehouse|get_item:wh.pk|default:0|floatformat:2 }}</td>
+        <td class="text-right">{{ summary.by_warehouse|get_item:wh.pk|default:0|smart_number }}</td>
         {% endfor %}
-        <td class="text-right">{{ summary.grand_total|floatformat:2 }}</td>
-        <td colspan="2"></td>
+        <td class="text-right">{{ summary.grand_total|smart_number }}</td>
+        <td colspan="4"></td>
         <td class="text-right">S/. {{ summary.grand_valuation|floatformat:2 }}</td>
       </tr>
     </tfoot>

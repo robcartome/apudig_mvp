@@ -1,3 +1,4 @@
+{% load formatters %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -140,7 +141,7 @@
         {% if line.memo %}<br><small><strong>Nota:</strong> {{ line.memo }}</small>{% endif %}
       </td>
       <td>{% include "components/unit_equivalence.html" with item=line %}</td>
-      <td class="text-right">{{ line.quantity|floatformat:2 }}</td>
+      <td class="text-right">{{ line.quantity|smart_number }}</td>
       <td class="text-right">{{ line.unit_price|floatformat:4 }}</td>
       <td class="text-right">{{ line.discount_amount|floatformat:2 }}</td>
       <td class="text-right">{{ line.subtotal|floatformat:2 }}</td>

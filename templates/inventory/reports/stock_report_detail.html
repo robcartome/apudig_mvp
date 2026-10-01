@@ -61,23 +61,45 @@
 {# ─── Summary cards ─── #}
 {% if rows %}
 <div class="row g-3 mb-3">
-  <div class="col-sm-6 col-lg-4">
+  <div class="col-sm-6 col-lg-3">
     <div class="card">
       <div class="card-body py-3 px-4">
         <div class="text-muted small mb-1">Stock total</div>
-        <div class="h4 mb-0 fw-bold">{{ total_stock|floatformat:2 }}</div>
+        <div class="h4 mb-0 fw-bold">{{ total_stock|smart_number }}</div>
       </div>
     </div>
   </div>
-  <div class="col-sm-6 col-lg-4">
+  <div class="col-sm-6 col-lg-3">
     <div class="card">
       <div class="card-body py-3 px-4">
-        <div class="text-muted small mb-1">Valorización total (Stock × P.Compra)</div>
+        <div class="text-muted small mb-1" title="Stock real multiplicado por el costo promedio registrado">Valorización total a costo <i class="ti ti-info-circle"></i></div>
         <div class="h4 mb-0 fw-bold">S/. {{ total_valuation|floatformat:2 }}</div>
+        <div class="text-muted small">No corresponde al valor potencial de venta.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card">
+      <div class="card-body py-3 px-4">
+        <div class="text-muted small mb-1">Registros valorizados</div>
+        <div class="h4 mb-0 fw-bold">{{ products_valued }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card {% if products_pending_cost %}border-warning{% endif %}">
+      <div class="card-body py-3 px-4">
+        <div class="text-muted small mb-1">Pendientes de costo</div>
+        <div class="h4 mb-0 fw-bold {% if products_pending_cost %}text-warning{% endif %}">{{ products_pending_cost }}</div>
       </div>
     </div>
   </div>
 </div>
+{% if products_pending_cost %}
+<div class="alert alert-warning py-2" role="alert">
+  La valorización es parcial: {{ products_pending_cost }} registro{{ products_pending_cost|pluralize }} con stock no tiene{{ products_pending_cost|pluralize:"n" }} un costo promedio válido.
+</div>
+{% endif %}
 {% endif %}
 
 {# ─── Table ─── #}
@@ -90,14 +112,17 @@
           <th>SKU</th>
           <th>Producto</th>
           <th>Categoría</th>
+          <th>Marca</th>
           <th>UM</th>
           <th class="text-end">Stock real</th>
           <th class="text-end" title="Cantidad incluida en documentos de venta en borrador">Comprometido <i class="ti ti-info-circle"></i></th>
           <th class="text-end">Disponible</th>
           <th class="text-end">Mínimo</th>
           <th class="text-center">Estado</th>
-          <th class="text-end">P. Compra</th>
-          <th class="text-end">Valorización</th>
+          <th class="text-end" title="Precio comercial de referencia; puede modificarse manualmente o desde una compra">P. compra ref. <i class="ti ti-info-circle"></i></th>
+          <th class="text-end" title="Último valor unitario neto registrado por una compra">Último costo <i class="ti ti-info-circle"></i></th>
+          <th class="text-end" title="Costo promedio usado para valorizar el inventario">Costo promedio <i class="ti ti-info-circle"></i></th>
+          <th class="text-end">Valorización a costo</th>
         </tr>
       </thead>
       <tbody>
@@ -107,13 +132,14 @@
           <td class="fw-semibold text-muted small font-monospace">{{ row.sku }}</td>
           <td>{{ row.product }}</td>
           <td class="text-muted small">{{ row.category }}</td>
+          <td class="text-muted small">{{ row.brand }}</td>
           <td class="text-muted small">{{ row.unit }}</td>
           <td class="text-end fw-semibold {% if row.status == 'BAJO' %}text-danger{% endif %}">
-            {{ row.quantity|floatformat:3 }}
+            {{ row.quantity|smart_number }}
           </td>
-          <td class="text-end text-warning fw-semibold">{{ row.committed|floatformat:3 }}</td>
-          <td class="text-end fw-semibold {% if row.available < 0 %}text-danger{% endif %}">{{ row.available|floatformat:3 }}</td>
-          <td class="text-end text-muted small">{{ row.min_stock|floatformat:0 }}</td>
+          <td class="text-end text-warning fw-semibold">{{ row.committed|smart_number }}</td>
+          <td class="text-end fw-semibold {% if row.available < 0 %}text-danger{% endif %}">{{ row.available|smart_number }}</td>
+          <td class="text-end text-muted small">{{ row.min_stock|smart_number }}</td>
           <td class="text-center">
             {% if row.status == "BAJO" %}
             <span class="badge bg-red-lt">BAJO</span>
@@ -122,11 +148,17 @@
             {% endif %}
           </td>
           <td class="text-end text-muted small">S/. {{ row.price_purchase|floatformat:2 }}</td>
-          <td class="text-end fw-semibold">S/. {{ row.valuation|floatformat:2 }}</td>
+          <td class="text-end text-muted small">{% if row.last_purchase_unit_value > 0 %}S/. {{ row.last_purchase_unit_value|floatformat:2 }}{% else %}<span class="text-muted">No disponible</span>{% endif %}</td>
+          <td class="text-end text-muted small">
+            {% if row.has_valid_cost %}S/. {{ row.inventory_unit_cost|floatformat:2 }}{% else %}<span class="text-warning">No disponible</span>{% endif %}
+          </td>
+          <td class="text-end fw-semibold">
+            {% if row.valuation is not None %}S/. {{ row.valuation|floatformat:2 }}{% else %}<span class="text-warning">Pendiente</span>{% endif %}
+          </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="12" class="text-center text-muted py-4">
+          <td colspan="15" class="text-center text-muted py-4">
             {% if should_run %}
             No hay registros de stock{% if selected_warehouse %} para el almacén seleccionado{% endif %}.
             {% if not selected_warehouse %}<br>Selecciona un almacén o busca un producto.{% endif %}
@@ -140,11 +172,11 @@
       {% if rows %}
       <tfoot class="table-light fw-bold">
         <tr>
-          <td colspan="5" class="text-end text-muted small">TOTALES:</td>
-          <td class="text-end">{{ total_stock|floatformat:2 }}</td>
-          <td class="text-end">{{ total_committed|floatformat:2 }}</td>
-          <td class="text-end">{{ total_available|floatformat:2 }}</td>
-          <td colspan="3"></td>
+          <td colspan="6" class="text-end text-muted small">TOTALES:</td>
+          <td class="text-end">{{ total_stock|smart_number }}</td>
+          <td class="text-end">{{ total_committed|smart_number }}</td>
+          <td class="text-end">{{ total_available|smart_number }}</td>
+          <td colspan="5"></td>
           <td class="text-end">S/. {{ total_valuation|floatformat:2 }}</td>
         </tr>
       </tfoot>
