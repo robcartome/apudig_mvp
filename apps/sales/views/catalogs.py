@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.sales.forms import (
@@ -211,7 +212,7 @@ def payment_method_update(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
-    obj = get_object_or_404(PaymentMethod, pk=pk)
+    obj = get_object_or_404(PaymentMethod, pk=pk, company_id=_get_company(request))
     if request.method == "POST":
         form = PaymentMethodForm(request.POST, instance=obj)
         if form.is_valid():
@@ -227,7 +228,7 @@ def payment_method_delete(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
-    obj = get_object_or_404(PaymentMethod, pk=pk)
+    obj = get_object_or_404(PaymentMethod, pk=pk, company_id=_get_company(request))
     if request.method == "POST":
         obj.delete()
         messages.success(request, "Forma de pago eliminada.")
@@ -276,9 +277,7 @@ def means_of_payment_list(request):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
-    company_id = _get_company(request)
-    qs = MeansOfPayment.objects.filter(company_id=company_id).order_by("name") if company_id else MeansOfPayment.objects.none()
-    return render(request, "sales/means_of_payment_list.html", {"objects": qs})
+    return redirect(f"{reverse('users:configuracion')}?item=medios_pago")
 
 
 def means_of_payment_create(request):
@@ -286,16 +285,18 @@ def means_of_payment_create(request):
     if redirect_resp:
         return redirect_resp
     company_id = _get_company(request)
+    if not company_id:
+        return redirect("select_company")
     if request.method == "POST":
-        form = MeansOfPaymentForm(request.POST)
+        form = MeansOfPaymentForm(request.POST, company_id=company_id)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.company_id = company_id
             obj.save()
             messages.success(request, f"Medio de pago «{obj.name}» creado.")
-            return redirect("sales:means_of_payment_list")
+            return redirect(f"{reverse('users:configuracion')}?item=medios_pago")
     else:
-        form = MeansOfPaymentForm()
+        form = MeansOfPaymentForm(company_id=company_id)
     return render(request, "sales/means_of_payment_form.html", {"form": form, "title": "Nuevo medio de pago"})
 
 
@@ -303,15 +304,18 @@ def means_of_payment_update(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
-    obj = get_object_or_404(MeansOfPayment, pk=pk)
+    company_id = _get_company(request)
+    if not company_id:
+        return redirect("select_company")
+    obj = get_object_or_404(MeansOfPayment, pk=pk, company_id=company_id)
     if request.method == "POST":
-        form = MeansOfPaymentForm(request.POST, instance=obj)
+        form = MeansOfPaymentForm(request.POST, instance=obj, company_id=company_id)
         if form.is_valid():
             form.save()
             messages.success(request, f"Medio de pago «{obj.name}» actualizado.")
-            return redirect("sales:means_of_payment_list")
+            return redirect(f"{reverse('users:configuracion')}?item=medios_pago")
     else:
-        form = MeansOfPaymentForm(instance=obj)
+        form = MeansOfPaymentForm(instance=obj, company_id=company_id)
     return render(request, "sales/means_of_payment_form.html", {"form": form, "title": "Editar medio de pago", "object": obj})
 
 
@@ -319,11 +323,14 @@ def means_of_payment_delete(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
-    obj = get_object_or_404(MeansOfPayment, pk=pk)
+    company_id = _get_company(request)
+    if not company_id:
+        return redirect("select_company")
+    obj = get_object_or_404(MeansOfPayment, pk=pk, company_id=company_id)
     if request.method == "POST":
         obj.delete()
         messages.success(request, "Medio de pago eliminado.")
-        return redirect("sales:means_of_payment_list")
+        return redirect(f"{reverse('users:configuracion')}?item=medios_pago")
     return render(request, "sales/means_of_payment_confirm_delete.html", {"object": obj})
 
 

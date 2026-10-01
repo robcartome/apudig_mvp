@@ -33,6 +33,21 @@
           </div>
 
           <div class="mb-3">
+            <label class="form-label required">Tipo</label>
+            {{ form.kind }}
+            <div class="form-hint">Permite separar efectivo, tarjetas, transferencias y billeteras durante el arqueo de caja.</div>
+            {% if form.kind.errors %}<div class="text-danger small mt-1">{{ form.kind.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-check">
+              {{ form.requires_reference }}
+              <span class="form-check-label">Solicitar número de operación o referencia</span>
+            </label>
+            {% if form.requires_reference.errors %}<div class="text-danger small mt-1">{{ form.requires_reference.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
             <label class="form-check">
               {{ form.active }}
               <span class="form-check-label">Activo</span>

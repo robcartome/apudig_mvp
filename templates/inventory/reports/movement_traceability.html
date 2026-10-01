@@ -131,7 +131,7 @@
           <td>{{ item.type_label }}</td>
           <td class="text-end">{{ item.movements }}</td>
           <td class="text-end {% if item.quantity_total < 0 %}text-danger{% endif %}">{{ item.quantity_total|floatformat:2 }}</td>
-          <td class="text-end">S/ {{ item.amount_total|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ item.amount_total|floatformat:2 }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -140,7 +140,7 @@
           <td>TOTAL</td>
           <td class="text-end">{{ report.total_rows }}</td>
           <td class="text-end {% if report.total_quantity < 0 %}text-danger{% endif %}">{{ report.total_quantity|floatformat:2 }}</td>
-          <td class="text-end">S/ {{ report.total_amount|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ report.total_amount|floatformat:2 }}</td>
         </tr>
       </tfoot>
     </table>
@@ -241,8 +241,8 @@
           <td class="text-end fw-semibold {% if entry.signed_quantity < 0 %}text-danger{% else %}text-success{% endif %}">
             {{ entry.signed_quantity|floatformat:2 }}
           </td>
-          <td class="text-end">S/ {{ entry.unit_price|floatformat:2 }}</td>
-          <td class="text-end">S/ {{ entry.amount|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ entry.unit_price|floatformat:2 }}</td>
+          <td class="text-end">S/. {{ entry.amount|floatformat:2 }}</td>
         </tr>
         {% endfor %}
       </tbody>

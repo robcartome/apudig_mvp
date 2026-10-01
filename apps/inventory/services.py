@@ -249,6 +249,7 @@ def _create_movement_details(movement: Movement, lines: list[dict]) -> list[dict
             unit_id=line["unit_id"], unit_code=line["unit_code"],
             conversion_factor=line["conversion_factor"], stock_quantity=line["stock_quantity"],
             unit_price=line.get("unit_price", Decimal("0")),
+            cost_source=line.get("cost_source", MovementDetail.CostSource.MANUAL),
             location_id=line.get("location_id") or None,
         )
     return lines
@@ -277,6 +278,7 @@ def _create_adjustment_details(movement: Movement, lines: list[dict]) -> None:
             unit_id=line["unit_id"], unit_code=line["unit_code"],
             conversion_factor=line["conversion_factor"], stock_quantity=difference,
             unit_price=line.get("unit_price", Decimal("0")),
+            cost_source=line.get("cost_source", MovementDetail.CostSource.MANUAL),
             physical_quantity=physical_qty,
             location_id=line.get("location_id") or None,
         )
@@ -290,6 +292,7 @@ def _movement_lines(movement: Movement) -> list[dict]:
             "unit_id": d.unit_id,
             "stock_quantity": d.stock_quantity,
             "unit_price": d.unit_price,
+            "cost_source": d.cost_source,
             "product_name": d.product.name,
         }
         for d in movement.details.select_related("product")
@@ -508,6 +511,10 @@ def _update_stock_bulk(lines: list[dict], warehouse_id: str, delta: int) -> None
 
 def set_product_price(pricelist_id, product_id, amount, currency: str = "PEN") -> ProductPrice:
     """Crea o actualiza el precio de un producto en una lista de precios."""
+    price_list = PriceList.objects.get(pk=pricelist_id)
+    product = Product.objects.get(pk=product_id)
+    if price_list.company_id != product.company_id:
+        raise ValueError("La lista y el producto deben pertenecer a la misma empresa.")
     obj, _ = ProductPrice.objects.update_or_create(
         price_list_id=pricelist_id,
         product_id=product_id,
@@ -534,8 +541,10 @@ def toggle_price_list(pricelist: PriceList) -> PriceList:
     return pricelist
 
 
+@transaction.atomic
 def set_default_price_list(pricelist: PriceList) -> PriceList:
     """Marca esta lista como predeterminada y desmarca las demás de la misma empresa."""
+    PriceList.objects.select_for_update().filter(company_id=pricelist.company_id).exists()
     PriceList.objects.filter(company_id=pricelist.company_id, is_default=True).update(is_default=False)
     pricelist.is_default = True
     pricelist.save(update_fields=["is_default"])

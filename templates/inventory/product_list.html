@@ -56,7 +56,7 @@
           <td class="small">{{ obj.category|default:"—" }}</td>
           <td class="small">{{ obj.brand|default:"—" }}</td>
           <td class="text-muted small">{{ obj.unit }}</td>
-          <td class="text-end fw-semibold">S/ {{ obj.price_sale|floatformat:2 }}</td>
+          <td class="text-end fw-semibold">S/. {{ obj.price_sale|floatformat:2 }}</td>
           <td class="text-center small">
             {% if obj.active %}
             <span class="badge bg-success-lt">Activo</span>

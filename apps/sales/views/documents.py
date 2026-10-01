@@ -394,6 +394,9 @@ def document_edit(request, pk):
     if document.status != "DRAFT":
         messages.error(request, "Solo se pueden editar documentos en Borrador.")
         return redirect("sales:document_detail", pk=pk)
+    if hasattr(document, "pos_transaction"):
+        messages.info(request, "Este borrador debe editarse y cobrarse desde el POS.")
+        return redirect(f"{reverse('pos:sale')}?draft={document.pos_transaction.pk}")
 
     if request.method == "POST":
         document_type = request.POST.get("document_type", document.document_type_id)
@@ -633,6 +636,9 @@ def document_delete(request, pk):
         return redirect_resp
     _, store_id = _get_ids(request)
     document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    if hasattr(document, "pos_transaction"):
+        messages.error(request, "Los borradores POS se descartan desde el punto de venta.")
+        return redirect("sales:document_list")
     try:
         delete_sales_document_draft(pk, deleted_by=request.user)
         messages.success(request, format_html("Documento borrador eliminado: {}.", _document_reference(document, link=False)))
@@ -648,7 +654,10 @@ def document_issue(request, pk):
     if request.method != "POST":
         return redirect("sales:document_list")
     _, store_id = _get_ids(request)
-    get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    if hasattr(document, "pos_transaction"):
+        messages.error(request, "El borrador POS debe cobrarse y emitirse desde el punto de venta.")
+        return redirect(f"{reverse('pos:sale')}?draft={document.pos_transaction.pk}")
     try:
         v = issue_sales_document(pk, issued_by=request.user)
         messages.success(request, format_html("Documento emitido: {}.", _document_reference(v)))
@@ -665,6 +674,9 @@ def document_void(request, pk):
         return redirect("sales:document_detail", pk=pk)
     _, store_id = _get_ids(request)
     document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    if hasattr(document, "pos_transaction"):
+        messages.error(request, "Las ventas emitidas por POS se anulan desde el punto de venta.")
+        return redirect(f"{reverse('pos:sale')}?draft={document.pos_transaction.pk}")
     reason = request.POST.get("reason", "")
     try:
         void_sales_document(pk, reason=reason, voided_by=request.user)
@@ -682,6 +694,9 @@ def document_cancel(request, pk):
         return redirect("sales:document_detail", pk=pk)
     _, store_id = _get_ids(request)
     document = get_object_or_404(SalesDocument, pk=pk, store_id=store_id)
+    if hasattr(document, "pos_transaction"):
+        messages.error(request, "Los borradores POS se descartan desde el punto de venta.")
+        return redirect(f"{reverse('pos:sale')}?draft={document.pos_transaction.pk}")
     try:
         cancel_sales_document(pk, cancelled_by=request.user)
         messages.success(request, format_html("Documento de venta cancelado: {}.", _document_reference(document)))

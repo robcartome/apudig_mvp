@@ -24,6 +24,9 @@ def active_company_context(request):
         "available_accesses": [],
         "active_access_id": None,
         "can_manage_company": False,
+        "can_access_pos": False,
+        "can_manage_pos": False,
+        "can_view_cash_sessions": False,
         "active_store_role": None,
     }
 
@@ -39,10 +42,32 @@ def active_company_context(request):
     if store_id:
         ctx["active_store"] = Store.objects.filter(pk=store_id).first()
 
-    from apps.users.permissions import user_is_company_admin, user_store_role
+    from apps.users.permissions import (
+        user_has_company_permission,
+        user_is_company_admin,
+        user_store_role,
+    )
 
     ctx["can_manage_company"] = user_is_company_admin(request.user, company_id)
     ctx["active_store_role"] = user_store_role(request.user, company_id, store_id)
+    ctx["can_access_pos"] = user_has_company_permission(
+        request.user,
+        company_id,
+        "read.pos",
+        store_id,
+    )
+    ctx["can_manage_pos"] = user_has_company_permission(
+        request.user,
+        company_id,
+        "manage.pos.configuration",
+        store_id,
+    )
+    ctx["can_view_cash_sessions"] = user_has_company_permission(
+        request.user,
+        company_id,
+        "read.pos.cash_sessions",
+        store_id,
+    )
 
     all_accesses = list(get_user_selectable_accesses(request.user))
     ctx["available_accesses"] = all_accesses

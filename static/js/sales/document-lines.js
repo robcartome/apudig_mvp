@@ -28,7 +28,7 @@
   const headerIgvRate = parseFloat(document.getElementById('id_igv_rate_default')?.value);
   const configuredIgvRate = parseFloat(configEl.dataset.igvRate);
   let IGV_RATE = Number.isFinite(headerIgvRate)
-    ? headerIgvRate : (Number.isFinite(configuredIgvRate) ? configuredIgvRate : 18);
+    ? headerIgvRate : (Number.isFinite(configuredIgvRate) ? configuredIgvRate : 0);
   let IGV_MULT = 1 + IGV_RATE / 100;             // e.g. 1.18
   // Build the price-list API URL template (replace the placeholder UUID)
   const PRICE_LIST_URL_TPL = configEl.dataset.priceListUrl;
@@ -63,7 +63,7 @@
   // ── IGV rate header select ────────────────────────────────────────────────
   document.getElementById('id_igv_rate_default')?.addEventListener('change', function () {
     const rate = parseFloat(this.value);
-    IGV_RATE = Number.isFinite(rate) ? rate : 18;
+    IGV_RATE = Number.isFinite(rate) ? rate : 0;
     IGV_MULT = 1 + IGV_RATE / 100;
     configEl.dataset.igvRate = IGV_RATE;
     linesBody.querySelectorAll('input[name*="-igv_rate"]').forEach(el => { el.value = IGV_RATE; });
@@ -362,6 +362,11 @@
 
     row.dataset.basePrice = product.price_sale ?? 0;
     setProductUnits(row, product);
+
+    const taxSelect = row.querySelector('select[name*="-tax_type"]');
+    const rateInput = row.querySelector('input[name*="-igv_rate"]');
+    if (taxSelect && product.tax_affectation) taxSelect.value = product.tax_affectation;
+    if (rateInput && product.tax_rate !== undefined) rateInput.value = product.tax_rate;
 
     // Fill description hidden field
     const descHidden = row.querySelector('input[name*="-description"]');

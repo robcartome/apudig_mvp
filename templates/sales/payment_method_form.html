@@ -40,6 +40,19 @@
             <div class="form-text text-muted">Cuando esté activo, se podrá seleccionar el Medio de Pago en la cotización.</div>
           </div>
 
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-sm-6"><label class="form-check">{{ form.receives_change }}<span class="form-check-label">Recibe vuelto</span></label>{{ form.receives_change.errors }}</div>
+            <div class="col-12 col-sm-6"><label class="form-check">{{ form.immediate_payment }}<span class="form-check-label">Pago inmediato</span></label></div>
+            <div class="col-12 col-sm-6"><label class="form-check">{{ form.is_credit }}<span class="form-check-label">Es crédito</span></label></div>
+            <div class="col-12 col-sm-6"><label class="form-check">{{ form.allows_advance }}<span class="form-check-label">Permite pago adelantado</span></label></div>
+            <div class="col-12">
+              <label class="form-label" for="{{ form.credit_days.id_for_label }}">Días de crédito</label>
+              {{ form.credit_days }}
+              <div class="form-hint">Use 0 cuando no corresponda crédito.</div>
+              {% if form.credit_days.errors %}<div class="text-danger small mt-1">{{ form.credit_days.errors.0 }}</div>{% endif %}
+            </div>
+          </div>
+
           <div class="mb-3">
             <label class="form-check">
               {{ form.active }}

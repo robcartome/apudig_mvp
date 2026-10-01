@@ -161,15 +161,20 @@
       <div class="card-header"><h3 class="card-title">Precios</h3></div>
       <div class="card-body">
         <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label required">Precio de compra (S/)</label>
+          <div class="col-md-4 mb-3">
+            <label class="form-label required">Precio final de compra (S/.)</label>
             {{ form.price_purchase }}
             {% if form.price_purchase.errors %}<div class="text-danger small mt-1">{{ form.price_purchase.errors.0 }}</div>{% endif %}
           </div>
-          <div class="col-md-6 mb-3">
-            <label class="form-label required">Precio de venta (S/)</label>
+          <div class="col-md-4 mb-3">
+            <label class="form-label required">Precio final de venta (S/.)</label>
             {{ form.price_sale }}
             {% if form.price_sale.errors %}<div class="text-danger small mt-1">{{ form.price_sale.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label required">Afectación tributaria</label>
+            {{ form.tax_affectation }}
+            {% if form.tax_affectation.errors %}<div class="text-danger small mt-1">{{ form.tax_affectation.errors.0 }}</div>{% endif %}
           </div>
         </div>
 
@@ -179,7 +184,7 @@
         <div class="row">
           {% for item in price_list_data %}
           <div class="col-md-6 mb-3">
-            <label class="form-label">{{ item.price_list.name }} (S/)</label>
+            <label class="form-label">{{ item.price_list.name }} (S/.)</label>
             <input type="number" step="0.01" min="0" name="price_list_{{ item.price_list.pk }}"
                    class="form-control"
                    placeholder="{% if item.amount %}{{ item.amount }}{% else %}Sin precio{% endif %}">

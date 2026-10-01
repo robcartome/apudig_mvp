@@ -206,12 +206,7 @@
             Lista de precios
             <i class="ti ti-info-circle text-muted" title="Selecciona una lista para aplicar precios automáticamente"></i>
           </label>
-          <select id="price-list-select" class="form-select form-select-sm">
-            <option value="">— Sin lista de precios —</option>
-            {% for pl in price_lists %}
-            <option value="{{ pl.pk }}" {% if pl.pk|stringformat:"s" == default_price_list_id %}selected{% endif %}>{{ pl.name }}</option>
-            {% endfor %}
-          </select>
+          {{ header_form.price_list }}
         </div>
       </div>
       <div id="price-list-alert" class="alert alert-warning d-none mt-2 py-2 px-3" style="font-size:.85rem">

@@ -185,13 +185,13 @@
             {% if entry.avg_cost is not None %}{{ entry.avg_cost|floatformat:3 }}{% endif %}
           </td>
           <td class="text-end text-success small border-start">
-            {% if entry.value_ingreso is not None %}S/ {{ entry.value_ingreso|floatformat:2 }}{% endif %}
+            {% if entry.value_ingreso is not None %}S/. {{ entry.value_ingreso|floatformat:2 }}{% endif %}
           </td>
           <td class="text-end text-danger small">
-            {% if entry.value_salida is not None %}S/ {{ entry.value_salida|floatformat:2 }}{% endif %}
+            {% if entry.value_salida is not None %}S/. {{ entry.value_salida|floatformat:2 }}{% endif %}
           </td>
           <td class="text-end fw-semibold small {% if entry.value_saldo < 0 %}text-danger{% endif %}">
-            S/ {{ entry.value_saldo|floatformat:2 }}
+            S/. {{ entry.value_saldo|floatformat:2 }}
           </td>
         </tr>
         {% empty %}

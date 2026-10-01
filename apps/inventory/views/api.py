@@ -10,6 +10,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.partners.models import Customer, Supplier
+from apps.inventory.pricing import tax_rate_for_company
 
 from ..models import (
     Brand,
@@ -84,7 +85,7 @@ def product_search(request):
         supplier_relations = supplier_relations.filter(company_id=company_id)
     if supplier_id:
         supplier_relations = supplier_relations.filter(supplier_id=supplier_id)
-    qs = Product.objects.filter(active=True).select_related("unit").prefetch_related(
+    qs = Product.objects.filter(active=True).select_related("unit", "company").prefetch_related(
         "unit_conversions__unit",
         Prefetch("supplier_relations", queryset=supplier_relations, to_attr="matched_supplier_relations"),
     )
@@ -145,6 +146,9 @@ def product_search(request):
                 "supplier_product_name": p.matched_supplier_relations[0].supplier_product_name if p.matched_supplier_relations else "",
                 "supplier_purchase_price": float(p.matched_supplier_relations[0].purchase_price) if p.matched_supplier_relations and p.matched_supplier_relations[0].purchase_price is not None else None,
                 "price_sale":     float(p.price_sale or 0),
+                "price_includes_tax": True,
+                "tax_affectation": p.tax_affectation,
+                "tax_rate": float(tax_rate_for_company(p.company_id)) if p.tax_affectation == "10" else 0,
                 "stock":          stock_map.get(str(p.pk), 0),
                 "total_stock":    total_stock_map.get(str(p.pk), 0),
             }
@@ -363,6 +367,9 @@ def product_quick_create(request):
             }],
             "price_purchase": float(product.price_purchase or 0),
             "price_sale":     float(product.price_sale or 0),
+            "price_includes_tax": True,
+            "tax_affectation": product.tax_affectation,
+            "tax_rate": float(tax_rate_for_company(product.company_id)) if product.tax_affectation == "10" else 0,
         },
         status=201,
     )

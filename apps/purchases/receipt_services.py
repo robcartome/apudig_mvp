@@ -43,7 +43,10 @@ def register_purchase_receipt(*, order_id, company_id, warehouse, receipt_number
         raise ValueError("El almacen debe pertenecer a la sucursal de la orden.")
 
     order_lines = {
-        line.pk: line for line in order.lines.select_for_update().select_related("product", "unit")
+        line.pk: line
+        for line in order.lines.select_for_update(of=("self",)).select_related(
+            "product", "unit"
+        )
     }
     already_received = received_quantities(order)
     normalized = []

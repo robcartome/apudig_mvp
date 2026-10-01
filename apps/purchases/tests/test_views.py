@@ -315,7 +315,7 @@ class PurchaseDocumentViewTest(TestCase):
         response = self.client.get(reverse("purchases:price_history"))
 
         self.assertEqual(response.context["price_decimal_places"], 3)
-        self.assertContains(response, "PEN 11,800")
+        self.assertContains(response, "S/. 11,800")
 
     def test_price_history_exports_xlsx_and_print_view(self):
         excel_response = self.client.get(

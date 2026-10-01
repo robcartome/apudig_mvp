@@ -13,7 +13,7 @@
   const configuredPriceDecimals = Number(config.dataset.priceDecimals);
   const priceDecimals = Number.isInteger(configuredPriceDecimals)
     ? Math.min(6, Math.max(0, configuredPriceDecimals)) : 2;
-  const defaultIgvRate = Number(config.dataset.igvRate || 18);
+  const defaultIgvRate = Number(config.dataset.igvRate || 0);
   const priceStep = priceDecimals === 0 ? '1' : `0.${'0'.repeat(priceDecimals - 1)}1`;
   const priceZero = (0).toFixed(priceDecimals);
   const totalForms = () => document.getElementById('id_lines-TOTAL_FORMS');
@@ -263,6 +263,10 @@
     const row = event.target.closest('.line-row');
     const product = event.detail;
     setUnits(row, product);
+    const taxSelect = row.querySelector('select[name*="-tax_type"]');
+    const rateInput = row.querySelector('input[name*="-igv_rate"]');
+    if (taxSelect && product.tax_affectation) taxSelect.value = product.tax_affectation;
+    if (rateInput && product.tax_rate !== undefined) rateInput.value = product.tax_rate;
     row.querySelector('.stock-info-btn').disabled = false;
     const description = row.querySelector('input[name*="-description"]');
     if (description && !description.value) description.value = product.name || product.text || '';

@@ -187,7 +187,7 @@ window.ProductPicker = (function ($) {
           ${supplierDetail}
         </div>
         <div class="text-end text-muted flex-shrink-0" style="font-size:.72rem">
-          ${priceLabel}<br><strong>S/ ${parseFloat(priceValue ?? 0).toFixed(settings.priceDecimals)}</strong>
+          ${priceLabel}<br><strong>${CurrencyDisplay.symbol('PEN')} ${parseFloat(priceValue ?? 0).toFixed(settings.priceDecimals)}</strong>
         </div>
       </div>`);
   }

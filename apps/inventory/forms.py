@@ -5,6 +5,8 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.core.currency import currency_choices
+
 from apps.partners.models import Carrier, Customer, DocumentType, Supplier
 
 from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductSupplier, ProductUnit, Unit, Warehouse, WarehouseLocation
@@ -145,7 +147,7 @@ class ProductForm(forms.ModelForm):
         model = Product
         fields = (
             "name", "sku", "barcode", "description", "model",
-            "price_purchase", "price_sale",
+            "price_purchase", "price_sale", "tax_affectation",
             "category", "brand", "unit", "tracks_inventory", "active",
         )
         widgets = {
@@ -156,6 +158,7 @@ class ProductForm(forms.ModelForm):
             "model": forms.TextInput(attrs=_text),
             "price_purchase": forms.NumberInput(attrs={**_text, "step": "0.01", "placeholder": "0"}),
             "price_sale": forms.NumberInput(attrs={**_text, "step": "0.01"}),
+            "tax_affectation": forms.Select(attrs={"class": "form-select"}),
             "category": forms.HiddenInput(),
             "brand": forms.HiddenInput(),
             "unit": forms.Select(attrs={"class": "form-select form-select-sm"}),
@@ -546,11 +549,12 @@ MovementDetailEditFormSet = forms.formset_factory(
 class PriceListForm(forms.ModelForm):
     class Meta:
         model = PriceList
-        fields = ("name", "description", "active")
+        fields = ("name", "description", "prices_include_tax", "active")
         widgets = {
             "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Lista minorista"}),
             "description": forms.TextInput(attrs={**_text, "placeholder": "Descripción (opcional)"}),
             "active": forms.CheckboxInput(attrs=_check),
+            "prices_include_tax": forms.CheckboxInput(attrs=_check),
         }
 
 
@@ -568,7 +572,7 @@ class ProductPriceForm(forms.Form):
         widget=forms.NumberInput(attrs={**_text, "step": "0.01", "min": "0"}),
     )
     currency = forms.ChoiceField(
-        choices=[("PEN", "Soles (PEN)"), ("USD", "Dólares (USD)")],
+        choices=currency_choices(),
         initial="PEN",
         widget=forms.Select(attrs=_select),
     )

@@ -3,6 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.db.models import Q
 
+from apps.core.currency import currency_choices
+
 from apps.inventory.models import Movement, MovementStatus, MovementType, Product, Unit, Warehouse
 from apps.partners.models import DocumentType, Supplier
 from apps.sales.models import MeansOfPayment, PaymentMethod
@@ -62,7 +64,7 @@ class PurchaseDocumentForm(forms.ModelForm):
             # explicit format also keeps existing dates visible when editing.
             "issue_date": forms.DateInput(format="%Y-%m-%d", attrs={**_text, "type": "date"}),
             "due_date": forms.DateInput(format="%Y-%m-%d", attrs={**_text, "type": "date"}),
-            "currency": forms.Select(choices=(("PEN", "Soles (PEN)"), ("USD", "Dolares (USD)")), attrs=_select),
+            "currency": forms.Select(choices=currency_choices(), attrs=_select),
             "exchange_rate": forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0.000001"}),
             "register_inventory_movement": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "warehouse": forms.Select(attrs=_select),
@@ -182,11 +184,11 @@ class PurchaseDocumentLineForm(forms.Form):
     unit_price = forms.DecimalField(min_value=0, max_digits=14, decimal_places=6, widget=forms.HiddenInput())
     discount_amount = forms.DecimalField(min_value=0, max_digits=14, decimal_places=2, required=False, initial=0, widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}))
     tax_type = forms.ChoiceField(choices=PurchaseTaxType.choices, initial=PurchaseTaxType.TAXED, widget=forms.Select(attrs={"class": "form-select form-select-sm"}))
-    igv_rate = forms.DecimalField(min_value=0, max_digits=5, decimal_places=2, required=False, initial=18, widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}))
+    igv_rate = forms.DecimalField(min_value=0, max_digits=5, decimal_places=2, required=False, initial=0, widget=forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}))
     update_purchase_price = forms.BooleanField(required=False, initial=True, widget=forms.CheckboxInput(attrs={"class": "form-check-input"}))
     memo = forms.CharField(max_length=1000, required=False, widget=forms.HiddenInput())
 
-    def __init__(self, *args, company_id=None, default_igv_rate=18, **kwargs):
+    def __init__(self, *args, company_id=None, default_igv_rate=0, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["igv_rate"].initial = default_igv_rate
         self.fields["product"].queryset = Product.objects.filter(
@@ -223,10 +225,10 @@ class PurchaseExpenseLineForm(forms.Form):
     )
     discount_amount = forms.DecimalField(required=False, initial=0, min_value=0, max_digits=14, decimal_places=2, widget=forms.HiddenInput())
     tax_type = forms.ChoiceField(choices=PurchaseTaxType.choices, initial=PurchaseTaxType.TAXED, widget=forms.Select(attrs=_select))
-    igv_rate = forms.DecimalField(required=False, initial=18, min_value=0, max_digits=5, decimal_places=2, widget=forms.HiddenInput())
+    igv_rate = forms.DecimalField(required=False, initial=0, min_value=0, max_digits=5, decimal_places=2, widget=forms.HiddenInput())
     memo = forms.CharField(required=False, max_length=1000, widget=forms.Textarea(attrs={**_text, "rows": 2}))
 
-    def __init__(self, *args, company_id=None, default_igv_rate=18, **kwargs):
+    def __init__(self, *args, company_id=None, default_igv_rate=0, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["igv_rate"].initial = default_igv_rate
         self.fields["purchase_category"].queryset = PurchaseCategory.objects.filter(
@@ -280,7 +282,7 @@ class PurchaseOrderForm(forms.ModelForm):
             "order_number": forms.TextInput(attrs=_text),
             "order_date": forms.DateInput(attrs={**_text, "type": "date"}),
             "expected_date": forms.DateInput(attrs={**_text, "type": "date"}),
-            "currency": forms.Select(choices=(("PEN", "Soles (PEN)"), ("USD", "Dolares (USD)")), attrs=_select),
+            "currency": forms.Select(choices=currency_choices(), attrs=_select),
             "exchange_rate": forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0.000001"}),
             "notes": forms.Textarea(attrs={**_text, "rows": 3}),
         }

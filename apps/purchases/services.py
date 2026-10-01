@@ -7,9 +7,10 @@ from django.utils import timezone
 from apps.core.models import AuditLog
 from apps.inventory.models import (
     Movement, MovementDetail, MovementOrigin, MovementStatus, MovementType,
-    Product, ProductSupplier, ProductUnit,
+    Product, ProductSupplier, ProductUnit, StockByWarehouse,
 )
 from apps.inventory.services import confirm_movement, register_entry, register_exit
+from apps.inventory.pricing import unit_value
 
 from .models import (
     PurchaseDocument,
@@ -80,7 +81,12 @@ def _calculate_line(line):
     tax_type = line.get("tax_type", "10")
     igv_rate = Decimal(str(line.get("igv_rate") or 0))
     igv = subtotal * igv_rate / Decimal("100") if tax_type == "10" else Decimal("0")
-    return {"subtotal": _money(subtotal), "igv_amount": _money(igv), "total": _money(subtotal + igv)}
+    return {
+        "subtotal": _money(subtotal),
+        "igv_amount": _money(igv),
+        "total": _money(subtotal + igv),
+        "global_discount_amount": Decimal("0.00"),
+    }
 
 
 def _totals(lines, calculated, global_discount_amount=0, global_discount_before_tax=False):
@@ -129,12 +135,29 @@ def _totals(lines, calculated, global_discount_amount=0, global_discount_before_
                 rate = Decimal(str(raw.get("igv_rate") or 0))
                 adjusted_igv = _money((calc["subtotal"] - discount_part) * rate / Decimal("100"))
                 totals["igv_total"] += adjusted_igv - calc["igv_amount"]
+                calc["igv_amount"] = adjusted_igv
+            calc["global_discount_amount"] = discount_part
+            calc["subtotal"] -= discount_part
+            calc["total"] = _money(calc["subtotal"] + calc["igv_amount"])
     totals["subtotal"] = totals["taxable_amount"] + totals["exempt_amount"] + totals["unaffected_amount"]
     totals["total"] = totals["subtotal"] + totals["igv_total"]
     if not global_discount_before_tax:
         if global_discount > totals["total"]:
             raise ValueError("El descuento general no puede superar el total del documento.")
         totals["total"] -= global_discount
+        eligible = [calc for calc in calculated if calc["total"] > 0]
+        remaining_discount = global_discount
+        remaining_total = sum((calc["total"] for calc in eligible), Decimal("0"))
+        for index, calc in enumerate(eligible):
+            discount_part = (
+                remaining_discount
+                if index == len(eligible) - 1
+                else min(_money(remaining_discount * calc["total"] / remaining_total), remaining_discount)
+            )
+            calc["global_discount_amount"] = discount_part
+            calc["total"] -= discount_part
+            remaining_discount -= discount_part
+            remaining_total -= calc["total"] + discount_part
     totals["total_discount"] += global_discount
     return {key: _money(value) for key, value in totals.items()}
 
@@ -307,7 +330,10 @@ def _update_current_purchase_prices(document):
     if not lines:
         return
     product_ids = {line.product_id for line in lines}
-    list(Product.objects.select_for_update().filter(pk__in=product_ids))
+    products = {
+        product.pk: product
+        for product in Product.objects.select_for_update().filter(pk__in=product_ids)
+    }
     relations = {
         relation.product_id: relation
         for relation in ProductSupplier.objects.select_for_update().filter(
@@ -317,19 +343,54 @@ def _update_current_purchase_prices(document):
         )
     }
     currency_factor = document.exchange_rate if document.currency != "PEN" else Decimal("1")
+    grouped = {}
     for line in lines:
-        base_price = (
+        commercial_price = (
             Decimal(str(line.price_unit))
             * Decimal(str(currency_factor))
             / Decimal(str(line.conversion_factor))
         )
-        Product.objects.filter(pk=line.product_id).update(
-            price_purchase=base_price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        net_base_value = (
+            Decimal(str(line.subtotal))
+            * Decimal(str(currency_factor))
+            / Decimal(str(line.stock_quantity))
+            if line.stock_quantity else Decimal("0")
+        )
+        item = grouped.setdefault(
+            line.product_id,
+            {"quantity": Decimal("0"), "value": Decimal("0"), "commercial_price": commercial_price},
+        )
+        item["quantity"] += Decimal(str(line.stock_quantity))
+        item["value"] += net_base_value * Decimal(str(line.stock_quantity))
+        item["commercial_price"] = commercial_price
+
+    stock_totals = {
+        row["product_id"]: row["total"] or Decimal("0")
+        for row in StockByWarehouse.objects.filter(product_id__in=product_ids)
+        .values("product_id")
+        .annotate(total=Sum("quantity"))
+    }
+    for product_id, item in grouped.items():
+        product = products[product_id]
+        incoming_quantity = item["quantity"]
+        current_quantity = Decimal(str(stock_totals.get(product_id, 0)))
+        previous_quantity = max(current_quantity - incoming_quantity, Decimal("0"))
+        previous_value = previous_quantity * Decimal(str(product.inventory_unit_cost or 0))
+        denominator = previous_quantity + incoming_quantity
+        average_cost = (
+            (previous_value + item["value"]) / denominator
+            if denominator > 0 else Decimal("0")
+        )
+        last_unit_value = item["value"] / incoming_quantity if incoming_quantity else Decimal("0")
+        Product.objects.filter(pk=product_id).update(
+            price_purchase=item["commercial_price"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            last_purchase_unit_value=unit_value(last_unit_value),
+            inventory_unit_cost=unit_value(average_cost),
             updated_at=timezone.now(),
         )
-        relation = relations.get(line.product_id)
+        relation = relations.get(product_id)
         if relation:
-            relation.purchase_price = base_price.quantize(
+            relation.purchase_price = item["commercial_price"].quantize(
                 Decimal("0.000001"), rounding=ROUND_HALF_UP
             )
             relation.save(update_fields=["purchase_price", "updated_at"])
@@ -439,6 +500,7 @@ def register_purchase_document(document_id, *, company_id, registered_by=None):
                     "quantity": line.quantity,
                     "unit_id": line.unit_id,
                     "unit_price": line.unit_price,
+                    "cost_source": "PURCHASE",
                 }
                 for line in inventory_lines
             ],
@@ -493,6 +555,7 @@ def cancel_purchase_document(document_id, *, company_id, cancelled_by=None):
                     "quantity": detail.quantity,
                     "unit_id": detail.unit_id,
                     "unit_price": detail.unit_price,
+                    "cost_source": detail.cost_source,
                 }
                 for detail in original.details.all()
             ],

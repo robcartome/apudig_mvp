@@ -31,10 +31,9 @@ from apps.sales.services import (
     update_quotation,
 )
 from apps.inventory.models import PriceList, Warehouse
+from apps.inventory.pricing import tax_rate_for_company
 from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.users.permissions import user_has_company_permission
-
-DEFAULT_IGV_RATE = 18
 
 QUOTATION_SORTS = {
     "issue_date": ("issue_date", "created_at"),
@@ -182,7 +181,7 @@ def quotation_create(request):
                         "title": "Nueva cotización",
                         "price_lists": price_lists,
                         "default_price_list_id": str(default_pl.pk) if default_pl else "",
-                        "igv_rate": DEFAULT_IGV_RATE,
+                        "igv_rate": tax_rate_for_company(company_id),
                     })
                 try:
                     q = create_quotation(
@@ -196,6 +195,7 @@ def quotation_create(request):
                         valid_until=cd.get("valid_until"),
                         currency=cd.get("currency", "PEN"),
                         exchange_rate=cd.get("exchange_rate") or 1,
+                        price_list=cd.get("price_list"),
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                         payment_method=cd.get("payment_method"),
@@ -218,7 +218,7 @@ def quotation_create(request):
         "title": "Nueva cotización",
         "price_lists": price_lists,
         "default_price_list_id": str(default_pl.pk) if default_pl else "",
-        "igv_rate": DEFAULT_IGV_RATE,
+        "igv_rate": tax_rate_for_company(company_id),
     })
 
 
@@ -308,7 +308,7 @@ def quotation_update(request, pk):
                         "quotation": quotation,
                         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
                         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
-                        "igv_rate": DEFAULT_IGV_RATE,
+                        "igv_rate": tax_rate_for_company(company_id),
                     })
                 try:
                     update_quotation(
@@ -320,6 +320,7 @@ def quotation_update(request, pk):
                         series=series,
                         number=cd.get("number"),
                         exchange_rate=cd.get("exchange_rate", 1),
+                        price_list=cd.get("price_list"),
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                     )
@@ -359,7 +360,7 @@ def quotation_update(request, pk):
         "quotation": quotation,
         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
-        "igv_rate": DEFAULT_IGV_RATE,
+        "igv_rate": tax_rate_for_company(company_id),
     })
 
 
@@ -448,7 +449,7 @@ def quotation_copy(request, pk):
                         "title": "Copiar cotización",
                         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
                         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
-                        "igv_rate": DEFAULT_IGV_RATE,
+                        "igv_rate": tax_rate_for_company(company_id),
                     })
                 try:
                     q = create_quotation(
@@ -460,6 +461,7 @@ def quotation_copy(request, pk):
                         issue_date=cd["issue_date"],
                         valid_until=cd.get("valid_until"),
                         currency=cd.get("currency", "PEN"),
+                        price_list=cd.get("price_list"),
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                         payment_method=cd.get("payment_method"),
@@ -490,7 +492,7 @@ def quotation_copy(request, pk):
         "title": "Copiar cotización",
         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
-        "igv_rate": DEFAULT_IGV_RATE,
+        "igv_rate": tax_rate_for_company(company_id),
     })
 
 

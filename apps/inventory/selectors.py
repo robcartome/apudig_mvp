@@ -404,6 +404,7 @@ def get_stock_comparative(store_id: str, warehouse_ids: list = None, query: str 
                 "category": s.product.category.name if s.product.category else "-",
                 "unit": s.product.unit.code if s.product.unit else "-",
                 "price_purchase": s.product.price_purchase,
+                "inventory_unit_cost": s.product.inventory_unit_cost,
                 "price_sale": s.product.price_sale,
                 "stocks": {},
             }
@@ -414,7 +415,7 @@ def get_stock_comparative(store_id: str, warehouse_ids: list = None, query: str 
     for row in sorted(product_map.values(), key=lambda r: r["product"]):
         total_stock = sum(row["stocks"].get(wid, Decimal("0")) for wid in wh_ids) if wh_ids else sum(row["stocks"].values(), Decimal("0"))
         row["total_stock"] = total_stock
-        row["total_valuation"] = total_stock * row["price_purchase"]
+        row["total_valuation"] = total_stock * row["inventory_unit_cost"]
         rows.append(row)
 
     # Summary
