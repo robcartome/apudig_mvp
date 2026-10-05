@@ -5,7 +5,7 @@
 {% block body_class %}pos-page{% endblock %}
 
 {% block extra_css %}
-  <link href="{% static 'css/pos.css' %}?v=20261001-1" rel="stylesheet">
+  <link href="{% static 'css/pos.css' %}?v=20261005-3" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -174,10 +174,12 @@
       </div>
 
       <div class="pos-sale-footer">
-        <div class="pos-notes">
-          <label for="sale-notes">Observación de venta</label>
-          <textarea id="sale-notes" rows="2" maxlength="1000" placeholder="Información visible para la operación"></textarea>
-        </div>
+        <details class="pos-notes" open>
+          <summary><i class="ti ti-notes"></i><span>Información adicional</span><i class="ti ti-chevron-down pos-notes__chevron"></i></summary>
+          <div class="pos-notes__content">
+            <textarea id="sale-notes" rows="2" maxlength="1000" placeholder="Información adicional"></textarea>
+          </div>
+        </details>
         <dl class="pos-totals" aria-label="Totales de la venta">
           <div><dt>Subtotal</dt><dd><span class="currency-label">S/.</span> <span id="subtotal">0.00</span></dd></div>
           <div id="global-discount-row">
@@ -618,13 +620,13 @@
     </form>
   </dialog>
 
-  <dialog id="reprint-dialog" class="pos-dialog">
+  <dialog id="reprint-dialog" class="pos-dialog pos-dialog--wide">
     <div>
       <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
       <h2>Historial de ventas POS</h2>
       <p>Los borradores de la caja abierta se pueden recuperar y cobrar; los comprobantes emitidos se pueden reimprimir.</p>
-      <div class="row g-2 mb-3"><div class="col-7"><label for="recent-sales-scope" class="form-label">Mostrar</label><select id="recent-sales-scope" class="form-select"><option value="session">Sesión actual</option><option value="day">Ventas de hoy</option><option value="all">Últimas ventas</option></select></div><div class="col-5"><label for="recent-sales-date" class="form-label">Fecha</label><input id="recent-sales-date" class="form-control" type="date" disabled></div></div>
-      <div id="recent-sales" class="pos-ticket-list"></div>
+      <div class="pos-history-filters"><div><label for="recent-sales-scope" class="form-label">Mostrar</label><select id="recent-sales-scope" class="form-select"><option value="session">Sesión actual</option><option value="day">Ventas de hoy</option><option value="all">Últimas ventas</option></select></div><div><label for="recent-sales-date" class="form-label">Fecha</label><input id="recent-sales-date" class="form-control" type="date" disabled></div></div>
+      <div id="recent-sales" class="pos-ticket-list pos-history-list"></div>
       <div class="pos-dialog__actions">
         <a class="btn btn-outline-primary" href="{% url 'pos:transaction_list' %}">Reporte por caja</a>
         <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cerrar</button>
@@ -640,5 +642,5 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/pos.js' %}?v=20261001-1"></script>
+  <script src="{% static 'js/pos.js' %}?v=20261005-3"></script>
 {% endblock %}
