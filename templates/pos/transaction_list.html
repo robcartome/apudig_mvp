@@ -1,10 +1,12 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block title %}Ventas por caja | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/pos_admin.css' %}?v=20261005-1" rel="stylesheet">{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3">
+<div class="pos-admin-page">
+<div class="page-header pos-page-heading d-print-none mb-3">
   <div class="row align-items-center">
     <div class="col"><h2 class="page-title">Ventas por caja</h2><div class="text-muted">Trazabilidad de tickets, borradores y comprobantes por sesión POS.</div></div>
-    <div class="col-auto"><a class="btn btn-primary" href="{% url 'pos:sale' %}"><i class="ti ti-device-desktop me-1"></i>Abrir POS</a></div>
+    <div class="col-auto pos-page-actions"><a class="btn btn-primary" href="{% url 'pos:sale' %}"><i class="ti ti-device-desktop me-1"></i>Abrir POS</a></div>
   </div>
 </div>
 <form class="card card-body mb-3 d-print-none" method="get">
@@ -15,16 +17,17 @@
     <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">Filtrar</button></div>
   </div>
 </form>
-<div class="card"><div class="table-responsive"><table class="table table-vcenter card-table">
+<div class="card pos-data-card"><div class="table-responsive"><table class="table table-vcenter card-table pos-data-table">
   <thead><tr><th>Fecha</th><th>Caja / sesión</th><th>Ticket</th><th>Documento</th><th>Vendedor</th><th>Estado</th><th class="text-end">Total</th></tr></thead>
   <tbody>{% for sale in page_obj %}<tr>
-    <td>{{ sale.started_at|date:"d/m/Y H:i" }}</td>
-    <td><strong>{{ sale.register.code }}</strong><div class="small text-muted">{{ sale.cash_session_id }}</div></td>
-    <td>{{ sale.ticket_code }}</td>
-    <td><a href="{% url 'sales:document_detail' sale.sales_document_id %}">{{ sale.sales_document.series_code }}-{{ sale.sales_document.number }}</a><div class="small text-muted">{{ sale.sales_document.customer_legal_name }}</div></td>
-    <td>{{ sale.cashier.display_name|default:"—" }}</td>
-    <td>{% include "components/status_badge.html" with status=sale.status label=sale.get_status_display %}</td>
-    <td class="text-end">{{ sale.sales_document.currency|currency_symbol }} {{ sale.sales_document.total|floatformat:2 }}</td>
+    <td data-label="Fecha">{{ sale.started_at|date:"d/m/Y H:i" }}</td>
+    <td data-label="Caja / sesión"><strong>{{ sale.register.code }}</strong><div class="small text-muted">{{ sale.cash_session_id }}</div></td>
+    <td data-label="Ticket">{{ sale.ticket_code }}</td>
+    <td data-label="Documento"><a href="{% url 'sales:document_detail' sale.sales_document_id %}">{{ sale.sales_document.series_code }}-{{ sale.sales_document.number }}</a><div class="small text-muted">{{ sale.sales_document.customer_legal_name }}</div></td>
+    <td data-label="Vendedor">{{ sale.cashier.display_name|default:"—" }}</td>
+    <td data-label="Estado">{% include "components/status_badge.html" with status=sale.status label=sale.get_status_display %}</td>
+    <td data-label="Total" class="text-end">{{ sale.sales_document.currency|currency_symbol }} {{ sale.sales_document.total|floatformat:2 }}</td>
   </tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-4">No hay operaciones para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
-</table></div></div>
+</table></div>{% if page_obj.has_other_pages %}<div class="card-footer d-flex align-items-center"><span class="text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><ul class="pagination m-0 ms-auto">{% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>{% endif %}{% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>{% endif %}</ul></div>{% endif %}</div>
+</div>
 {% endblock %}

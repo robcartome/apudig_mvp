@@ -1,14 +1,16 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block title %}Configuración POS | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/components/table-scroll-sync.css' %}" rel="stylesheet"><link href="{% static 'css/pos_admin.css' %}?v=20261005-2" rel="stylesheet">{% endblock %}
 {% block page_title %}<h2 class="page-title">Configuración del Punto de Venta</h2>{% endblock %}
 
 {% block content %}
-<div class="page-header d-print-none mb-3">
+<div class="pos-admin-page">
+<div class="page-header pos-page-heading d-print-none mb-3">
   <div class="row align-items-center">
     <div class="col">
       <p class="text-muted mb-0">{{ active_company.name }} · {{ active_store.name }}</p>
     </div>
-    <div class="col-auto d-flex gap-2">
+    <div class="col-auto pos-page-actions">
       <a href="{% url 'pos:sale' %}" class="btn btn-outline-secondary"><i class="ti ti-cash-register me-1"></i>Abrir POS</a>
       <a href="{% url 'pos:register_create' %}" class="btn btn-primary"><i class="ti ti-plus me-1"></i>Nueva caja</a>
     </div>
@@ -32,21 +34,22 @@
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-vcenter card-table">
+<div class="card pos-data-card">
+  <div class="table-scroll-top js-table-scroll-top pos-table-scroll-top" data-scroll-target="#pos-register-table-scroll" aria-label="Desplazamiento horizontal superior"><div></div></div>
+  <div class="table-responsive" id="pos-register-table-scroll">
+    <table class="table table-vcenter card-table pos-data-table pos-register-table">
       <thead><tr><th>Código</th><th>Caja</th><th>Almacén</th><th>Lista de precios</th><th>Cliente</th><th>Documento</th><th>Estado</th><th></th></tr></thead>
       <tbody>
         {% for register in registers %}
         <tr>
-          <td class="fw-semibold">{{ register.code }}</td>
-          <td>{{ register.name }}</td>
-          <td>{{ register.default_warehouse|default:"—" }}</td>
-          <td>{{ register.default_price_list|default:"Precio base" }}</td>
-          <td>{{ register.default_customer|default:"—" }}</td>
-          <td>{{ register.default_document_type|default:"—" }}</td>
-          <td>{% if register.active %}<span class="badge bg-success-lt">Activa</span>{% else %}<span class="badge bg-secondary-lt">Inactiva</span>{% endif %}</td>
-          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'pos:register_update' register.pk %}"><i class="ti ti-edit me-1"></i>Editar</a></td>
+          <td data-label="Código" class="fw-semibold">{{ register.code }}</td>
+          <td data-label="Caja">{{ register.name }}</td>
+          <td data-label="Almacén">{{ register.default_warehouse|default:"—" }}</td>
+          <td data-label="Lista de precios">{{ register.default_price_list|default:"Precio base" }}</td>
+          <td data-label="Cliente">{{ register.default_customer|default:"—" }}</td>
+          <td data-label="Documento">{{ register.default_document_type|default:"—" }}</td>
+          <td data-label="Estado">{% if register.active %}<span class="badge bg-success-lt">Activa</span>{% else %}<span class="badge bg-secondary-lt">Inactiva</span>{% endif %}</td>
+          <td data-label="Acciones" class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'pos:register_update' register.pk %}"><i class="ti ti-edit me-1"></i>Editar</a></td>
         </tr>
         {% empty %}
         <tr><td colspan="8" class="text-center text-muted py-5">No hay cajas POS configuradas para esta sucursal.</td></tr>
@@ -55,4 +58,6 @@
     </table>
   </div>
 </div>
+</div>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/components/table-scroll-sync.js' %}"></script>{% endblock %}

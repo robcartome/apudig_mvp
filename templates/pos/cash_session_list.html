@@ -1,13 +1,15 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block title %}Cierres de caja | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/components/table-scroll-sync.css' %}" rel="stylesheet"><link href="{% static 'css/pos_admin.css' %}?v=20261005-2" rel="stylesheet">{% endblock %}
 {% block content %}
-<div class="page-header d-print-none mb-3">
+<div class="pos-admin-page">
+<div class="page-header pos-page-heading d-print-none mb-3">
   <div class="row align-items-center">
     <div class="col">
       <h2 class="page-title">Cierres de caja</h2>
       <div class="text-muted">Consulta cajas activas y cierres anteriores. Cada cierre corresponde a un turno de caja.</div>
     </div>
-    <div class="col-auto d-flex gap-2">
+    <div class="col-auto pos-page-actions">
       {% if can_manage_safe %}<a class="btn btn-outline-primary" href="{% url 'pos:cash_safe_ledger' %}"><i class="ti ti-building-bank me-1"></i>Caja fuerte</a>{% endif %}
       <a class="btn btn-outline-secondary" href="{% url 'pos:transaction_list' %}">Ventas por caja</a>
       <a class="btn btn-primary" href="{% url 'pos:sale' %}"><i class="ti ti-device-desktop me-1"></i>Abrir POS</a>
@@ -23,40 +25,43 @@
     <div class="col-sm-6 col-lg-2"><label class="form-label">Caja</label><select class="form-select" name="register"><option value="">Todas</option>{% for register in registers %}<option value="{{ register.pk }}"{% if selected_register == register.pk|stringformat:'s' %} selected{% endif %}>{{ register.code }} · {{ register.name }}</option>{% endfor %}</select></div>
     {% if can_audit_all %}<div class="col-sm-6 col-lg-2"><label class="form-label">Cajero</label><select class="form-select" name="cashier"><option value="">Todos</option>{% for cashier in cashiers %}<option value="{{ cashier.opened_by_id }}"{% if selected_cashier == cashier.opened_by_id|stringformat:'s' %} selected{% endif %}>{{ cashier.opened_by__name|default:cashier.opened_by__email }}</option>{% endfor %}</select></div>{% endif %}
     <div class="col-sm-6 col-lg-2"><label class="form-label">Estado</label><select class="form-select" name="status"><option value="">Todos</option>{% for value,label in status_choices %}<option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div class="col-12 d-flex justify-content-end gap-2 mt-3"><a class="btn btn-outline-secondary" href="{% url 'pos:cash_session_list' %}">Limpiar</a><button class="btn btn-outline-primary" type="submit"><i class="ti ti-filter me-1"></i>Filtrar</button></div>
+    <div class="col-12 pos-filter-actions mt-3"><a class="btn btn-outline-secondary" href="{% url 'pos:cash_session_list' %}">Limpiar</a><button class="btn btn-outline-primary" type="submit"><i class="ti ti-filter me-1"></i>Filtrar</button></div>
   </div>
 </form>
 
 {% if can_audit_all %}
-<div class="card mb-3">
+<div class="card pos-daily-card mb-3">
   <div class="card-header"><div><h3 class="card-title mb-0">Resumen diario por POS</h3><div class="text-muted small">Consolida todos los turnos y cajeros de la caja física. Al consultar también se filtra el listado inferior.</div></div><form class="ms-auto d-flex gap-2" method="get"><input class="form-control" type="date" name="daily_date" value="{{ daily_date }}"><button class="btn btn-outline-primary" type="submit"><i class="ti ti-search me-1"></i>Consultar</button></form></div>
   <div class="table-responsive"><table class="table table-vcenter card-table"><thead><tr><th>Caja POS</th><th class="text-end">Sesiones</th><th class="text-end">Ventas</th><th>Moneda</th><th class="text-end">Total vendido</th></tr></thead><tbody>{% for row in daily_totals %}<tr><td><strong>{{ row.register__code }}</strong><div class="small text-muted">{{ row.register__name }}</div></td><td class="text-end">{{ row.sessions }}</td><td class="text-end">{{ row.sales_count }}</td><td>{{ row.sales_document__currency|currency_symbol }}</td><td class="text-end fw-semibold">{{ row.sales_document__currency|currency_symbol }} {{ row.sales_total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No hay ventas POS completadas en esta fecha.</td></tr>{% endfor %}</tbody></table></div>
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-vcenter card-table text-nowrap">
+<div class="card pos-data-card">
+  <div class="table-scroll-top js-table-scroll-top pos-table-scroll-top" data-scroll-target="#pos-session-table-scroll" aria-label="Desplazamiento horizontal superior"><div></div></div>
+  <div class="table-responsive" id="pos-session-table-scroll">
+    <table class="table table-vcenter card-table pos-data-table pos-session-table">
       <thead><tr><th>Cierre / turno</th><th>Caja</th><th>Sucursal</th><th>Cajero</th><th>Apertura</th><th>Cierre</th><th class="text-end">Fondo inicial</th><th class="text-end">Ventas/cobros</th><th class="text-end">Esperado</th><th class="text-end">Contado</th><th class="text-end">Gaveta siguiente</th><th class="text-end">Caja fuerte</th><th class="text-end">Banco</th><th class="text-end">Diferencia</th><th>Estado</th></tr></thead>
       <tbody>{% for session in page_obj %}<tr>
-        <td><a class="fw-semibold" href="{% url 'pos:cash_session_detail' session.pk %}">{% if session.status == 'OPEN' %}Caja activa{% else %}Cierre{% endif %} N.º {{ session.session_number }}</a><div class="small text-muted">Turno {{ session.currency|currency_symbol }} · Ver resumen</div></td>
-        <td><strong>{{ session.register.code }}</strong><div class="small text-muted">{{ session.register.name }}</div></td>
-        <td>{{ session.store.name }}</td>
-        <td>{{ session.opened_by.display_name|default:"—" }}</td>
-        <td>{{ session.opened_at|date:"d/m/Y H:i" }}</td>
-        <td>{{ session.closed_at|date:"d/m/Y H:i"|default:"—" }}</td>
-        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.opening_total|floatformat:2 }}</td>
-        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.net_collected_total|floatformat:2 }}</td>
-        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.display_expected_cash_total|floatformat:2 }}{% if session.status == 'OPEN' %}<div class="small text-muted">En curso</div>{% endif %}</td>
-        <td class="text-end">{% if session.counted_cash_total is not None %}{{ session.currency|currency_symbol }} {{ session.counted_cash_total|floatformat:2 }}{% else %}—{% endif %}</td>
-        <td class="text-end">{% if session.next_opening_total is not None %}{{ session.currency|currency_symbol }} {{ session.next_opening_total|floatformat:2 }}{% else %}—{% endif %}</td>
-        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.safe_deposit_total|floatformat:2 }}</td>
-        <td class="text-end">{{ session.currency|currency_symbol }} {{ session.bank_deposit_total|floatformat:2 }}</td>
-        <td class="text-end {% if session.cash_difference < 0 %}text-danger{% elif session.cash_difference > 0 %}text-warning{% endif %}">{% if session.cash_difference is not None %}{{ session.currency|currency_symbol }} {{ session.cash_difference|floatformat:2 }}{% else %}—{% endif %}</td>
-        <td>{% include "components/status_badge.html" with status=session.status label=session.get_status_display %}</td>
+        <td data-label="Turno"><a class="fw-semibold" href="{% url 'pos:cash_session_detail' session.pk %}">{% if session.status == 'OPEN' %}Caja activa{% else %}Cierre{% endif %} N.º {{ session.session_number }}</a><div class="small text-muted">Turno {{ session.currency|currency_symbol }} · Ver resumen</div></td>
+        <td data-label="Caja"><strong>{{ session.register.code }}</strong><div class="small text-muted">{{ session.register.name }}</div></td>
+        <td data-label="Sucursal">{{ session.store.name }}</td>
+        <td data-label="Cajero">{{ session.opened_by.display_name|default:"—" }}</td>
+        <td data-label="Apertura">{{ session.opened_at|date:"d/m/Y H:i" }}</td>
+        <td data-label="Cierre">{{ session.closed_at|date:"d/m/Y H:i"|default:"—" }}</td>
+        <td data-label="Fondo inicial" class="text-end">{{ session.currency|currency_symbol }} {{ session.opening_total|floatformat:2 }}</td>
+        <td data-label="Ventas / cobros" class="text-end">{{ session.currency|currency_symbol }} {{ session.net_collected_total|floatformat:2 }}</td>
+        <td data-label="Esperado" class="text-end">{{ session.currency|currency_symbol }} {{ session.display_expected_cash_total|floatformat:2 }}{% if session.status == 'OPEN' %}<div class="small text-muted">En curso</div>{% endif %}</td>
+        <td data-label="Contado" class="text-end">{% if session.counted_cash_total is not None %}{{ session.currency|currency_symbol }} {{ session.counted_cash_total|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td data-label="Gaveta siguiente" class="text-end">{% if session.next_opening_total is not None %}{{ session.currency|currency_symbol }} {{ session.next_opening_total|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td data-label="Caja fuerte" class="text-end">{{ session.currency|currency_symbol }} {{ session.safe_deposit_total|floatformat:2 }}</td>
+        <td data-label="Banco" class="text-end">{{ session.currency|currency_symbol }} {{ session.bank_deposit_total|floatformat:2 }}</td>
+        <td data-label="Diferencia" class="text-end {% if session.cash_difference < 0 %}text-danger{% elif session.cash_difference > 0 %}text-warning{% endif %}">{% if session.cash_difference is not None %}{{ session.currency|currency_symbol }} {{ session.cash_difference|floatformat:2 }}{% else %}—{% endif %}</td>
+        <td data-label="Estado">{% include "components/status_badge.html" with status=session.status label=session.get_status_display %}</td>
       </tr>{% empty %}<tr><td colspan="15" class="text-center text-muted py-5">No existen cierres para los filtros seleccionados.</td></tr>{% endfor %}</tbody>
     </table>
   </div>
   {% if page_obj.has_other_pages %}<div class="card-footer d-flex align-items-center"><span class="text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><ul class="pagination m-0 ms-auto">{% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>{% endif %}{% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>{% endif %}</ul></div>{% endif %}
 </div>
+</div>
 {% endblock %}
+{% block extra_js %}<script src="{% static 'js/components/table-scroll-sync.js' %}"></script>{% endblock %}
