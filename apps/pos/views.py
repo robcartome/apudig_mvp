@@ -110,6 +110,8 @@ def transaction_list(request):
     if status:
         transactions = transactions.filter(status=status)
     page_obj = Paginator(transactions, 80).get_page(request.GET.get("page"))
+    query = request.GET.copy()
+    query.pop("page", None)
     return render(request, "pos/transaction_list.html", {
         "page_obj": page_obj,
         "registers": PosRegister.objects.filter(company_id=company_id, store_id=store_id),
@@ -117,6 +119,7 @@ def transaction_list(request):
         "selected_session": session_id,
         "selected_status": status,
         "status_choices": PosTransaction.Status.choices,
+        "pagination_query": query.urlencode(),
     })
 
 

@@ -542,7 +542,15 @@
     hideProductResults();
     renderCart();
     if (state.productSearchMode === "CATALOG") loadCatalog("");
-    byId("product-search").focus();
+    // On iOS, returning focus to a small search field keeps the software
+    // keyboard open and Safari's automatic zoom after choosing a product.
+    // Desktop scanners/keyboard workflows retain the convenient refocus.
+    if (window.matchMedia("(min-width: 821px)").matches) {
+      byId("product-search").focus();
+    } else {
+      document.activeElement?.blur();
+      requestAnimationFrame(() => window.scrollTo(0, window.scrollY));
+    }
   }
 
   function renderCart() {
@@ -1557,28 +1565,30 @@
       list.innerHTML = records.length ? records.map((record) => {
         const isDraft = record.status === "DRAFT";
         const timestamp = record.completed_at || record.started_at;
-        return `<button class="pos-ticket-row pos-ticket-row--button ${isDraft ? "is-draft" : ""}" type="button" ${isDraft ? `data-load-draft-id="${record.id}"` : `data-reprint-id="${record.id}"`}>
-          <span><strong>${isDraft ? "BORRADOR" : `${escapeHtml(record.document_series)}-${escapeHtml(record.document_number)}`}</strong><small>${new Date(timestamp).toLocaleString("es-PE")} · ${escapeHtml(record.customer_name)} · ${escapeHtml(record.cashier_name || "")}</small></span>
-          <span><b>${escapeHtml(currencySymbol(record.currency))} ${escapeHtml(record.total)}</b><small>${isDraft ? "Recuperar y editar" : escapeHtml(record.ticket_code)}</small></span>
+        const date = new Date(timestamp);
+        const documentCode = isDraft
+          ? (record.ticket_code || "Venta sin emitir")
+          : `${record.document_series || ""}-${record.document_number || ""}`;
+        const customerDocument = record.customer_document_number
+          ? ` · ${record.customer_document_number}`
+          : "";
+        return `<button class="pos-history-card ${isDraft ? "is-draft" : ""}" type="button" ${isDraft ? `data-load-draft-id="${record.id}"` : `data-reprint-id="${record.id}"`}>
+          <span class="pos-history-card__top">
+            <span class="pos-history-status"><i class="ti ${isDraft ? "ti-pencil" : "ti-circle-check"}"></i>${isDraft ? "Borrador" : "Emitida"}</span>
+            <time datetime="${escapeHtml(timestamp || "")}">${date.toLocaleDateString("es-PE")} <b>${date.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</b></time>
+          </span>
+          <span class="pos-history-card__main">
+            <span><strong>${escapeHtml(documentCode)}</strong><small>${escapeHtml(record.customer_name || "Cliente general")}${escapeHtml(customerDocument)}</small></span>
+            <b class="pos-history-card__total">${escapeHtml(currencySymbol(record.currency))} ${escapeHtml(record.total)}</b>
+          </span>
+          <span class="pos-history-card__footer">
+            <span><i class="ti ti-user"></i>${escapeHtml(record.cashier_name || "Sin usuario")}</span>
+            <span><i class="ti ${isDraft ? "ti-edit" : "ti-printer"}"></i>${isDraft ? "Recuperar y editar" : "Ver y reimprimir"}</span>
+          </span>
         </button>`;
       }).join("") : '<div class="pos-no-results">No hay ventas ni borradores recientes.</div>';
     } catch (error) {
       list.innerHTML = `<div class="pos-no-results">${escapeHtml(error.message)}</div>`;
-    }
-    return;
-    openDialog(byId("reprint-dialog"));
-    const container = byId("recent-sales");
-    container.innerHTML = '<div class="pos-no-results">Buscando comprobantes…</div>';
-    try {
-      const query = state.register ? `?register_id=${encodeURIComponent(state.register.id)}` : "";
-      const records = await api(`${endpoints.recentSales}${query}`);
-      container.innerHTML = records.length ? records.map((record) => `
-        <button class="pos-ticket-row pos-ticket-row--button" type="button" data-reprint-id="${record.id}">
-          <span><strong>${escapeHtml(record.document_series)}-${escapeHtml(record.document_number)}</strong><small>${new Date(record.completed_at).toLocaleString("es-PE")} · ${escapeHtml(record.customer_name)}</small></span>
-          <strong>${escapeHtml(currencySymbol(record.currency))} ${escapeHtml(record.total)}</strong>
-        </button>`).join("") : '<div class="pos-no-results">No hay comprobantes recientes.</div>';
-    } catch (error) {
-      container.innerHTML = `<div class="pos-no-results">${escapeHtml(error.message)}</div>`;
     }
   }
 
@@ -2525,6 +2535,14 @@
   byId("debit-note-form").addEventListener("submit", submitDebitNote);
   byId("receipt-width").addEventListener("change", (event) => setReceiptWidth(event.target.value));
   byId("print-receipt-button").addEventListener("click", () => window.print());
+
+  const saleNotes = document.querySelector(".pos-notes");
+  const compactSaleNotes = window.matchMedia("(max-width: 820px)");
+  const syncSaleNotesLayout = (event) => {
+    saleNotes.open = !event.matches;
+  };
+  syncSaleNotesLayout(compactSaleNotes);
+  compactSaleNotes.addEventListener?.("change", syncSaleNotesLayout);
 
   renderDenominations("opening-denominations");
   renderDenominations("closing-denominations");

@@ -1,0 +1,297 @@
+.pos-admin-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.pos-admin-page > .page-header,
+.pos-admin-page > form,
+.pos-admin-page > .card,
+.pos-admin-page > .row {
+  margin-bottom: 0 !important;
+}
+
+.pos-page-heading .row {
+  gap: .75rem 0;
+}
+
+.pos-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.pos-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+
+.pos-data-card {
+  overflow: hidden;
+}
+
+.pos-data-table th,
+.pos-data-table td {
+  vertical-align: middle;
+}
+
+.pos-data-table td[data-label="Total"],
+.pos-data-table td[data-label="Diferencia"],
+.pos-data-table td[data-label="Saldo"] {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .pos-data-card > .table-responsive {
+    overflow-x: auto;
+  }
+
+  .pos-session-table {
+    min-width: 1580px;
+    table-layout: auto;
+    font-size: .9rem;
+  }
+
+  .pos-session-table th {
+    padding: .55rem .6rem;
+    color: #52606d;
+    font-size: .65rem;
+    letter-spacing: .035em;
+    white-space: nowrap;
+  }
+
+  .pos-session-table td {
+    padding: .65rem .6rem;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+
+  .pos-session-table td:first-child {
+    min-width: 150px;
+  }
+
+  .pos-session-table td:nth-child(2) {
+    min-width: 100px;
+  }
+
+  .pos-session-table td:nth-child(3),
+  .pos-session-table td:nth-child(4) {
+    min-width: 135px;
+  }
+
+  .pos-session-table td:nth-child(5),
+  .pos-session-table td:nth-child(6) {
+    min-width: 118px;
+  }
+
+  .pos-session-table td:nth-child(n+7):nth-child(-n+14) {
+    min-width: 96px;
+    text-align: right;
+    font-size: .84rem;
+  }
+
+  .pos-session-table .small {
+    font-size: .7rem;
+  }
+
+  .pos-register-table {
+    min-width: 960px;
+    font-size: .8rem;
+  }
+
+  .pos-register-table th {
+    font-size: .62rem;
+    white-space: nowrap;
+  }
+
+  .pos-register-table td {
+    padding-block: .65rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .pos-data-table {
+    min-width: 920px;
+  }
+
+  .pos-session-table {
+    min-width: 1480px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .pos-admin-page {
+    gap: .75rem;
+  }
+
+  .pos-page-heading .row,
+  .pos-page-heading .col,
+  .pos-page-heading .col-auto {
+    width: 100%;
+  }
+
+  .pos-page-heading .page-title {
+    font-size: 1.15rem;
+  }
+
+  .pos-page-heading .text-muted {
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+
+  .pos-page-actions {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pos-page-actions .btn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .pos-filter-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pos-filter-actions .btn {
+    width: 100%;
+  }
+
+  .pos-data-card,
+  .pos-data-card > .table-responsive {
+    overflow: visible;
+  }
+
+  .pos-table-scroll-top {
+    display: none !important;
+  }
+
+  .pos-data-table,
+  .pos-data-table tbody,
+  .pos-data-table tr,
+  .pos-data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .pos-data-table thead {
+    display: none;
+  }
+
+  .pos-data-table {
+    margin: 0;
+    padding: .65rem;
+    background: #f6f8fb;
+  }
+
+  .pos-data-table tbody {
+    display: grid;
+    gap: .65rem;
+  }
+
+  .pos-data-table tbody tr {
+    padding: .3rem .8rem;
+    border: 1px solid var(--tblr-border-color, #e4e7ec);
+    border-radius: .75rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+  }
+
+  .pos-data-table tbody td {
+    min-height: 38px;
+    padding: .55rem 0;
+    border: 0;
+    border-bottom: 1px solid #eef0f3;
+    display: grid;
+    grid-template-columns: minmax(100px, .72fr) minmax(0, 1.28fr);
+    align-items: center;
+    gap: .75rem;
+    text-align: right !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .pos-data-table tbody td::before {
+    content: attr(data-label);
+    color: var(--tblr-secondary, #667085);
+    text-align: left;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .025em;
+    text-transform: uppercase;
+  }
+
+  .pos-data-table tbody td:first-child {
+    min-height: 46px;
+  }
+
+  .pos-data-table tbody td:last-child {
+    border-bottom: 0;
+  }
+
+  .pos-data-table tbody td[colspan] {
+    display: block;
+    padding: 1.5rem .75rem;
+    text-align: center !important;
+  }
+
+  .pos-data-table tbody td[colspan]::before {
+    content: none;
+  }
+
+  .pos-data-table .pos-cell-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .4rem;
+  }
+
+  .pos-data-card .card-footer {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: .65rem;
+  }
+
+  .pos-data-card .pagination {
+    width: 100%;
+    margin-left: 0 !important;
+    justify-content: space-between;
+  }
+
+  .pos-daily-card .card-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: .75rem;
+  }
+
+  .pos-daily-card .card-header form {
+    width: 100%;
+    margin-left: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pos-register-form-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pos-safe-form .card-footer .btn {
+    width: 100%;
+  }
+
+  .report-table {
+    min-width: 620px;
+  }
+}
+
+@media (max-width: 420px) {
+  .pos-page-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-page-actions .btn {
+    grid-column: 1 !important;
+  }
+}
