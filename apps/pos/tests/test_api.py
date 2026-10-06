@@ -193,6 +193,14 @@ class PosApiTest(TestCase):
         self.assertEqual(response.status_code, 201, response.content)
         return response.json()["id"]
 
+    def test_expired_session_is_identified_for_pos_client(self):
+        self.client.logout()
+
+        response = self.client.get("/api/v1/pos/bootstrap/")
+
+        self.assertIn(response.status_code, (401, 403))
+        self.assertEqual(response["X-ApuDig-Auth-Required"], "1")
+
     def _checkout_payload(self, session_id, *, key=None, unit_price=None):
         line = {
             "product_id": str(self.product.pk),
@@ -380,6 +388,57 @@ class PosApiTest(TestCase):
         self.assertEqual(product["unit_price"], "84.745763")
         self.assertEqual(product["stock"], "10.000")
         self.assertEqual(product["unit"], "NIU")
+
+    def test_barcode_search_is_exact_and_does_not_use_text_matching(self):
+        self.product.barcode = "7751234567890"
+        self.product.save(update_fields=("barcode",))
+        Product.objects.create(
+            company=self.company,
+            name="Referencia 7751234567890 que no debe coincidir",
+            sku="REF-001",
+            unit=self.unit,
+            price_sale=Decimal("50.00"),
+            active=True,
+        )
+
+        response = self.client.get(
+            "/api/v1/pos/products/",
+            {
+                "register_id": str(self.register.pk),
+                "barcode": "7751234567890",
+                "currency": "PEN",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([item["id"] for item in response.json()], [str(self.product.pk)])
+
+    def test_barcode_search_returns_duplicates_for_explicit_selection(self):
+        self.product.barcode = "DUPLICADO-01"
+        self.product.save(update_fields=("barcode",))
+        duplicate = Product.objects.create(
+            company=self.company,
+            name="Martillo duplicado",
+            sku="MAR-002",
+            barcode="DUPLICADO-01",
+            unit=self.unit,
+            price_sale=Decimal("90.00"),
+            active=True,
+        )
+
+        response = self.client.get(
+            "/api/v1/pos/products/",
+            {
+                "register_id": str(self.register.pk),
+                "barcode": "DUPLICADO-01",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            {item["id"] for item in response.json()},
+            {str(self.product.pk), str(duplicate.pk)},
+        )
 
     def test_alternate_unit_uses_presentation_price_and_stock_conversion(self):
         box = Unit.objects.create(code="BX12", name="Caja de 12")

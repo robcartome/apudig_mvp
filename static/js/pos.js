@@ -131,6 +131,13 @@
       ...options,
       headers,
     });
+    if (response.status === 401 || response.headers.get("X-ApuDig-Auth-Required") === "1") {
+      const returnUrl = `${window.location.pathname}${window.location.search}`;
+      const loginUrl = new URL(app.dataset.loginUrl, window.location.origin);
+      loginUrl.searchParams.set("next", returnUrl);
+      window.location.replace(loginUrl.toString());
+      throw new Error("La sesión expiró. Redirigiendo al inicio de sesión.");
+    }
     let payload = null;
     try {
       payload = await response.json();
@@ -585,23 +592,23 @@
         : `<span class="pos-tax-label">${line.taxType === "10" ? `IGV ${fixed(line.igvRate, 0)}%` : "Sin IGV"}</span>`;
       return `
         <tr data-line-id="${line.id}" class="${state.activeCartLineId === line.id ? "is-selected" : ""}">
-          <td>
+          <td data-label="Producto">
             ${productControl}
             <span class="pos-product-meta">${escapeHtml(line.sku)} · ${unitControl} · ${line.manual ? '<b class="pos-manual-badge">Línea libre · Sin stock</b>' : `Stock ${fixed(line.stock, 3)} ${escapeHtml(line.unit)}`}</span>
             ${canDiscount ? `<label class="pos-line-discount">Desc. neto <span class="currency-label">${currencySymbol()}</span><input class="pos-discount-input" data-action="discount" type="number" min="0" step="0.01" value="${fixed(line.discount)}" aria-label="Descuento de ${escapeHtml(line.name)}"></label>` : ""}
             ${line.memo ? `<span class="pos-line-memo"><i class="ti ti-notes"></i>${escapeHtml(line.memo)}</span>` : ""}
           </td>
-          <td>
+          <td data-label="Cantidad">
             <div class="pos-quantity">
               <button type="button" data-action="decrease" aria-label="Reducir cantidad">−</button>
               <input data-action="quantity" type="number" min="0.001" step="0.001" inputmode="decimal" value="${fixed(line.quantity, line.quantity % 1 ? 3 : 0)}" aria-label="Cantidad de ${escapeHtml(line.name)}">
               <button type="button" data-action="increase" aria-label="Aumentar cantidad">+</button>
             </div>
           </td>
-          <td><input class="pos-price-input" data-action="price" type="number" min="0" step="0.01" inputmode="decimal" value="${fixed(grossUnitPrice(line))}" ${canChangePrice ? "" : "disabled"} aria-label="Precio unitario de ${escapeHtml(line.name)}"></td>
-          <td>${taxControl}</td>
-          <td class="text-end"><span class="pos-line-total">${currencySymbol()} ${fixed(values.total)}</span></td>
-          <td><div class="pos-line-actions">${line.manual ? "" : `<button class="pos-line-info" data-action="prices" type="button" aria-label="Ver listas de precios de ${escapeHtml(line.name)}" title="Listas de precios"><i class="ti ti-tags"></i></button><button class="pos-line-info" data-action="stock" type="button" aria-label="Ver stock por almacén de ${escapeHtml(line.name)}" title="Stock por almacén"><i class="ti ti-building-warehouse"></i></button>`}<button class="pos-memo-line ${line.memo ? "has-value" : ""}" data-action="memo" type="button" aria-label="Información adicional de ${escapeHtml(line.name)}" title="Información adicional"><i class="ti ti-notes"></i></button><button class="pos-remove-line" data-action="remove" type="button" aria-label="Quitar ${escapeHtml(line.name)}"><i class="ti ti-trash"></i></button></div></td>
+          <td data-label="Precio unitario"><input class="pos-price-input" data-action="price" type="number" min="0" step="0.01" inputmode="decimal" value="${fixed(grossUnitPrice(line))}" ${canChangePrice ? "" : "disabled"} aria-label="Precio unitario de ${escapeHtml(line.name)}"></td>
+          <td data-label="Impuesto">${taxControl}</td>
+          <td data-label="Total" class="text-end"><span class="pos-line-total">${currencySymbol()} ${fixed(values.total)}</span></td>
+          <td data-label="Acciones"><div class="pos-line-actions">${line.manual ? "" : `<button class="pos-line-info" data-action="prices" type="button" aria-label="Ver listas de precios de ${escapeHtml(line.name)}" title="Listas de precios"><i class="ti ti-tags"></i></button><button class="pos-line-info" data-action="stock" type="button" aria-label="Ver stock por almacén de ${escapeHtml(line.name)}" title="Stock por almacén"><i class="ti ti-building-warehouse"></i></button>`}<button class="pos-memo-line ${line.memo ? "has-value" : ""}" data-action="memo" type="button" aria-label="Información adicional de ${escapeHtml(line.name)}" title="Información adicional"><i class="ti ti-notes"></i></button><button class="pos-remove-line" data-action="remove" type="button" aria-label="Quitar ${escapeHtml(line.name)}"><i class="ti ti-trash"></i></button></div></td>
         </tr>`;
     }).join("");
     updateTotals();
@@ -962,6 +969,23 @@
   }
 
   let productSearchTimer = null;
+
+  function requestBarcodeScan() {
+    hideProductResults();
+    const scanRequest = new CustomEvent("pos:scan-requested", {
+      bubbles: true,
+      cancelable: true,
+      detail: {
+        targetInput: byId("product-search"),
+        barcodeField: "barcode",
+      },
+    });
+    if (app.dispatchEvent(scanRequest)) {
+      showAlert("La cámara no está disponible en este navegador o contexto. Puede ingresar el código de barras en el buscador.");
+      byId("product-search").focus();
+    }
+  }
+
   async function searchProducts() {
     const search = byId("product-search").value.trim();
     if (!search || !state.register) {
@@ -973,6 +997,28 @@
       const products = await api(`${endpoints.products}?${params}`);
       if (byId("product-search").value.trim() === search) {
         renderProductResults(products);
+      }
+    } catch (error) {
+      showAlert(error.message);
+    }
+  }
+
+  async function searchProductByBarcode(barcode) {
+    if (!barcode || !state.register) return;
+    try {
+      const params = productQuery();
+      params.delete("search");
+      params.delete("category_id");
+      params.set("barcode", barcode);
+      const products = await api(`${endpoints.products}?${params}`);
+      if (byId("product-search").value.trim() !== barcode) return;
+      if (products.length === 1) {
+        addProduct(products[0]);
+      } else {
+        renderProductResults(products);
+        if (products.length > 1) {
+          showAlert("Hay más de un producto con este código de barras. Seleccione el correcto.");
+        }
       }
     } catch (error) {
       showAlert(error.message);
@@ -1261,7 +1307,7 @@
       renderReceipt(result, cartSnapshot);
       closeDialog(byId("checkout-review-dialog"));
       resetSale();
-      document.body.classList.remove("pos-checkout-open");
+      closeMobileCheckout();
       openDialog(byId("success-dialog"));
     } catch (error) {
       showAlert(error.message);
@@ -2099,6 +2145,11 @@
       220,
     );
   });
+  byId("product-search").addEventListener("pos:barcode-detected", (event) => {
+    clearTimeout(productSearchTimer);
+    searchProductByBarcode(event.detail.barcode);
+  });
+  byId("scan-barcode").addEventListener("click", requestBarcodeScan);
   byId("product-search").addEventListener("keydown", (event) => {
     if (state.productSearchMode === "SEARCH" && event.key === "ArrowDown" && state.productResults.length) {
       event.preventDefault();
@@ -2163,6 +2214,11 @@
       event.preventDefault();
       const dialog = openDialogs.at(-1);
       if (!(dialog.id === "open-session-dialog" && !state.session)) closeDialog(dialog);
+      return;
+    }
+    if (event.key === "Escape" && document.body.classList.contains("pos-checkout-open")) {
+      event.preventDefault();
+      closeMobileCheckout();
       return;
     }
     if (event.key === "F2") {
@@ -2454,8 +2510,27 @@
     event.preventDefault();
     checkout();
   });
-  byId("mobile-checkout-button").addEventListener("click", () => document.body.classList.add("pos-checkout-open"));
-  byId("close-mobile-checkout").addEventListener("click", () => document.body.classList.remove("pos-checkout-open"));
+  function openMobileCheckout() {
+    document.body.classList.add("pos-checkout-open");
+    byId("mobile-checkout-button").setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => byId("close-mobile-checkout").focus());
+  }
+
+  function closeMobileCheckout() {
+    document.body.classList.remove("pos-checkout-open");
+    byId("mobile-checkout-button").setAttribute("aria-expanded", "false");
+  }
+
+  byId("mobile-checkout-button").addEventListener("click", openMobileCheckout);
+  byId("close-mobile-checkout").addEventListener("click", closeMobileCheckout);
+  document.addEventListener("pointerdown", (event) => {
+    if (!document.body.classList.contains("pos-checkout-open")) return;
+    if (event.target.closest("#checkout-panel, #mobile-checkout-button")) return;
+    closeMobileCheckout();
+  });
+  window.addEventListener("resize", () => {
+    if (window.matchMedia("(min-width: 821px)").matches) closeMobileCheckout();
+  });
   byId("open-session-form").addEventListener("submit", openCashSession);
   byId("opening-currency").addEventListener("change", (event) => {
     byId("opening-currency-symbol").textContent = currencySymbol(event.target.value);
@@ -2543,6 +2618,21 @@
   };
   syncSaleNotesLayout(compactSaleNotes);
   compactSaleNotes.addEventListener?.("change", syncSaleNotesLayout);
+
+  const updateNetworkStatus = () => {
+    byId("pos-network-status").hidden = navigator.onLine;
+  };
+  window.addEventListener("online", updateNetworkStatus);
+  window.addEventListener("offline", updateNetworkStatus);
+  updateNetworkStatus();
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/pos/service-worker.js", { scope: "/pos/" }).catch((error) => {
+        console.warn("No se pudo registrar el Service Worker del POS.", error);
+      });
+    });
+  }
 
   renderDenominations("opening-denominations");
   renderDenominations("closing-denominations");

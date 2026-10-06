@@ -203,7 +203,7 @@
       <div class="card-body">
         <p class="text-muted small">Puedes cargar hasta 3 imágenes. La principal se muestra en el catálogo.</p>
 
-        <div class="mb-4">
+        <div class="mb-4 product-image-slot" data-field-name="image_file">
           <div class="mb-2{% if not object.image %} d-none{% endif %}" id="image-preview-wrap">
             <img id="image-preview" src="{% if object.image %}{{ object.image }}{% endif %}"
                  class="img-fluid rounded border" alt="Imagen principal"
@@ -211,12 +211,23 @@
           </div>
           <label class="form-label" for="{{ form.image_file.id_for_label }}">1. Principal</label>
           {{ form.image_file }}
+          <input type="file" id="camera_image_file" class="visually-hidden product-camera-input"
+                 accept="image/*" capture="environment" data-target-id="{{ form.image_file.id_for_label }}">
+          <div class="d-grid d-sm-flex gap-2 mt-1">
+            <label class="btn btn-outline-primary" for="camera_image_file">
+              <i class="ti ti-camera me-1" aria-hidden="true"></i>Tomar foto
+            </label>
+            <label class="btn btn-outline-secondary" for="{{ form.image_file.id_for_label }}">
+              <i class="ti ti-photo me-1" aria-hidden="true"></i>Elegir de galería
+            </label>
+          </div>
           <div class="form-hint">{{ form.image_file.help_text }}</div>
+          <div class="image-processing-status small mt-1" role="status" aria-live="polite"></div>
           {% if form.image_file.errors %}<div class="text-danger small mt-1">{{ form.image_file.errors.0 }}</div>{% endif %}
           {% if object.image %}<label class="form-check mt-2">{{ form.remove_image }}<span class="form-check-label">Quitar principal</span></label>{% endif %}
         </div>
 
-        <div class="mb-4 border-top pt-3">
+        <div class="mb-4 border-top pt-3 product-image-slot" data-field-name="secondary_image_file">
           <div class="mb-2{% if not object.secondary_image %} d-none{% endif %}" id="secondary-image-preview-wrap">
             <img id="secondary-image-preview" src="{% if object.secondary_image %}{{ object.secondary_image }}{% endif %}"
                  class="img-fluid rounded border" alt="Imagen secundaria"
@@ -224,12 +235,23 @@
           </div>
           <label class="form-label" for="{{ form.secondary_image_file.id_for_label }}">2. Secundaria</label>
           {{ form.secondary_image_file }}
+          <input type="file" id="camera_secondary_image_file" class="visually-hidden product-camera-input"
+                 accept="image/*" capture="environment" data-target-id="{{ form.secondary_image_file.id_for_label }}">
+          <div class="d-grid d-sm-flex gap-2 mt-1">
+            <label class="btn btn-outline-primary" for="camera_secondary_image_file">
+              <i class="ti ti-camera me-1" aria-hidden="true"></i>Tomar foto
+            </label>
+            <label class="btn btn-outline-secondary" for="{{ form.secondary_image_file.id_for_label }}">
+              <i class="ti ti-photo me-1" aria-hidden="true"></i>Elegir de galería
+            </label>
+          </div>
           <div class="form-hint">{{ form.secondary_image_file.help_text }}</div>
+          <div class="image-processing-status small mt-1" role="status" aria-live="polite"></div>
           {% if form.secondary_image_file.errors %}<div class="text-danger small mt-1">{{ form.secondary_image_file.errors.0 }}</div>{% endif %}
           {% if object.secondary_image %}<label class="form-check mt-2">{{ form.remove_secondary_image }}<span class="form-check-label">Quitar secundaria</span></label>{% endif %}
         </div>
 
-        <div class="border-top pt-3">
+        <div class="border-top pt-3 product-image-slot" data-field-name="tertiary_image_file">
           <div class="mb-2{% if not object.tertiary_image %} d-none{% endif %}" id="tertiary-image-preview-wrap">
             <img id="tertiary-image-preview" src="{% if object.tertiary_image %}{{ object.tertiary_image }}{% endif %}"
                  class="img-fluid rounded border" alt="Imagen adicional"
@@ -237,7 +259,18 @@
           </div>
           <label class="form-label" for="{{ form.tertiary_image_file.id_for_label }}">3. Adicional</label>
           {{ form.tertiary_image_file }}
+          <input type="file" id="camera_tertiary_image_file" class="visually-hidden product-camera-input"
+                 accept="image/*" capture="environment" data-target-id="{{ form.tertiary_image_file.id_for_label }}">
+          <div class="d-grid d-sm-flex gap-2 mt-1">
+            <label class="btn btn-outline-primary" for="camera_tertiary_image_file">
+              <i class="ti ti-camera me-1" aria-hidden="true"></i>Tomar foto
+            </label>
+            <label class="btn btn-outline-secondary" for="{{ form.tertiary_image_file.id_for_label }}">
+              <i class="ti ti-photo me-1" aria-hidden="true"></i>Elegir de galería
+            </label>
+          </div>
           <div class="form-hint">{{ form.tertiary_image_file.help_text }}</div>
+          <div class="image-processing-status small mt-1" role="status" aria-live="polite"></div>
           {% if form.tertiary_image_file.errors %}<div class="text-danger small mt-1">{{ form.tertiary_image_file.errors.0 }}</div>{% endif %}
           {% if object.tertiary_image %}<label class="form-check mt-2">{{ form.remove_tertiary_image }}<span class="form-check-label">Quitar adicional</span></label>{% endif %}
         </div>

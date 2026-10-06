@@ -10,6 +10,7 @@ from apps.core.currency import currency_choices
 from apps.partners.models import Carrier, Customer, DocumentType, Supplier
 
 from .models import Brand, Category, Movement, MovementDetail, MovementType, PriceList, Product, ProductPrice, ProductSupplier, ProductUnit, Unit, Warehouse, WarehouseLocation
+from .product_image_storage import ProductImageStorageError, inspect_product_image
 
 _text = {"class": "form-control"}
 _select = {"class": "form-select"}
@@ -118,27 +119,27 @@ class WarehouseLocationForm(forms.ModelForm):
 
 
 class ProductForm(forms.ModelForm):
-    image_file = forms.ImageField(
+    image_file = forms.FileField(
         required=False,
         label="Imagen del producto",
         widget=forms.ClearableFileInput(
-            attrs={"class": "form-control product-image-input", "accept": "image/jpeg,image/png,image/webp"}
+            attrs={"class": "visually-hidden product-image-input", "accept": "image/jpeg,image/png,image/webp"}
         ),
     )
     remove_image = forms.BooleanField(required=False, label="Quitar imagen")
-    secondary_image_file = forms.ImageField(
+    secondary_image_file = forms.FileField(
         required=False,
         label="Imagen secundaria",
         widget=forms.ClearableFileInput(
-            attrs={"class": "form-control product-image-input", "accept": "image/jpeg,image/png,image/webp"}
+            attrs={"class": "visually-hidden product-image-input", "accept": "image/jpeg,image/png,image/webp"}
         ),
     )
     remove_secondary_image = forms.BooleanField(required=False, label="Quitar imagen secundaria")
-    tertiary_image_file = forms.ImageField(
+    tertiary_image_file = forms.FileField(
         required=False,
         label="Imagen adicional",
         widget=forms.ClearableFileInput(
-            attrs={"class": "form-control product-image-input", "accept": "image/jpeg,image/png,image/webp"}
+            attrs={"class": "visually-hidden product-image-input", "accept": "image/jpeg,image/png,image/webp"}
         ),
     )
     remove_tertiary_image = forms.BooleanField(required=False, label="Quitar imagen adicional")
@@ -170,12 +171,13 @@ class ProductForm(forms.ModelForm):
         image = self.cleaned_data.get(field_name)
         if not image:
             return image
-        allowed_types = {"image/jpeg", "image/png", "image/webp"}
-        if getattr(image, "content_type", "") not in allowed_types:
-            raise forms.ValidationError("Formato no permitido. Usa JPEG, PNG o WebP.")
         if image.size > settings.PRODUCT_IMAGE_MAX_SIZE:
             max_mb = settings.PRODUCT_IMAGE_MAX_SIZE // (1024 * 1024)
             raise forms.ValidationError(f"La imagen no debe superar {max_mb} MB.")
+        try:
+            inspect_product_image(image)
+        except ProductImageStorageError as exc:
+            raise forms.ValidationError(str(exc)) from exc
         return image
 
     def clean_image_file(self):

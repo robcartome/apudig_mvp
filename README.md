@@ -171,8 +171,12 @@ La interfaz queda disponible en [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 | `R2_BUCKET_NAME` | Bucket que almacena imágenes. | Vacío |
 | `R2_PUBLIC_BASE_URL` | URL pública base para construir las imágenes. | `https://media.apudig.com` |
 | `PRODUCT_IMAGE_MAX_SIZE` | Tamaño máximo de carga en bytes. | `5242880` (5 MiB) |
-| `PRODUCT_IMAGE_MAX_DIMENSION` | Máximo de ancho o alto tras redimensionar. | `1200` |
+| `PRODUCT_IMAGE_MAX_DIMENSION` | Máximo de ancho o alto tras redimensionar. | `1920` |
+| `PRODUCT_IMAGE_MAX_SOURCE_DIMENSION` | Máximo permitido de ancho o alto en el archivo recibido. | `12000` |
+| `PRODUCT_IMAGE_MAX_PIXELS` | Máximo total de píxeles permitido antes de decodificar. | `40000000` |
 | `PRODUCT_IMAGE_WEBP_QUALITY` | Calidad WebP. | `82` |
+| `PRODUCT_IMAGE_THUMBNAIL_DIMENSION` | Máximo de ancho o alto del thumbnail. | `480` |
+| `PRODUCT_IMAGE_THUMBNAIL_QUALITY` | Calidad WebP del thumbnail. | `78` |
 
 El `.env.example` actual cubre Django, base de datos, R2 y límites de imagen, pero aún no lista `CORS_ALLOWED_ORIGINS`, `JWT_SECRET_KEY`, `JWT_ACCESS_TTL_HOURS` ni `JWT_REFRESH_TTL_DAYS`. Añádalas al `.env` cuando necesite valores distintos de los predeterminados. Nunca confirme `.env` ni secretos reales.
 
@@ -344,9 +348,12 @@ Los objetos se almacenan con las claves:
 products/{company_uuid}/{product_uuid}/main.webp
 products/{company_uuid}/{product_uuid}/secondary.webp
 products/{company_uuid}/{product_uuid}/tertiary.webp
+products/{company_uuid}/{product_uuid}/main-thumbnail.webp
+products/{company_uuid}/{product_uuid}/secondary-thumbnail.webp
+products/{company_uuid}/{product_uuid}/tertiary-thumbnail.webp
 ```
 
-La base de datos conserva las claves, no el binario. Las URLs públicas se construyen con `R2_PUBLIC_BASE_URL`. Las credenciales R2 son exclusivamente del backend; el bucket o dominio público debe configurarse por separado en Cloudflare.
+La base de datos conserva las claves, no el binario. Los productos anteriores sin thumbnail usan automáticamente la imagen completa como fallback. Las URLs públicas se construyen con `R2_PUBLIC_BASE_URL`. Las credenciales R2 son exclusivamente del backend; el bucket o dominio público debe configurarse por separado en Cloudflare.
 
 ## API e integraciones
 

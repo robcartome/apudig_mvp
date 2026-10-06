@@ -153,6 +153,38 @@ class SelectCompanyViewTest(TestCase):
         self.assertNotIn("active_company_id", self.client.session)
         self.assertNotIn("active_store_id", self.client.session)
 
+    def test_single_context_returns_to_pos(self):
+        user = User.objects.create_user(email="single-pos@example.com", password="secret")
+        UserCompanyAccess.objects.create(user=user, company=self.company_a, store=self.store_a)
+        UserStore.objects.create(user=user, store=self.store_a, role="CASHIER")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("select_company"), {"next": "/pos/"})
+
+        self.assertRedirects(response, "/pos/", fetch_redirect_response=False)
+        self.assertEqual(self.client.session["active_company_id"], str(self.company_a.pk))
+        self.assertEqual(self.client.session["active_store_id"], str(self.store_a.pk))
+
+    def test_context_form_preserves_safe_pos_destination(self):
+        user = User.objects.create_user(email="multi-pos@example.com", password="secret")
+        selected = UserCompanyAccess.objects.create(
+            user=user, company=self.company_a, store=self.store_a
+        )
+        UserCompanyAccess.objects.create(user=user, company=self.company_b, store=self.store_b)
+        UserStore.objects.create(user=user, store=self.store_a, role="CASHIER")
+        UserStore.objects.create(user=user, store=self.store_b, role="CASHIER")
+        self.client.force_login(user)
+
+        get_response = self.client.get(reverse("select_company"), {"next": "/pos/"})
+        self.assertContains(get_response, 'name="next" value="/pos/"')
+
+        response = self.client.post(
+            reverse("select_company"),
+            {"access_id": selected.pk, "next": "/pos/"},
+        )
+
+        self.assertRedirects(response, "/pos/", fetch_redirect_response=False)
+
     def test_inactive_company_and_store_are_not_selectable(self):
         user = User.objects.create_user(email="active@example.com", password="secret")
         active_access = UserCompanyAccess.objects.create(

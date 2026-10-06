@@ -49,9 +49,9 @@ from ..selectors import (
 
 
 PRODUCT_IMAGE_SLOTS = (
-    ("image_file", "remove_image", "image_key", "main"),
-    ("secondary_image_file", "remove_secondary_image", "secondary_image_key", "secondary"),
-    ("tertiary_image_file", "remove_tertiary_image", "tertiary_image_key", "tertiary"),
+    ("image_file", "remove_image", "image_key", "image_thumbnail_key", "main"),
+    ("secondary_image_file", "remove_secondary_image", "secondary_image_key", "secondary_image_thumbnail_key", "secondary"),
+    ("tertiary_image_file", "remove_tertiary_image", "tertiary_image_key", "tertiary_image_thumbnail_key", "tertiary"),
 )
 
 
@@ -59,17 +59,22 @@ def _apply_product_image_changes(product, cleaned_data):
     """Upload, replace or remove the three fixed product-image slots."""
     cleanup_keys = []
     try:
-        for file_field, remove_field, key_attribute, slot in PRODUCT_IMAGE_SLOTS:
+        for file_field, remove_field, key_attribute, thumbnail_attribute, slot in PRODUCT_IMAGE_SLOTS:
             image_file = cleaned_data.get(file_field)
             current_key = getattr(product, key_attribute)
+            current_thumbnail_key = getattr(product, thumbnail_attribute)
             if image_file:
-                new_key = upload_product_image(product, image_file, slot=slot)
-                setattr(product, key_attribute, new_key)
+                uploaded = upload_product_image(product, image_file, slot=slot)
+                setattr(product, key_attribute, uploaded.image_key)
+                setattr(product, thumbnail_attribute, uploaded.thumbnail_key)
                 if not current_key:
-                    cleanup_keys.append(new_key)
+                    cleanup_keys.extend((uploaded.image_key, uploaded.thumbnail_key))
             elif cleaned_data.get(remove_field) and current_key:
                 delete_product_image(current_key)
+                if current_thumbnail_key:
+                    delete_product_image(current_thumbnail_key)
                 setattr(product, key_attribute, "")
+                setattr(product, thumbnail_attribute, "")
     except ProductImageStorageError:
         for key in cleanup_keys:
             try:

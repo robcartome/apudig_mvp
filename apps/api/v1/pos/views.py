@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotAuthenticated, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from apps.api.v1.base import BaseCompanyAPIView
@@ -117,7 +117,10 @@ class PosAPIView(BaseCompanyAPIView):
                 {"code": "CONFLICT", "detail": "La operacion entra en conflicto con datos existentes."},
                 status=status.HTTP_409_CONFLICT,
             )
-        return super().handle_exception(exc)
+        response = super().handle_exception(exc)
+        if isinstance(exc, NotAuthenticated):
+            response["X-ApuDig-Auth-Required"] = "1"
+        return response
 
 
 class PosBootstrapAPIView(PosAPIView):
@@ -255,6 +258,7 @@ class PosProductSearchAPIView(PosAPIView):
         parameters=[
             OpenApiParameter(name="register_id", type=str, required=True),
             OpenApiParameter(name="search", type=str, required=False),
+            OpenApiParameter(name="barcode", type=str, required=False),
             OpenApiParameter(name="currency", type=str, required=False),
             OpenApiParameter(name="price_list_id", type=str, required=False),
             OpenApiParameter(name="category_id", type=str, required=False),
@@ -274,6 +278,9 @@ class PosProductSearchAPIView(PosAPIView):
         if currency not in {"PEN", "USD"}:
             raise ValidationError({"currency": "La moneda debe ser S/. o $."})
         search = (request.query_params.get("search") or "").strip()
+        barcode = (request.query_params.get("barcode") or "").strip()
+        if len(barcode) > Product._meta.get_field("barcode").max_length:
+            raise ValidationError({"barcode": "El código de barras es demasiado largo."})
         product_ids = [
             value.strip()
             for value in (request.query_params.get("product_ids") or "").split(",")
@@ -281,11 +288,17 @@ class PosProductSearchAPIView(PosAPIView):
         ]
         if len(product_ids) > 100:
             raise ValidationError({"product_ids": "Puede consultar hasta 100 productos."})
-        products_query = inventory_selectors.search_products(
-            search,
-            company_id=company_id,
-            active_only=True,
-        )
+        if barcode:
+            products_query = inventory_selectors.get_products(
+                company_id=company_id,
+                active_only=True,
+            ).filter(barcode=barcode)
+        else:
+            products_query = inventory_selectors.search_products(
+                search,
+                company_id=company_id,
+                active_only=True,
+            )
         if product_ids:
             products_query = products_query.filter(pk__in=product_ids)
         else:
@@ -419,7 +432,7 @@ class PosProductSearchAPIView(PosAPIView):
                 "stock": str(stock_by_product.get(str(product.pk), 0)),
                 "stock_unit": product.unit.code,
                 "tracks_inventory": product.tracks_inventory,
-                "image": product.image,
+                "image": product.image_thumbnail,
             })
         return Response(result)
 
