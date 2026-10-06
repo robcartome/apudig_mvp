@@ -111,6 +111,9 @@ class Product(TimeStampedModel):
     image_key = models.CharField(max_length=500, blank=True)
     secondary_image_key = models.CharField(max_length=500, blank=True)
     tertiary_image_key = models.CharField(max_length=500, blank=True)
+    image_thumbnail_key = models.CharField(max_length=500, blank=True)
+    secondary_image_thumbnail_key = models.CharField(max_length=500, blank=True)
+    tertiary_image_thumbnail_key = models.CharField(max_length=500, blank=True)
     price_purchase = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price_sale = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax_affectation = models.CharField(
@@ -139,6 +142,13 @@ class Product(TimeStampedModel):
         db_table = "products"
         ordering = ["name"]
         unique_together = (("company", "sku"),)
+        indexes = [
+            models.Index(
+                fields=("company", "barcode"),
+                condition=~Q(barcode=""),
+                name="idx_product_company_barcode",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"[{self.sku}] {self.name}"
@@ -162,6 +172,24 @@ class Product(TimeStampedModel):
         return build_public_url(self.tertiary_image_key)
 
     @property
+    def image_thumbnail(self) -> str:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return build_public_url(self.image_thumbnail_key) or self.image
+
+    @property
+    def secondary_image_thumbnail(self) -> str:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return build_public_url(self.secondary_image_thumbnail_key) or self.secondary_image
+
+    @property
+    def tertiary_image_thumbnail(self) -> str:
+        from apps.inventory.product_image_storage import build_public_url
+
+        return build_public_url(self.tertiary_image_thumbnail_key) or self.tertiary_image
+
+    @property
     def image_urls(self) -> list[str]:
         from apps.inventory.product_image_storage import build_public_url
 
@@ -171,6 +199,18 @@ class Product(TimeStampedModel):
                 build_public_url(self.image_key),
                 build_public_url(self.secondary_image_key),
                 build_public_url(self.tertiary_image_key),
+            )
+            if url
+        ]
+
+    @property
+    def thumbnail_urls(self) -> list[str]:
+        return [
+            url
+            for url in (
+                self.image_thumbnail,
+                self.secondary_image_thumbnail,
+                self.tertiary_image_thumbnail,
             )
             if url
         ]

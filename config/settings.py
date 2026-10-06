@@ -112,6 +112,16 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
+# Session authentication is shared by the browser and the installed POS PWA.
+SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE", "1209600"))
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+_secure_cookies_default = "0" if DEBUG else "1"
+SESSION_COOKIE_SECURE = os.getenv("DJANGO_SESSION_COOKIE_SECURE", _secure_cookies_default) == "1"
+CSRF_COOKIE_SECURE = os.getenv("DJANGO_CSRF_COOKIE_SECURE", _secure_cookies_default) == "1"
+
 # ── CORS ─────────────────────────────────────────────────────────────────────
 # Only allow CORS on the catalog and API auth routes (not on admin/HTML views).
 CORS_URLS_REGEX = r"^/(catalog|api)/.*$"
@@ -135,8 +145,12 @@ R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "")
 R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "https://media.apudig.com")
 PRODUCT_IMAGE_MAX_SIZE = int(os.getenv("PRODUCT_IMAGE_MAX_SIZE", str(5 * 1024 * 1024)))
-PRODUCT_IMAGE_MAX_DIMENSION = int(os.getenv("PRODUCT_IMAGE_MAX_DIMENSION", "1200"))
+PRODUCT_IMAGE_MAX_DIMENSION = int(os.getenv("PRODUCT_IMAGE_MAX_DIMENSION", "1920"))
+PRODUCT_IMAGE_MAX_SOURCE_DIMENSION = int(os.getenv("PRODUCT_IMAGE_MAX_SOURCE_DIMENSION", "12000"))
+PRODUCT_IMAGE_MAX_PIXELS = int(os.getenv("PRODUCT_IMAGE_MAX_PIXELS", "40000000"))
 PRODUCT_IMAGE_WEBP_QUALITY = int(os.getenv("PRODUCT_IMAGE_WEBP_QUALITY", "82"))
+PRODUCT_IMAGE_THUMBNAIL_DIMENSION = int(os.getenv("PRODUCT_IMAGE_THUMBNAIL_DIMENSION", "480"))
+PRODUCT_IMAGE_THUMBNAIL_QUALITY = int(os.getenv("PRODUCT_IMAGE_THUMBNAIL_QUALITY", "78"))
 
 
 # ── Django REST Framework ────────────────────────────────────────────────────

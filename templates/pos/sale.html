@@ -4,8 +4,17 @@
 {% block title %}Punto de venta | APUDIG{% endblock %}
 {% block body_class %}pos-page{% endblock %}
 
+{% block extra_head %}
+  <meta name="theme-color" content="#066fd1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ApuDig POS">
+  <link rel="manifest" href="{% url 'pos:manifest' %}">
+  <link rel="apple-touch-icon" href="{% static 'pwa/pos-icon-192.png' %}">
+{% endblock %}
+
 {% block extra_css %}
-  <link href="{% static 'css/pos.css' %}?v=20261005-3" rel="stylesheet">
+  <link href="{% static 'css/pos.css' %}?v=20261006-4" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -29,9 +38,14 @@
   data-config-url="{% url 'pos:register_list' %}"
   data-sales-report-url="{% url 'pos:transaction_list' %}"
   data-dashboard-url="{% url 'dashboard' %}"
+  data-login-url="{% url 'pos:login' %}"
 >
   {% csrf_token %}
   <div id="pos-live-region" class="visually-hidden" aria-live="polite"></div>
+  <div id="pos-network-status" class="pos-network-status" role="status" aria-live="polite" hidden>
+    <i class="ti ti-wifi-off" aria-hidden="true"></i>
+    Sin conexión. No se pueden consultar productos ni registrar ventas.
+  </div>
 
   <header class="pos-header">
     <div class="pos-header__identity">
@@ -123,6 +137,15 @@
           >
           <kbd>F2</kbd>
         </div>
+        <button
+          id="scan-barcode"
+          class="btn btn-primary pos-scan-button"
+          type="button"
+          aria-label="Escanear código de barras con la cámara"
+          title="Escanear código de barras"
+        >
+          <i class="ti ti-scan" aria-hidden="true"></i><span>Escanear</span>
+        </button>
         <button id="add-manual-line" class="btn btn-outline-primary pos-manual-line-button" type="button" title="Agregar producto no registrado o servicio (Alt+L)">
           <i class="ti ti-file-plus me-1"></i><span>Línea libre</span><kbd>Alt+L</kbd>
         </button>
@@ -299,7 +322,8 @@
     </aside>
   </div>
 
-  <button id="mobile-checkout-button" class="pos-mobile-checkout-button" type="button" disabled>
+  <button id="mobile-checkout-button" class="pos-mobile-checkout-button" type="button"
+          aria-controls="checkout-panel" aria-expanded="false" disabled>
     <span><i class="ti ti-cash"></i> Cobrar</span>
     <strong><span class="currency-label">S/.</span> <span id="mobile-checkout-total">0.00</span></strong>
   </button>
@@ -634,6 +658,26 @@
     </div>
   </dialog>
 
+  <dialog id="barcode-scanner-dialog" class="pos-dialog pos-scanner-dialog">
+    <div>
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar escáner">
+        <i class="ti ti-x"></i>
+      </button>
+      <h2>Escanear código de barras</h2>
+      <p id="barcode-scanner-help">Apunte la cámara al código y mantenga el dispositivo estable.</p>
+      <div class="pos-scanner-viewport">
+        <video id="barcode-scanner-video" playsinline muted aria-describedby="barcode-scanner-help"></video>
+        <div class="pos-scanner-guide" aria-hidden="true"></div>
+      </div>
+      <p id="barcode-scanner-status" class="pos-scanner-status" role="status" aria-live="polite">
+        Preparando cámara…
+      </p>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="pos-loading" class="pos-loading" hidden>
     <span class="spinner-border" aria-hidden="true"></span>
     <strong id="pos-loading-text">Procesando…</strong>
@@ -642,5 +686,7 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/pos.js' %}?v=20261005-3"></script>
+  <script src="{% static 'vendor/zxing/zxing-browser-0.2.1.min.js' %}?v=0.2.1"></script>
+  <script src="{% static 'js/pos-barcode-scanner.js' %}?v=20261006-2"></script>
+  <script src="{% static 'js/pos.js' %}?v=20261006-5"></script>
 {% endblock %}

@@ -1,4 +1,8 @@
+import json
+
+from django.contrib.staticfiles import finders
 from django.test import TestCase
+from django.urls import reverse
 
 from apps.companies.models import Company, CompanyOperationalSettings, Store
 from apps.inventory.models import Unit, Warehouse
@@ -44,7 +48,35 @@ class PosWorkspaceViewTest(TestCase):
         response = self.client.get("/pos/")
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response.url)
+        self.assertEqual(response.url, "/pos/login/?next=/pos/")
+
+    def test_login_returns_to_installed_pos_start_url(self):
+        response = self.client.post(
+            "/pos/login/?next=/pos/",
+            {"username": self.user.email, "password": "test", "next": "/pos/"},
+        )
+
+        self.assertRedirects(response, "/pos/", fetch_redirect_response=False)
+
+    def test_pos_context_route_keeps_anonymous_user_inside_pwa_scope(self):
+        response = self.client.get(reverse("pos:select_context"))
+
+        self.assertRedirects(
+            response,
+            "/pos/login/?next=/pos/contexto/",
+            fetch_redirect_response=False,
+        )
+
+    def test_workspace_without_active_context_preserves_pos_destination(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get("/pos/")
+
+        self.assertRedirects(
+            response,
+            "/pos/contexto/?next=%2Fpos%2F",
+            fetch_redirect_response=False,
+        )
 
     def test_workspace_renders_for_cashier_with_read_permission(self):
         self.activate_context()
@@ -62,6 +94,75 @@ class PosWorkspaceViewTest(TestCase):
         self.assertNotContains(response, 'id="manual-line-dialog"')
         self.assertContains(response, 'data-product-search-mode="SEARCH"')
         self.assertContains(response, 'id="pos-catalog-browser" class="pos-catalog-browser" hidden')
+        self.assertContains(response, 'id="mobile-checkout-button"')
+        self.assertContains(response, 'aria-controls="checkout-panel"')
+        self.assertContains(response, 'aria-expanded="false"')
+        self.assertContains(response, 'rel="manifest"')
+        self.assertContains(response, reverse("pos:manifest"))
+        self.assertContains(response, 'id="pos-network-status"')
+        self.assertContains(response, 'id="scan-barcode"')
+        self.assertContains(response, 'aria-label="Escanear código de barras con la cámara"')
+        self.assertContains(response, 'id="barcode-scanner-dialog"')
+        self.assertContains(response, 'id="barcode-scanner-video"')
+        self.assertContains(response, "vendor/zxing/zxing-browser-0.2.1.min.js")
+        self.assertContains(response, "js/pos-barcode-scanner.js")
+
+    def test_pos_manifest_exposes_install_metadata_and_icons(self):
+        response = self.client.get(reverse("pos:manifest"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/manifest+json")
+        manifest = json.loads(response.content)
+        self.assertEqual(manifest["start_url"], "/pos/")
+        self.assertEqual(manifest["scope"], "/pos/")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual([icon["sizes"] for icon in manifest["icons"]], ["192x192", "512x512"])
+        self.assertIsNotNone(finders.find("pwa/pos-icon-192.png"))
+        self.assertIsNotNone(finders.find("pwa/pos-icon-512.png"))
+
+    def test_pos_service_worker_is_public_and_limited_to_pos_scope(self):
+        response = self.client.get(reverse("pos:service_worker"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Type"].startswith("text/javascript"))
+        self.assertEqual(response["Service-Worker-Allowed"], "/pos/")
+        self.assertIn("no-cache", response["Cache-Control"])
+        self.assertContains(response, "apudig-pos-static-v5")
+        self.assertContains(response, "ApuDig POS necesita")
+        self.assertNotContains(response, "'/api/")
+
+    def test_pos_javascript_exposes_decoupled_scanner_hook(self):
+        script_path = finders.find("js/pos.js")
+
+        self.assertIsNotNone(script_path)
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn('new CustomEvent("pos:scan-requested"', script)
+        self.assertIn('barcodeField: "barcode"', script)
+
+    def test_barcode_scanner_releases_camera_and_uses_local_zxing(self):
+        scanner_path = finders.find("js/pos-barcode-scanner.js")
+        zxing_path = finders.find("vendor/zxing/zxing-browser-0.2.1.min.js")
+        license_path = finders.find("vendor/zxing/LICENSE")
+
+        self.assertIsNotNone(scanner_path)
+        self.assertIsNotNone(zxing_path)
+        self.assertIsNotNone(license_path)
+        with open(scanner_path, encoding="utf-8") as scanner_file:
+            scanner = scanner_file.read()
+        self.assertIn('facingMode: { ideal: "environment" }', scanner)
+        self.assertIn("track.stop()", scanner)
+        self.assertIn('window.addEventListener("pagehide", stopScanner)', scanner)
+        self.assertIn('new CustomEvent("pos:barcode-detected"', scanner)
+
+    def test_pos_javascript_uses_exact_barcode_endpoint(self):
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn('params.set("barcode", barcode)', script)
+        self.assertIn('addProduct(products[0])', script)
+        self.assertIn("Hay más de un producto con este código de barras", script)
 
     def test_workspace_uses_visual_catalog_mode_from_company_settings(self):
         CompanyOperationalSettings.objects.create(

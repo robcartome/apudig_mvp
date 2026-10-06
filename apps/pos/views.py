@@ -2,16 +2,23 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
+from django.contrib.staticfiles import finders
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
+from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 from uuid import UUID
 from decimal import Decimal, InvalidOperation
+import json
+from urllib.parse import urlencode
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 
 from apps.users.permissions import user_has_company_permission
 from apps.companies.models import CompanyOperationalSettings
+from apps.companies.views import select_company_context
 from apps.inventory.models import Product, Warehouse
 from apps.partners.models import Customer
 from apps.sales.models import DocumentSeries, MeansOfPayment
@@ -26,6 +33,60 @@ from apps.pos.selectors import (
 )
 
 
+def pos_manifest(request):
+    """Return install metadata for the POS-only PWA."""
+    manifest = {
+        "id": reverse("pos:sale"),
+        "name": "ApuDig POS",
+        "short_name": "ApuDig POS",
+        "description": "Punto de venta de ApuDig",
+        "start_url": reverse("pos:sale"),
+        "scope": reverse("pos:sale"),
+        "display": "standalone",
+        "orientation": "any",
+        "background_color": "#ffffff",
+        "theme_color": "#066fd1",
+        "icons": [
+            {
+                "src": static("pwa/pos-icon-192.png"),
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable",
+            },
+            {
+                "src": static("pwa/pos-icon-512.png"),
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable",
+            },
+        ],
+    }
+    response = HttpResponse(
+        json.dumps(manifest, ensure_ascii=False),
+        content_type="application/manifest+json",
+    )
+    response["Cache-Control"] = "public, max-age=300"
+    return response
+
+
+def pos_service_worker(request):
+    """Serve the worker at /pos/ so its scope cannot cover the full ERP."""
+    worker_path = finders.find("js/pos-service-worker.js")
+    if not worker_path:
+        return HttpResponse("Service Worker no disponible.", status=404)
+    with open(worker_path, encoding="utf-8") as worker_file:
+        response = HttpResponse(worker_file.read(), content_type="text/javascript")
+    response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response["Service-Worker-Allowed"] = reverse("pos:sale")
+    return response
+
+
+@login_required(login_url="pos:login")
+def pos_select_context(request):
+    """Select company/store without leaving the installed POS scope."""
+    return select_company_context(request)
+
+
 def _pos_context(request, permission_code):
     company_id = getattr(request, "active_company_id", None) or request.session.get("active_company_id")
     store_id = getattr(request, "active_store_id", None) or request.session.get("active_store_id")
@@ -36,13 +97,14 @@ def _pos_context(request, permission_code):
     return company_id, store_id, None
 
 
-@login_required
+@login_required(login_url="pos:login")
 def sale_workspace(request):
     """Render the POS shell; operational data is loaded from the versioned API."""
     company_id = getattr(request, "active_company_id", None)
     store_id = getattr(request, "active_store_id", None)
     if not company_id or not store_id:
-        return redirect("select_company")
+        selector_url = f'{reverse("pos:select_context")}?{urlencode({"next": request.get_full_path()})}'
+        return redirect(selector_url)
     if not user_has_company_permission(
         request.user,
         company_id,

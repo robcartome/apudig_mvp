@@ -28,6 +28,7 @@
       {% else %}
       <form method="post">
         {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
         <div class="mb-3">
           <label class="form-label required">Empresa / Sucursal</label>
           <select name="access_id" class="form-select" required>

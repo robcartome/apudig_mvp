@@ -7,8 +7,18 @@ from .models import Company, Store, UserCompanyAccess
 from .selectors import get_user_selectable_accesses
 
 
-@login_required
-def select_company(request):
+def _safe_next_url(request):
+    next_url = request.POST.get("next") or request.GET.get("next")
+    if next_url and url_has_allowed_host_and_scheme(
+        url=next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return None
+
+
+def select_company_context(request):
     # Superusuario: sincronizar siempre con todas las empresas y sucursales activas.
     # Se ejecuta en cada carga del selector para capturar nuevas empresas/sucursales.
     if request.user.is_superuser:
@@ -30,7 +40,7 @@ def select_company(request):
         only_access = accesses.first()
         request.session["active_company_id"] = str(only_access.company_id)
         request.session["active_store_id"] = str(only_access.store_id) if only_access.store_id else None
-        return redirect("dashboard")
+        return redirect(_safe_next_url(request) or "dashboard")
 
     if request.method == "POST":
         access_id = request.POST.get("access_id")
@@ -40,12 +50,8 @@ def select_company(request):
         request.session["active_company_id"] = str(selected.company_id)
         request.session["active_store_id"] = str(selected.store_id) if selected.store_id else None
 
-        next_url = request.POST.get("next") or request.GET.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={request.get_host()},
-            require_https=request.is_secure(),
-        ):
+        next_url = _safe_next_url(request)
+        if next_url:
             return redirect(next_url)
         return redirect("dashboard")
 
@@ -59,5 +65,11 @@ def select_company(request):
             "accesses": accesses,
             "default_company": default_company,
             "default_store": default_store,
+            "next": _safe_next_url(request),
         },
     )
+
+
+@login_required
+def select_company(request):
+    return select_company_context(request)

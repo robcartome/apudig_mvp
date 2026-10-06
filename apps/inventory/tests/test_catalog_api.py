@@ -115,11 +115,13 @@ class CatalogApiTest(TestCase):
         self.assertEqual(response.status_code, 200)
         item = response.json()["results"][0]
         self.assertEqual(item["image"], f"https://media.apudig.com/{self.product.image_key}")
+        self.assertEqual(item["thumbnail"], f"https://media.apudig.com/{self.product.image_key}")
         self.assertEqual(item["images"], [
             f"https://media.apudig.com/{self.product.image_key}",
             f"https://media.apudig.com/{self.product.secondary_image_key}",
             f"https://media.apudig.com/{self.product.tertiary_image_key}",
         ])
+        self.assertEqual(item["thumbnails"], item["images"])
 
     def test_v1_catalog_searches_by_supplier_code_and_returns_codes(self):
         response = self.client.get(

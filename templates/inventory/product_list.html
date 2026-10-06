@@ -32,6 +32,7 @@
     <table class="table table-vcenter table-hover card-table">
       <thead>
         <tr>
+          <th class="text-center">Imagen</th>
           <th>SKU</th>
           <th>Nombre</th>
           <th>Categoría</th>
@@ -45,6 +46,14 @@
       <tbody class="small">
         {% for obj in page_obj %}
         <tr>
+          <td class="text-center">
+            {% if obj.image_thumbnail %}
+            <img src="{{ obj.image_thumbnail }}" alt="" width="48" height="48"
+                 class="rounded border" style="object-fit: contain;">
+            {% else %}
+            <span class="avatar avatar-sm"><i class="ti ti-package"></i></span>
+            {% endif %}
+          </td>
           <td class="fw-semibold">
             <a href="{% url 'inventory:product_update' obj.pk %}"
                title="Editar producto {{ obj.sku }}">{{ obj.sku }}</a>
@@ -75,7 +84,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="text-center text-muted py-4">
+          <td colspan="9" class="text-center text-muted py-4">
             No hay productos{% if query %} que coincidan con "{{ query }}"{% endif %}.
           </td>
         </tr>
