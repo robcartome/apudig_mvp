@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block extra_css %}
-  <link href="{% static 'css/pos.css' %}?v=20261006-4" rel="stylesheet">
+  <link href="{% static 'css/pos.css' %}?v=20261007-5" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -207,7 +207,7 @@
           <div><dt>Subtotal</dt><dd><span class="currency-label">S/.</span> <span id="subtotal">0.00</span></dd></div>
           <div id="global-discount-row">
             <dt><label for="global-discount">Descuento global</label></dt>
-            <dd><span class="currency-label">S/.</span> <input id="global-discount" class="pos-global-discount" type="number" min="0" step="0.01" value="0.00" inputmode="decimal"></dd>
+            <dd><span class="pos-currency-input-group pos-global-discount-group"><span class="pos-input-affix currency-label">S/.</span><input id="global-discount" class="pos-global-discount" type="number" min="0" step="0.01" value="0.00" inputmode="decimal"></span></dd>
           </div>
           <div><dt>Descuento</dt><dd><span class="currency-label">S/.</span> <span id="discount-total">0.00</span></dd></div>
           <div><dt>IGV</dt><dd><span class="currency-label">S/.</span> <span id="igv-total">0.00</span></dd></div>
@@ -576,12 +576,15 @@
     <div>
       <button class="pos-dialog__close d-print-none" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
       <div class="pos-success d-print-none">
-        <div class="pos-dialog__icon is-success"><i class="ti ti-check"></i></div>
-        <h2>Venta registrada</h2>
-        <p>La operación se guardó correctamente.</p>
+        <div id="receipt-result-icon" class="pos-dialog__icon is-success"><i class="ti ti-check"></i></div>
+        <h2 id="receipt-result-title">Venta registrada</h2>
+        <p id="receipt-result-message">La operación se guardó correctamente.</p>
       </div>
       <article id="pos-receipt" class="pos-receipt"></article>
       <div class="pos-dialog__actions d-print-none">
+        <button id="continue-draft-button" class="btn btn-outline-secondary" type="button" hidden>
+          <i class="ti ti-edit me-1"></i>Seguir editando
+        </button>
         <button id="new-sale-button" class="btn btn-outline-secondary" type="button">Nueva venta</button>
         <button id="return-sale-button" class="btn btn-outline-danger" type="button">
           <i class="ti ti-arrow-back-up me-1"></i>Devolver
@@ -688,5 +691,5 @@
 {% block extra_js %}
   <script src="{% static 'vendor/zxing/zxing-browser-0.2.1.min.js' %}?v=0.2.1"></script>
   <script src="{% static 'js/pos-barcode-scanner.js' %}?v=20261006-2"></script>
-  <script src="{% static 'js/pos.js' %}?v=20261006-5"></script>
+  <script src="{% static 'js/pos.js' %}?v=20261007-6"></script>
 {% endblock %}

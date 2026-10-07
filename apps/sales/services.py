@@ -552,9 +552,40 @@ def cancel_order(order_id) -> SaleOrder:
 
 def _calc_sales_document_totals(
     lines: list[dict], calculated: list[dict], global_discount_amount=0,
-    global_discount_before_tax=False,
+    global_discount_before_tax=False, global_discount_from_total=False,
+    line_discount_from_total=False,
 ) -> dict:
     """Calcula los totales tributarios sin confiar en importes del navegador."""
+    if line_discount_from_total:
+        for index, raw in enumerate(lines):
+            gross_discount = money(raw.get("discount_amount", 0) or 0)
+            quantity = Decimal(str(raw["quantity"]))
+            unit_price = Decimal(str(raw["unit_price"]))
+            rate = Decimal(str(raw.get("igv_rate") or 0))
+            tax_type = raw.get("tax_type", "10")
+            net_before_discount = unit_price * quantity
+            tax_before_discount = (
+                net_before_discount * rate / Decimal("100")
+                if tax_type == "10"
+                else Decimal("0")
+            )
+            gross_before_discount = money(net_before_discount + tax_before_discount)
+            if gross_discount > gross_before_discount:
+                raise ValueError("El descuento no puede superar el importe de la linea.")
+            discounted_total = money(gross_before_discount - gross_discount)
+            if tax_type == "10" and rate:
+                subtotal = money(
+                    discounted_total / (Decimal("1") + rate / Decimal("100"))
+                )
+                igv_amount = money(discounted_total - subtotal)
+            else:
+                subtotal = discounted_total
+                igv_amount = Decimal("0.00")
+            calculated[index] = {
+                "subtotal": subtotal,
+                "igv_amount": igv_amount,
+                "total": discounted_total,
+            }
     taxable = Decimal("0")
     exempt = Decimal("0")
     unaffected = Decimal("0")
@@ -583,7 +614,46 @@ def _calc_sales_document_totals(
     global_discount = money(global_discount_amount or 0)
     if global_discount < 0:
         raise ValueError("El descuento general no puede ser negativo.")
-    if global_discount_before_tax and global_discount:
+    if global_discount_from_total and global_discount:
+        document_total = money(taxable + exempt + unaffected + export + igv_total)
+        if global_discount > document_total:
+            raise ValueError("El descuento general no puede superar el total del documento.")
+        eligible = [
+            (raw, calc) for raw, calc in zip(lines, calculated)
+            if raw.get("tax_type", "10") != "11" and calc["total"] > 0
+        ]
+        remaining_discount = global_discount
+        for index, (raw, calc) in enumerate(eligible):
+            discount_part = (
+                remaining_discount
+                if index == len(eligible) - 1
+                else min(money(global_discount * calc["total"] / document_total), remaining_discount)
+            )
+            discounted_line_total = money(calc["total"] - discount_part)
+            tax_type = raw.get("tax_type", "10")
+            if tax_type == "10":
+                rate = Decimal(str(raw.get("igv_rate") or 0))
+                adjusted_subtotal = money(
+                    discounted_line_total / (Decimal("1") + rate / Decimal("100"))
+                )
+                adjusted_igv = money(discounted_line_total - adjusted_subtotal)
+                taxable += adjusted_subtotal - calc["subtotal"]
+                igv_total += adjusted_igv - calc["igv_amount"]
+            else:
+                adjusted_subtotal = discounted_line_total
+                adjusted_igv = Decimal("0")
+                if tax_type == "20":
+                    exempt += adjusted_subtotal - calc["subtotal"]
+                elif tax_type == "30":
+                    unaffected += adjusted_subtotal - calc["subtotal"]
+                elif tax_type == "40":
+                    export += adjusted_subtotal - calc["subtotal"]
+            calc["global_discount_amount"] = discount_part
+            calc["subtotal"] = adjusted_subtotal
+            calc["igv_amount"] = adjusted_igv
+            calc["total"] = discounted_line_total
+            remaining_discount -= discount_part
+    elif global_discount_before_tax and global_discount:
         eligible = [
             (raw, calc) for raw, calc in zip(lines, calculated)
             if raw.get("tax_type", "10") != "11" and calc["subtotal"] > 0
@@ -625,7 +695,7 @@ def _calc_sales_document_totals(
 
     subtotal = taxable + exempt + unaffected + export
     total = money(subtotal + igv_total)
-    if not global_discount_before_tax:
+    if not global_discount_before_tax and not global_discount_from_total:
         if global_discount > total:
             raise ValueError("El descuento general no puede superar el total del documento.")
         total -= global_discount
@@ -847,11 +917,15 @@ def create_sales_document_draft(
         kwargs["warehouse"] = None
     lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(line) for line in lines]
+    global_discount_from_total = kwargs.pop("global_discount_from_total", False)
+    line_discount_from_total = kwargs.pop("line_discount_from_total", False)
     totals = _calc_sales_document_totals(
         lines,
         calculated_lines,
         kwargs.get("global_discount_amount", 0),
         kwargs.get("global_discount_before_tax", False),
+        global_discount_from_total,
+        line_discount_from_total,
     )
     requested_number = kwargs.pop("number", None)
     series, number = _reserve_sales_document_number(series, requested_number)
@@ -1042,11 +1116,15 @@ def update_sales_document_draft(
     document_type = _validate_sales_document_input(store_id, customer, document_type, series, lines)
     lines = _normalize_lines_uom(lines)
     calculated_lines = [_calculate_line(line) for line in lines]
+    global_discount_from_total = kwargs.pop("global_discount_from_total", False)
+    line_discount_from_total = kwargs.pop("line_discount_from_total", False)
     totals = _calc_sales_document_totals(
         lines,
         calculated_lines,
         kwargs.get("global_discount_amount", 0),
         kwargs.get("global_discount_before_tax", False),
+        global_discount_from_total,
+        line_discount_from_total,
     )
     requested_number = kwargs.pop("number", None)
 

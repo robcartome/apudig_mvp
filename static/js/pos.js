@@ -454,12 +454,21 @@
   }
 
   function lineTotals(line) {
-    const grossBeforeDiscount = line.netPrice * line.quantity;
-    const discount = Math.min(Math.max(line.discount, 0), grossBeforeDiscount);
-    const rawNet = Math.max(grossBeforeDiscount - discount, 0);
-    const net = roundMoney(rawNet);
-    const tax = line.taxType === "10" ? roundMoney(rawNet * (line.igvRate / 100)) : 0;
-    return { net, tax, discount: roundMoney(discount), total: net + tax };
+    const netBeforeDiscount = line.netPrice * line.quantity;
+    const taxBeforeDiscount = line.taxType === "10"
+      ? roundMoney(netBeforeDiscount * (line.igvRate / 100))
+      : 0;
+    const grossBeforeDiscount = roundMoney(netBeforeDiscount + taxBeforeDiscount);
+    const requestedDiscount = line.discountMode === "percent"
+      ? grossBeforeDiscount * Math.min(Math.max(number(line.discountValue), 0), 100) / 100
+      : number(line.discountValue ?? line.discount) * line.quantity;
+    const discount = Math.min(Math.max(requestedDiscount, 0), grossBeforeDiscount);
+    const total = roundMoney(grossBeforeDiscount - discount);
+    const net = line.taxType === "10"
+      ? roundMoney(total / (1 + line.igvRate / 100))
+      : total;
+    const tax = roundMoney(total - net);
+    return { net, tax, discount: roundMoney(discount), total };
   }
 
   function totals() {
@@ -473,22 +482,13 @@
       acc.lines.push({ line, ...values });
       return acc;
     }, { subtotal: 0, tax: 0, discount: 0, total: 0, quantity: 0, lines: [] });
-    const globalDiscount = Math.min(Math.max(number(state.globalDiscount), 0), result.subtotal);
-    if (globalDiscount > 0 && result.subtotal > 0) {
-      let remainingDiscount = globalDiscount;
-      let remainingBase = result.subtotal;
-      result.lines.filter((item) => item.line.taxType !== "11" && item.net > 0).forEach((item, index, eligible) => {
-        const part = index === eligible.length - 1
-          ? remainingDiscount
-          : Math.min(roundMoney(remainingDiscount * item.net / remainingBase), remainingDiscount);
-        if (item.line.taxType === "10") {
-          result.tax += roundMoney((item.net - part) * item.line.igvRate / 100) - item.tax;
-        }
-        remainingDiscount -= part;
-        remainingBase -= item.net;
-      });
-      result.subtotal -= globalDiscount;
-      result.total = result.subtotal + result.tax;
+    const globalDiscount = Math.min(Math.max(number(state.globalDiscount), 0), result.total);
+    if (globalDiscount > 0 && result.total > 0) {
+      const discountedTotal = result.total - globalDiscount;
+      const factor = discountedTotal / result.total;
+      result.subtotal *= factor;
+      result.tax = discountedTotal - result.subtotal;
+      result.total = discountedTotal;
       result.discount += globalDiscount;
     }
     result.globalDiscount = globalDiscount;
@@ -533,7 +533,8 @@
         originalNetPrice: number(selectedUnit.unit_price),
         priceChanged: false,
         quantity: 1,
-        discount: 0,
+        discountMode: "amount",
+        discountValue: 0,
         memo: "",
         taxType: product.tax_type || "10",
         igvRate: number(product.igv_rate || 0),
@@ -571,11 +572,9 @@
       const values = lineTotals(line);
       const canChangePrice = line.manual || hasPermission("change.pos.price");
       const canDiscount = hasPermission("apply.pos.discount");
-      const unitControl = line.units.length > 1
-        ? `<select class="pos-unit-select" data-action="unit" aria-label="Unidad de ${escapeHtml(line.name)}">
+      const unitControl = `<select class="pos-unit-select" data-action="unit" aria-label="Unidad de ${escapeHtml(line.name)}">
             ${line.units.map((unit) => `<option value="${unit.id}" ${unit.id === line.unitId ? "selected" : ""} ${unit.unit_price === null ? "disabled" : ""}>${escapeHtml(unit.code)}</option>`).join("")}
-          </select>`
-        : `<span>${escapeHtml(line.unit)}</span>`;
+          </select>`;
       const productControl = line.manual
         ? `<div class="pos-manual-product-fields">
             <input class="pos-manual-description" data-action="description" type="text" maxlength="500" value="${escapeHtml(line.name)}" placeholder="Descripción del producto o servicio" aria-label="Descripción de la línea libre">
@@ -595,7 +594,16 @@
           <td data-label="Producto">
             ${productControl}
             <span class="pos-product-meta">${escapeHtml(line.sku)} · ${unitControl} · ${line.manual ? '<b class="pos-manual-badge">Línea libre · Sin stock</b>' : `Stock ${fixed(line.stock, 3)} ${escapeHtml(line.unit)}`}</span>
-            ${canDiscount ? `<label class="pos-line-discount">Desc. neto <span class="currency-label">${currencySymbol()}</span><input class="pos-discount-input" data-action="discount" type="number" min="0" step="0.01" value="${fixed(line.discount)}" aria-label="Descuento de ${escapeHtml(line.name)}"></label>` : ""}
+            ${canDiscount ? `<div class="pos-line-discount">
+              <select class="pos-discount-mode" data-action="discount-mode" aria-label="Tipo de descuento de ${escapeHtml(line.name)}">
+                <option value="amount" ${line.discountMode !== "percent" ? "selected" : ""}>Desc. monto</option>
+                <option value="percent" ${line.discountMode === "percent" ? "selected" : ""}>Desc. %</option>
+              </select>
+              <span class="pos-currency-input-group pos-discount-value">
+                <span class="pos-input-affix ${line.discountMode === "percent" ? "" : "currency-label"}">${line.discountMode === "percent" ? "%" : currencySymbol()}</span>
+                <input class="pos-discount-input" data-action="discount" type="number" min="0" ${line.discountMode === "percent" ? 'max="100"' : ""} step="0.01" value="${fixed(line.discountValue ?? line.discount)}" aria-label="Descuento de ${escapeHtml(line.name)}">
+              </span>
+            </div>` : ""}
             ${line.memo ? `<span class="pos-line-memo"><i class="ti ti-notes"></i>${escapeHtml(line.memo)}</span>` : ""}
           </td>
           <td data-label="Cantidad">
@@ -605,7 +613,7 @@
               <button type="button" data-action="increase" aria-label="Aumentar cantidad">+</button>
             </div>
           </td>
-          <td data-label="Precio unitario"><input class="pos-price-input" data-action="price" type="number" min="0" step="0.01" inputmode="decimal" value="${fixed(grossUnitPrice(line))}" ${canChangePrice ? "" : "disabled"} aria-label="Precio unitario de ${escapeHtml(line.name)}"></td>
+          <td data-label="Precio unitario"><span class="pos-currency-input-group pos-price-group"><span class="pos-input-affix currency-label">${currencySymbol()}</span><input class="pos-price-input" data-action="price" type="number" min="0" step="0.01" inputmode="decimal" value="${fixed(grossUnitPrice(line))}" ${canChangePrice ? "" : "disabled"} aria-label="Precio unitario de ${escapeHtml(line.name)}"></span></td>
           <td data-label="Impuesto">${taxControl}</td>
           <td data-label="Total" class="text-end"><span class="pos-line-total">${currencySymbol()} ${fixed(values.total)}</span></td>
           <td data-label="Acciones"><div class="pos-line-actions">${line.manual ? "" : `<button class="pos-line-info" data-action="prices" type="button" aria-label="Ver listas de precios de ${escapeHtml(line.name)}" title="Listas de precios"><i class="ti ti-tags"></i></button><button class="pos-line-info" data-action="stock" type="button" aria-label="Ver stock por almacén de ${escapeHtml(line.name)}" title="Stock por almacén"><i class="ti ti-building-warehouse"></i></button>`}<button class="pos-memo-line ${line.memo ? "has-value" : ""}" data-action="memo" type="button" aria-label="Información adicional de ${escapeHtml(line.name)}" title="Información adicional"><i class="ti ti-notes"></i></button><button class="pos-remove-line" data-action="remove" type="button" aria-label="Quitar ${escapeHtml(line.name)}"><i class="ti ti-trash"></i></button></div></td>
@@ -1096,7 +1104,7 @@
       conversionFactor: 1,
       netPrice: number(netPrice.toFixed(6)),
       originalNetPrice: number(netPrice.toFixed(6)),
-      priceChanged: false, quantity, discount: 0,
+      priceChanged: false, quantity, discountMode: "amount", discountValue: 0,
       memo: "",
       taxType, igvRate, baseStock: 0, stock: 0,
       stockUnit: unit.code, tracksInventory: false,
@@ -1202,7 +1210,7 @@
       currency: state.currency,
       exchange_rate: fixed(byId("exchange-rate").value || 1, 6),
       global_discount_amount: fixed(totals().globalDiscount),
-      global_discount_before_tax: true,
+      global_discount_before_tax: false,
       notes: byId("sale-notes").value.trim(),
       device_identifier: `web-${navigator.userAgentData?.mobile ? "mobile" : "desktop"}`,
       lines: lines.map((line) => ({
@@ -1212,7 +1220,7 @@
         description: line.name,
         quantity: fixed(line.quantity, 3),
         unit_price: fixed(line.netPrice, 6),
-        discount_amount: fixed(line.discount),
+        discount_amount: fixed(lineTotals(line).discount),
         tax_type: line.taxType,
         igv_rate: fixed(line.igvRate),
         product_code: line.sku,
@@ -1241,9 +1249,13 @@
         method: "POST",
         body: JSON.stringify(salePayload(false)),
       });
-      showAlert(`Borrador ${result.ticket_code} guardado en la caja abierta.`, "success");
-      resetSale();
-      byId("product-search").focus();
+      const cartSnapshot = [...state.cart.values()].map((line) => ({ ...line }));
+      renderReceipt(result, cartSnapshot);
+      state.draftTransactionId = result.id;
+      state.idempotencyKey = result.idempotency_key;
+      byId("discard-draft-button").hidden = false;
+      closeMobileCheckout();
+      openDialog(byId("success-dialog"));
     } catch (error) {
       showAlert(error.message);
     } finally {
@@ -1356,6 +1368,7 @@
 
   function renderReceipt(result, lines) {
     state.currentReceipt = result;
+    const isDraft = result.status === "DRAFT";
     const documentLabels = {
       NV: "NOTA DE VENTA",
       "03": "BOLETA",
@@ -1416,7 +1429,7 @@
       ERROR: "Error de envío electrónico",
       PENDING: "Pendiente de envío electrónico",
     };
-    const electronicNotice = electronicLabels[result.electronic_status]
+    const electronicNotice = !isDraft && electronicLabels[result.electronic_status]
       ? `<div class="pos-receipt__electronic"><strong>${escapeHtml(electronicLabels[result.electronic_status])}</strong>${result.electronic_message ? `<br><span>${escapeHtml(result.electronic_message)}</span>` : ""}</div>`
       : "";
     byId("pos-receipt").innerHTML = `
@@ -1429,7 +1442,7 @@
         ${result.store_name ? `<div class="pos-receipt__store">${escapeHtml(result.store_name)}${result.store_address ? ` · ${escapeHtml(result.store_address)}` : ""}</div>` : ""}
       </div>
       <div class="pos-receipt__document">
-        <strong>${escapeHtml(documentLabels[result.document_type] || "COMPROBANTE")}</strong>
+        ${isDraft ? "<strong>PRECUENTA</strong>" : `<strong>${escapeHtml(documentLabels[result.document_type] || "COMPROBANTE")}</strong>`}
         <span>${escapeHtml(result.document_series)}-${escapeHtml(result.document_number)}</span>
         <small>Ticket ${escapeHtml(result.ticket_code || "")}</small>
       </div>
@@ -1456,8 +1469,18 @@
       ${paymentLines ? `<div class="pos-receipt__payments"><div class="pos-receipt__caption">PAGOS</div>${paymentLines}</div>` : ""}
       ${result.notes ? `<div class="pos-receipt__notes"><strong>Observaciones</strong><br>${escapeHtml(result.notes)}</div>` : ""}
       ${electronicNotice}
-      <div class="pos-receipt__footer">${["01", "03"].includes(result.document_type) ? "Representación impresa del comprobante electrónico.<br>" : ""}Gracias por su compra.</div>
+      <div class="pos-receipt__footer">${isDraft ? "PRECUENTA SIN VALOR FISCAL.<br>La venta, el stock y la caja aún no han sido registrados." : `${["01", "03"].includes(result.document_type) ? "Representación impresa del comprobante electrónico.<br>" : ""}Gracias por su compra.`}</div>
       <div class="text-center small">Powered by APUDIG</div>`;
+    byId("receipt-result-title").textContent = isDraft ? "Borrador guardado" : "Venta registrada";
+    byId("receipt-result-message").textContent = isDraft
+      ? "Imprime la precuenta para revisarla con el cliente. Podrás seguir editando este borrador."
+      : "La operación se guardó correctamente.";
+    const resultIcon = byId("receipt-result-icon");
+    resultIcon.classList.toggle("is-primary", isDraft);
+    resultIcon.classList.toggle("is-success", !isDraft);
+    resultIcon.innerHTML = `<i class="ti ${isDraft ? "ti-file-pencil" : "ti-check"}"></i>`;
+    byId("continue-draft-button").hidden = !isDraft;
+    byId("new-sale-button").textContent = "Nueva venta";
     byId("receipt-a4-button").href = result.document_pdf_url || "#";
     byId("return-sale-button").hidden = !(
       hasPermission("refund.pos.sale") &&
@@ -1668,7 +1691,10 @@
           unit: saved.unit_code || unit?.code || product.unit, units,
           conversionFactor, netPrice: number(saved.unit_price),
           originalNetPrice: number(unit?.unit_price ?? saved.unit_price), priceChanged: true,
-          quantity: number(saved.quantity), discount: number(saved.discount_amount),
+          quantity: number(saved.quantity), discountMode: "amount",
+          discountValue: number(saved.quantity) > 0
+            ? number(saved.discount_amount) / number(saved.quantity)
+            : 0,
           memo: saved.memo || "",
           taxType: saved.tax_type, igvRate: number(saved.igv_rate),
           baseStock: number(product.stock), stock: number(product.stock) / conversionFactor,
@@ -2317,11 +2343,25 @@
         line.netPrice = number(unit.unit_price);
         line.originalNetPrice = number(unit.unit_price);
         line.priceChanged = false;
-        line.discount = 0;
+        line.discountMode = "amount";
+        line.discountValue = 0;
       }
     }
     if (action === "quantity") line.quantity = Math.max(number(event.target.value), 0.001);
-    if (action === "discount") line.discount = Math.max(number(event.target.value), 0);
+    if (action === "discount") {
+      const maximum = line.discountMode === "percent" ? 100 : Infinity;
+      line.discountValue = Math.min(Math.max(number(event.target.value), 0), maximum);
+    }
+    if (action === "discount-mode") {
+      const currentAmount = lineTotals(line).discount;
+      const grossBeforeDiscount = roundMoney(
+        line.netPrice * line.quantity * (line.taxType === "10" ? 1 + line.igvRate / 100 : 1),
+      );
+      line.discountMode = event.target.value === "percent" ? "percent" : "amount";
+      line.discountValue = line.discountMode === "percent" && grossBeforeDiscount > 0
+        ? Math.min(currentAmount * 100 / grossBeforeDiscount, 100)
+        : currentAmount / Math.max(line.quantity, 0.001);
+    }
     if (action === "description" && line.manual) {
       line.name = event.target.value.trim().slice(0, 500) || "Producto o servicio sin registrar";
     }
@@ -2601,6 +2641,11 @@
     button.addEventListener("click", () => closeDialog(button.closest("dialog")));
   });
   byId("new-sale-button").addEventListener("click", () => {
+    closeDialog(byId("success-dialog"));
+    resetSale();
+    byId("product-search").focus();
+  });
+  byId("continue-draft-button").addEventListener("click", () => {
     closeDialog(byId("success-dialog"));
     byId("product-search").focus();
   });
