@@ -696,8 +696,10 @@
 }
 
 .pos-unit-select {
-  min-height: 30px;
-  padding: 3px 24px 3px 7px;
+  width: auto;
+  max-width: 78px;
+  min-height: 26px;
+  padding: 2px 20px 2px 6px;
   border: 1px solid #d0d5dd;
   border-radius: 7px;
   color: var(--pos-ink);
@@ -778,11 +780,23 @@
 
 .pos-line-discount {
   margin-top: 7px;
-  display: flex;
+  width: min(210px, 100%);
+  display: grid;
+  grid-template-columns: 88px minmax(94px, 112px);
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   color: var(--pos-muted);
   font-size: 0.68rem;
+}
+
+.pos-discount-mode {
+  min-height: 27px;
+  padding: 2px 20px 2px 6px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  color: #475467;
+  background: #fff;
+  font-size: .67rem;
 }
 
 .pos-line-memo {
@@ -984,6 +998,73 @@
   padding: .3rem .45rem;
   text-align: right;
   font-weight: 600;
+}
+
+.pos-currency-input-group {
+  min-width: 0;
+  height: 32px;
+  border: 1px solid #d0d5dd;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: #fff;
+  vertical-align: middle;
+}
+
+.pos-input-affix {
+  min-width: 28px;
+  padding: 0 6px;
+  border-right: 1px solid #e4e7ec;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #667085;
+  background: #f8fafc;
+  font-size: .68rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.pos-currency-input-group input {
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px;
+  border: 0 !important;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none !important;
+  text-align: right;
+}
+
+.pos-price-group {
+  width: 118px;
+  height: 40px;
+}
+
+.pos-price-group .pos-price-input {
+  width: calc(100% - 30px);
+  max-width: none;
+}
+
+.pos-discount-value {
+  width: 100%;
+  height: 27px;
+}
+
+.pos-discount-value .pos-discount-input {
+  width: calc(100% - 28px);
+}
+
+.pos-global-discount-group {
+  width: 7.25rem;
+  height: 34px;
+}
+
+.pos-global-discount-group .pos-global-discount {
+  width: calc(100% - 30px);
+  padding-inline: 6px;
 }
 
 .pos-cart-table tbody tr.is-selected {
@@ -2331,6 +2412,23 @@
     display: none;
   }
 
+  .pos-cart-table th,
+  .pos-cart-table td {
+    padding-inline: 5px;
+  }
+
+  .pos-line-actions {
+    gap: 1px;
+  }
+
+  .pos-memo-line,
+  .pos-line-info,
+  .pos-remove-line {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+  }
+
   .pos-sale-footer {
     grid-template-columns: minmax(180px, 1fr) minmax(210px, 0.7fr);
     gap: 20px;
@@ -2618,6 +2716,16 @@
     min-height: 44px;
     touch-action: manipulation;
   }
+
+  .pos-cart-table .pos-remove-line,
+  .pos-cart-table .pos-memo-line,
+  .pos-cart-table .pos-line-info {
+    min-width: 34px;
+    min-height: 34px;
+    width: 34px;
+    height: 34px;
+    padding: 4px;
+  }
 }
 
 @media (max-width: 580px) {
@@ -2747,7 +2855,7 @@
     border-radius: 12px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 6px 8px;
   }
 
   .pos-cart-table td {
@@ -2797,21 +2905,34 @@
     position: static;
     grid-column: 1 / -1;
     width: 100%;
+    margin-top: -2px;
     order: 2;
   }
 
-  .pos-cart-table td:nth-child(2) { order: 3; }
-  .pos-cart-table td:nth-child(3) { order: 4; }
-  .pos-cart-table td:nth-child(5) { order: 5; }
+  .pos-cart-table td:nth-child(2) { order: 2; }
+  .pos-cart-table td:nth-child(3) { order: 3; }
+  .pos-cart-table td:nth-child(5) { order: 4; }
 
   .pos-line-actions {
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 6px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 1px;
+  }
+
+  .pos-cart-table .pos-memo-line,
+  .pos-cart-table .pos-line-info,
+  .pos-cart-table .pos-remove-line {
+    min-width: 30px;
+    min-height: 30px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .pos-line-discount {
+    margin-top: 5px;
   }
 
   .pos-cart-table input,
-  .pos-cart-table select,
   .pos-sale-footer textarea,
   .pos-checkout-panel input,
   .pos-checkout-panel select,
@@ -2819,6 +2940,32 @@
   .pos-dialog select,
   .pos-dialog textarea {
     font-size: 16px;
+  }
+
+  .pos-cart-table .pos-unit-select,
+  .pos-cart-table .pos-discount-mode {
+    width: auto;
+    min-width: 0;
+    min-height: 26px;
+    height: 26px;
+    padding: 1px 20px 1px 6px;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .pos-cart-table .pos-unit-select {
+    max-width: 72px;
+  }
+
+  .pos-cart-table .pos-discount-mode {
+    max-width: 88px;
+  }
+
+  .pos-cart-table .pos-manual-tax {
+    min-height: 30px;
+    height: 30px;
+    padding-block: 2px;
+    font-size: 12px;
   }
 
   .pos-quantity {

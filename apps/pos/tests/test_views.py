@@ -90,6 +90,9 @@ class PosWorkspaceViewTest(TestCase):
         self.assertContains(response, 'id="checkout-review-dialog"')
         self.assertContains(response, "Esta es una precuenta")
         self.assertContains(response, "Confirmar y cobrar")
+        self.assertContains(response, 'id="receipt-result-title"')
+        self.assertContains(response, 'id="receipt-result-message"')
+        self.assertContains(response, 'id="continue-draft-button"')
         self.assertContains(response, 'id="add-manual-line"')
         self.assertNotContains(response, 'id="manual-line-dialog"')
         self.assertContains(response, 'data-product-search-mode="SEARCH"')
@@ -127,7 +130,7 @@ class PosWorkspaceViewTest(TestCase):
         self.assertTrue(response["Content-Type"].startswith("text/javascript"))
         self.assertEqual(response["Service-Worker-Allowed"], "/pos/")
         self.assertIn("no-cache", response["Cache-Control"])
-        self.assertContains(response, "apudig-pos-static-v5")
+        self.assertContains(response, "apudig-pos-static-v11")
         self.assertContains(response, "ApuDig POS necesita")
         self.assertNotContains(response, "'/api/")
 
@@ -139,6 +142,16 @@ class PosWorkspaceViewTest(TestCase):
             script = script_file.read()
         self.assertIn('new CustomEvent("pos:scan-requested"', script)
         self.assertIn('barcodeField: "barcode"', script)
+
+    def test_pos_javascript_opens_draft_receipt_and_discounts_final_total(self):
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn('openDialog(byId("success-dialog"))', script)
+        self.assertIn('global_discount_before_tax: false', script)
+        self.assertIn('const factor = discountedTotal / result.total', script)
+        self.assertIn('value="percent"', script)
 
     def test_barcode_scanner_releases_camera_and_uses_local_zxing(self):
         scanner_path = finders.find("js/pos-barcode-scanner.js")

@@ -698,6 +698,55 @@ class PosApiTest(TestCase):
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, Decimal("8.000"))
 
+    def test_pos_global_discount_is_subtracted_from_final_total(self):
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload["global_discount_amount"] = "50.00"
+        payload["global_discount_before_tax"] = False
+        payload["payments"][0]["amount"] = "50.00"
+        payload["payments"][0]["received_amount"] = "50.00"
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["total_discount"], "50.00")
+        self.assertEqual(response.json()["subtotal"], "42.37")
+        self.assertEqual(response.json()["igv_total"], "7.63")
+        self.assertEqual(response.json()["total"], "50.00")
+
+    def test_pos_line_amount_discount_is_subtracted_from_price_with_tax(self):
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload["lines"][0]["discount_amount"] = "1.00"
+        payload["payments"][0]["amount"] = "99.00"
+        payload["payments"][0]["received_amount"] = "99.00"
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["subtotal"], "83.90")
+        self.assertEqual(response.json()["igv_total"], "15.10")
+        self.assertEqual(response.json()["total_discount"], "1.00")
+        self.assertEqual(response.json()["total"], "99.00")
+        self.assertEqual(response.json()["lines"][0]["discount_amount"], "1.00")
+        self.assertEqual(response.json()["lines"][0]["total"], "99.00")
+
+    def test_pos_line_amount_discount_scales_with_quantity(self):
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload["lines"][0]["quantity"] = "3.000"
+        # El cliente aplica S/. 1 por cada unidad: el navegador envía S/. 3 por la línea.
+        payload["lines"][0]["discount_amount"] = "3.00"
+        payload["payments"][0]["amount"] = "297.00"
+        payload["payments"][0]["received_amount"] = "297.00"
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["total_discount"], "3.00")
+        self.assertEqual(response.json()["total"], "297.00")
+        self.assertEqual(response.json()["lines"][0]["total"], "297.00")
+
     def test_draft_can_be_discarded_without_moving_stock(self):
         session_id = self._open_session()
         payload = self._checkout_payload(session_id)

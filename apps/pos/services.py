@@ -1282,6 +1282,8 @@ def checkout_pos_sale(
             "warehouse": warehouse,
             "global_discount_amount": global_discount,
             "global_discount_before_tax": global_discount_before_tax,
+            "global_discount_from_total": True,
+            "line_discount_from_total": True,
             "notes": (notes or "").strip(),
         }
         if existing is not None:
