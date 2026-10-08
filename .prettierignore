@@ -1,0 +1,12 @@
+# Ignorar el entorno virtual de Python
+venv/
+.venv/
+env/
+
+# Ignorar la base de datos local y archivos estáticos recolectados
+db.sqlite3
+staticfiles/
+media/
+
+# Ignorar las plantillas de Django (opcional si ya configuraste djLint)
+**/templates/**/*.html

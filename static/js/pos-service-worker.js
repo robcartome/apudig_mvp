@@ -1,9 +1,9 @@
-const CACHE_NAME = 'apudig-pos-static-v11';
+const CACHE_NAME = 'apudig-pos-static-v13';
 const STATIC_ASSETS = [
-  '/static/css/pos.css?v=20261007-5',
+  '/static/css/pos.css?v=20261008-2',
   '/static/vendor/zxing/zxing-browser-0.2.1.min.js?v=0.2.1',
   '/static/js/pos-barcode-scanner.js?v=20261006-2',
-  '/static/js/pos.js?v=20261007-6',
+  '/static/js/pos.js?v=20261008-2',
   '/static/pwa/pos-icon-192.png',
   '/static/pwa/pos-icon-512.png',
 ];

@@ -698,6 +698,31 @@ class PosApiTest(TestCase):
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, Decimal("8.000"))
 
+    def test_draft_keeps_reserved_document_number_and_next_sale_uses_following_number(self):
+        session_id = self._open_session()
+        draft_payload = self._checkout_payload(session_id)
+        draft_payload["payments"] = []
+
+        created = self._post("/api/v1/pos/sales/drafts/", draft_payload)
+        updated = self._post("/api/v1/pos/sales/drafts/", draft_payload)
+        checkout_payload = self._checkout_payload(session_id, key=draft_payload["idempotency_key"])
+        completed = self._post("/api/v1/pos/sales/checkout/", checkout_payload)
+        next_sale = self._post(
+            "/api/v1/pos/sales/checkout/",
+            self._checkout_payload(session_id),
+        )
+
+        self.assertEqual(created.status_code, 201, created.content)
+        self.assertEqual(updated.status_code, 200, updated.content)
+        self.assertEqual(completed.status_code, 200, completed.content)
+        self.assertEqual(next_sale.status_code, 201, next_sale.content)
+        self.assertEqual(created.json()["document_number"], "00000001")
+        self.assertEqual(updated.json()["document_number"], "00000001")
+        self.assertEqual(completed.json()["document_number"], "00000001")
+        self.assertEqual(next_sale.json()["document_number"], "00000002")
+        self.nv_series.refresh_from_db()
+        self.assertEqual(self.nv_series.current_number, 2)
+
     def test_pos_global_discount_is_subtracted_from_final_total(self):
         session_id = self._open_session()
         payload = self._checkout_payload(session_id)

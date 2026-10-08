@@ -130,7 +130,7 @@ class PosWorkspaceViewTest(TestCase):
         self.assertTrue(response["Content-Type"].startswith("text/javascript"))
         self.assertEqual(response["Service-Worker-Allowed"], "/pos/")
         self.assertIn("no-cache", response["Cache-Control"])
-        self.assertContains(response, "apudig-pos-static-v11")
+        self.assertContains(response, "apudig-pos-static-v13")
         self.assertContains(response, "ApuDig POS necesita")
         self.assertNotContains(response, "'/api/")
 
@@ -152,6 +152,13 @@ class PosWorkspaceViewTest(TestCase):
         self.assertIn('global_discount_before_tax: false', script)
         self.assertIn('const factor = discountedTotal / result.total', script)
         self.assertIn('value="percent"', script)
+        self.assertIn('data-action="discount-toggle"', script)
+        self.assertIn('Borrador reservado', script)
+        self.assertIn('Próximo N.º', script)
+        self.assertIn('pos-receipt__internal-reference', script)
+        self.assertIn('Ref. interna POS:', script)
+        self.assertIn('BORRADOR · NO ES COMPROBANTE DE PAGO.', script)
+        self.assertNotIn('<small>Ticket ', script)
 
     def test_barcode_scanner_releases_camera_and_uses_local_zxing(self):
         scanner_path = finders.find("js/pos-barcode-scanner.js")
