@@ -90,7 +90,6 @@
 {% if pos_transaction %}
 <div class="section">
   <div class="section-title">Datos de la operación POS</div>
-  <div class="info-row"><span class="info-label">Ticket:</span><span>{{ pos_transaction.ticket_code }}</span></div>
   <div class="info-row"><span class="info-label">Caja:</span><span>{{ pos_transaction.register.name }}</span></div>
   <div class="info-row"><span class="info-label">Cajero(a):</span><span>{{ pos_transaction.cashier.display_name }}</span></div>
 </div>
@@ -225,7 +224,10 @@
 </div>
 {% endif %}
 
-<div class="footer">Documento generado por APUDIG — {{ sales_document.issue_date|date:"d/m/Y" }}</div>
+<div class="footer">
+  {% if pos_transaction %}Ref. interna POS: {{ pos_transaction.ticket_code }}<br>{% endif %}
+  Documento generado por APUDIG — {{ sales_document.issue_date|date:"d/m/Y" }}
+</div>
 
 </body>
 </html>

@@ -14,21 +14,27 @@ window.ApiService = (function () {
   }
 
   function getCookie(name) {
-    const cookie = document.cookie.split(';').map(value => value.trim())
-      .find(value => value.startsWith(`${name}=`));
+    const cookie = document.cookie
+      .split(';')
+      .map((value) => value.trim())
+      .find((value) => value.startsWith(`${name}=`));
     return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : '';
   }
 
   function csrfToken(explicitToken) {
-    return explicitToken
-      || document.querySelector('[name=csrfmiddlewaretoken]')?.value
-      || getCookie('csrftoken');
+    return (
+      explicitToken ||
+      document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+      getCookie('csrftoken')
+    );
   }
 
   function validationMessage(errors) {
-    return Object.values(errors || {}).flat()
-      .map(item => (typeof item === 'object' ? item.message : item))
-      .filter(Boolean).join(' ');
+    return Object.values(errors || {})
+      .flat()
+      .map((item) => (typeof item === 'object' ? item.message : item))
+      .filter(Boolean)
+      .join(' ');
   }
 
   function errorMessage(data, status) {
@@ -81,4 +87,4 @@ window.ApiService = (function () {
   }
 
   return { request, get, post, ApiError };
-}());
+})();
