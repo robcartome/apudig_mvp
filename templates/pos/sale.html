@@ -82,7 +82,7 @@
           </button>
           <div class="dropdown-divider"></div>
           <button id="open-close-session" class="dropdown-item text-danger" type="button">
-            <i class="ti ti-lock me-2"></i>Cerrar caja
+            <i class="ti ti-lock me-2"></i><span>Cerrar caja</span>
           </button>
         </div>
       </div>
@@ -105,6 +105,7 @@
 
   <nav class="pos-command-bar" aria-label="Acciones rápidas del punto de venta">
     <div class="pos-command-actions">
+      <button id="quick-new-sale" type="button"><i class="ti ti-plus"></i><span>Nueva venta</span><kbd>Alt+N</kbd></button>
       <button id="quick-sales-history" type="button"><i class="ti ti-receipt"></i><span>Ventas POS</span><kbd>F10</kbd></button>
       <button id="quick-cash-movement" type="button"><i class="ti ti-arrows-exchange"></i><span>Vales de caja</span><kbd>F9</kbd></button>
       <button id="quick-collections" type="button"><i class="ti ti-cash-register"></i><span>Cobranzas</span></button>
@@ -375,6 +376,12 @@
       </select>
       <label for="movement-amount">Importe</label>
       <div class="pos-money-input"><span>S/.</span><input id="movement-amount" type="number" min="0.01" step="0.01" required></div>
+      <label for="movement-means">Medio de pago</label>
+      <select id="movement-means" class="form-select" required></select>
+      <div id="movement-reference-wrap" hidden>
+        <label for="movement-reference">N.º de operación / voucher <span>(opcional)</span></label>
+        <input id="movement-reference" class="form-control" type="text" maxlength="120" placeholder="Ej.: OP003457">
+      </div>
       <label for="movement-description">Motivo</label>
       <textarea id="movement-description" rows="2" maxlength="500" required></textarea>
       <label for="movement-reason-code">Categoría <span>(opcional)</span></label>
@@ -386,6 +393,7 @@
         <option value="BANK_DEPOSIT">Depósito bancario</option>
         <option value="OTHER">Otro</option>
       </select>
+      <small class="form-text text-muted">La categoría clasifica el motivo para la auditoría; el medio de pago indica por dónde ingresó o salió el importe.</small>
       <div class="pos-dialog__actions">
         <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
         <button class="btn btn-primary" type="submit">Registrar</button>
@@ -691,5 +699,5 @@
 {% block extra_js %}
   <script src="{% static 'vendor/zxing/zxing-browser-0.2.1.min.js' %}?v=0.2.1"></script>
   <script src="{% static 'js/pos-barcode-scanner.js' %}?v=20261006-2"></script>
-  <script src="{% static 'js/pos.js' %}?v=20261008-2"></script>
+  <script src="{% static 'js/pos.js' %}?v=20261009-3"></script>
 {% endblock %}

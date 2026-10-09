@@ -287,6 +287,8 @@ class CashSessionOpenRequestSerializer(serializers.Serializer):
 class CashMovementRequestSerializer(serializers.Serializer):
     movement_type = serializers.ChoiceField(choices=("PAY_IN", "PAY_OUT", "WITHDRAWAL", "DEPOSIT"))
     amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    means_of_payment_id = serializers.UUIDField(required=False, allow_null=True)
+    operation_reference = serializers.CharField(max_length=120, required=False, allow_blank=True)
     reason_code = serializers.CharField(max_length=40, required=False, allow_blank=True)
     description = serializers.CharField(max_length=500)
 

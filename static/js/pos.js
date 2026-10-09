@@ -52,6 +52,7 @@
   };
 
   const cashDenominations = [200, 100, 50, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1];
+  let alertHideTimer = null;
 
   const endpoints = {
     bootstrap: app.dataset.bootstrapUrl,
@@ -159,14 +160,22 @@
 
   function showAlert(message, kind = 'error') {
     const alert = byId('pos-alert');
+    if (alertHideTimer) window.clearTimeout(alertHideTimer);
+    alertHideTimer = null;
     byId('pos-alert-message').textContent = message;
     alert.classList.toggle('is-success', kind === 'success');
     alert.hidden = false;
     byId('pos-live-region').textContent = message;
+    if (kind === 'success') {
+      alertHideTimer = window.setTimeout(hideAlert, 5000);
+    }
   }
 
   function hideAlert() {
+    if (alertHideTimer) window.clearTimeout(alertHideTimer);
+    alertHideTimer = null;
     byId('pos-alert').hidden = true;
+    byId('pos-live-region').textContent = '';
   }
 
   function setBusy(value, label = 'Procesando…') {
@@ -382,6 +391,10 @@
 
   function setSessionState() {
     const pill = byId('session-state');
+    const sessionActionButtons = [byId('open-close-session'), byId('quick-close-session')];
+    const canUseSessionAction = state.session
+      ? hasPermission('close.pos.cash')
+      : hasPermission('open.pos.cash');
     pill.classList.remove('is-loading', 'is-closed');
     if (state.session) {
       pill.querySelector('span:last-child').textContent =
@@ -390,14 +403,22 @@
       pill.classList.add('is-closed');
       pill.querySelector('span:last-child').textContent = 'Caja cerrada';
     }
+    sessionActionButtons.forEach((button) => {
+      button.disabled = !canUseSessionAction;
+      button.classList.toggle('is-danger', Boolean(state.session));
+      button.classList.toggle('text-danger', Boolean(state.session));
+      button.querySelector('i').className = `ti ${state.session ? 'ti-lock' : 'ti-lock-open'}${
+        button.id === 'open-close-session' ? ' me-2' : ''
+      }`;
+      button.querySelector('span').textContent = state.session ? 'Cerrar caja' : 'Abrir caja';
+    });
+    byId('quick-new-sale').disabled = !state.session;
     byId('open-movement').disabled = !state.session || !hasPermission('manage.pos.cash_movements');
-    byId('open-close-session').disabled = !state.session || !hasPermission('close.pos.cash');
     byId('open-consolidation').disabled =
       !state.session || !hasPermission('consolidate.pos.invoice');
     byId('open-reprints').disabled = !hasPermission('reprint.pos.receipt');
     byId('quick-cash-movement').disabled =
       !state.session || !hasPermission('manage.pos.cash_movements');
-    byId('quick-close-session').disabled = !state.session || !hasPermission('close.pos.cash');
     byId('quick-sales-history').disabled = !hasPermission('reprint.pos.receipt');
     byId('sale-currency').disabled = Boolean(state.session);
     byId('open-collections').disabled = !state.session || !hasPermission('manage.pos.collections');
@@ -426,6 +447,10 @@
       const data = await api(`${endpoints.bootstrap}${query}`);
       state.registers = data.registers || [];
       state.means = data.means_of_payment || [];
+      byId('movement-means').innerHTML = state.means
+        .map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`)
+        .join('');
+      updateMovementMeans();
       state.paymentMethods = data.payment_methods || [];
       state.series = data.document_series || [];
       state.priceLists = data.price_lists || [];
@@ -2004,6 +2029,41 @@
     renderCart();
   }
 
+  function startNewSale() {
+    if (!state.session) {
+      showAlert('Abra la caja antes de iniciar una nueva venta.');
+      return;
+    }
+    if (
+      (state.cart.size || state.draftTransactionId) &&
+      !window.confirm(
+        state.draftTransactionId
+          ? 'Se iniciará una venta en blanco. El borrador guardado no se modificará; los cambios posteriores a su último guardado se perderán.'
+          : 'Se limpiará la venta actual para iniciar una nueva. ¿Desea continuar?',
+      )
+    ) {
+      return;
+    }
+    resetSale();
+    showAlert('Nueva venta lista. La venta anterior no fue modificada.', 'success');
+    byId('product-search').focus();
+  }
+
+  function openCashSessionDialog() {
+    if (!state.register || state.session || !hasPermission('open.pos.cash')) return;
+    byId('opening-total').value = fixed(
+      state.suggestedOpeningTotals[byId('opening-currency').value] || 0,
+    );
+    renderDenominations('opening-denominations');
+    openDialog(byId('open-session-dialog'));
+    setTimeout(() => byId('opening-total').focus(), 50);
+  }
+
+  function handleCashSessionAction() {
+    if (state.session) prepareCashClose();
+    else openCashSessionDialog();
+  }
+
   async function openCashSession(event) {
     event.preventDefault();
     if (!state.register) return;
@@ -2047,11 +2107,14 @@
         body: JSON.stringify({
           movement_type: byId('movement-type').value,
           amount: fixed(byId('movement-amount').value),
+          means_of_payment_id: byId('movement-means').value,
+          operation_reference: byId('movement-reference').value.trim(),
           reason_code: byId('movement-reason-code').value,
           description: byId('movement-description').value.trim(),
         }),
       });
       byId('cash-movement-form').reset();
+      updateMovementMeans();
       closeDialog(byId('cash-movement-dialog'));
       showAlert(
         `Movimiento registrado. Efectivo disponible en gaveta: ${currencySymbol()} ${result.drawer_cash_after}.`,
@@ -2064,6 +2127,13 @@
     }
   }
 
+  function updateMovementMeans() {
+    const means = state.means.find((item) => item.id === byId('movement-means').value);
+    const needsReference = Boolean(means && means.kind !== 'CASH');
+    byId('movement-reference-wrap').hidden = !needsReference;
+    if (!needsReference) byId('movement-reference').value = '';
+  }
+
   function renderCashMovementHistory(summary) {
     const container = byId('cash-movement-history');
     const movements = summary?.movement_details || [];
@@ -2072,7 +2142,7 @@
           .map(
             (item) => `
       <div class="pos-cash-ledger__row">
-        <span><strong>${escapeHtml(item.movement_type_label)}</strong><small>${new Date(item.created_at).toLocaleString('es-PE')} · ${escapeHtml(item.description)}</small></span>
+        <span><strong>${escapeHtml(item.movement_type_label)}</strong><small>${new Date(item.created_at).toLocaleString('es-PE')} · ${escapeHtml(item.means_of_payment_name || 'Efectivo')}${item.operation_reference ? ` · ${escapeHtml(item.operation_reference)}` : ''} · ${escapeHtml(item.description)}</small></span>
         <strong class="${['PAY_OUT', 'WITHDRAWAL', 'DEPOSIT'].includes(item.movement_type) ? 'is-out' : 'is-in'}">${['PAY_OUT', 'WITHDRAWAL', 'DEPOSIT'].includes(item.movement_type) ? '-' : '+'} ${currencySymbol()} ${escapeHtml(item.amount)}</strong>
       </div>`,
           )
@@ -2178,8 +2248,8 @@
     byId('cash-close-report').innerHTML = `
       <div class="pos-receipt__header"><strong>${escapeHtml(state.register?.name || 'Caja POS')}</strong><br><span>CIERRE DE CAJA</span></div>
       <div class="pos-receipt__row"><span>Apertura</span><span>${currencySymbol()} ${escapeHtml(summary.opening_total)}</span></div>
-      <div class="pos-receipt__row"><span>Ingresos de caja</span><span>${currencySymbol()} ${escapeHtml(summary.cash_in)}</span></div>
-      <div class="pos-receipt__row"><span>Salidas de caja</span><span>${currencySymbol()} ${escapeHtml(summary.cash_out)}</span></div>
+      <div class="pos-receipt__row"><span>Ingresos de efectivo</span><span>${currencySymbol()} ${escapeHtml(summary.drawer_cash_in)}</span></div>
+      <div class="pos-receipt__row"><span>Salidas de efectivo</span><span>${currencySymbol()} ${escapeHtml(summary.drawer_cash_out)}</span></div>
       ${paymentRows}
       <div class="pos-receipt__row pos-receipt__total"><span>Efectivo esperado</span><span>${currencySymbol()} ${escapeHtml(closed.expected_cash_total)}</span></div>
       <div class="pos-receipt__row"><span>Efectivo contado</span><span>${currencySymbol()} ${escapeHtml(closed.counted_cash_total)}</span></div>
@@ -2554,7 +2624,10 @@
       closeMobileCheckout();
       return;
     }
-    if (event.key === 'F2') {
+    if (event.altKey && event.key.toLowerCase() === 'n' && !openDialogs.length) {
+      event.preventDefault();
+      startNewSale();
+    } else if (event.key === 'F2') {
       event.preventDefault();
       byId('product-search').focus();
       byId('product-search').select();
@@ -2940,7 +3013,8 @@
     if (event.target.value === 'WITHDRAWAL') byId('movement-reason-code').value = 'SAFE_WITHDRAWAL';
     if (event.target.value === 'DEPOSIT') byId('movement-reason-code').value = 'BANK_DEPOSIT';
   });
-  byId('open-close-session').addEventListener('click', prepareCashClose);
+  byId('movement-means').addEventListener('change', updateMovementMeans);
+  byId('open-close-session').addEventListener('click', handleCashSessionAction);
   byId('close-session-form').addEventListener('submit', closeCashSession);
   byId('counted-cash').addEventListener('input', () => {
     updateCashDifferencePreview();
@@ -2981,7 +3055,8 @@
     byId('credit-collection-form').hidden = true;
   });
   byId('quick-cash-movement').addEventListener('click', openCashMovementDialog);
-  byId('quick-close-session').addEventListener('click', prepareCashClose);
+  byId('quick-close-session').addEventListener('click', handleCashSessionAction);
+  byId('quick-new-sale').addEventListener('click', startNewSale);
   byId('recent-sales').addEventListener('click', (event) => {
     const draftButton = event.target.closest('[data-load-draft-id]');
     if (draftButton) {

@@ -540,6 +540,64 @@ class PosApiTest(TestCase):
         self.assertEqual(data["movement_details"][0]["description"], "Fondo adicional")
         self.assertEqual(data["movement_details"][0]["movement_type_label"], "Ingreso")
 
+    def test_non_cash_voucher_records_payment_means_without_changing_drawer_cash(self):
+        wallet = MeansOfPayment.objects.create(
+            company=self.company,
+            name="Yape",
+            kind=MeansOfPayment.Kind.DIGITAL_WALLET,
+            requires_reference=True,
+        )
+        session_id = self._open_session(opening="10.00")
+
+        movement = self._post(
+            f"/api/v1/pos/sessions/{session_id}/movements/",
+            {
+                "movement_type": "PAY_IN",
+                "amount": "25.00",
+                "means_of_payment_id": str(wallet.pk),
+                "operation_reference": "YAPE-001",
+                "reason_code": "OTHER",
+                "description": "Ingreso extraordinario",
+            },
+        )
+
+        self.assertEqual(movement.status_code, 201, movement.content)
+        self.assertEqual(movement.json()["means_of_payment_name"], "Yape")
+        self.assertEqual(movement.json()["drawer_cash_after"], "10.00")
+        outgoing = self._post(
+            f"/api/v1/pos/sessions/{session_id}/movements/",
+            {
+                "movement_type": "PAY_OUT",
+                "amount": "5.00",
+                "means_of_payment_id": str(wallet.pk),
+                "operation_reference": "YAPE-002",
+                "reason_code": "OTHER",
+                "description": "Salida extraordinaria",
+            },
+        )
+        self.assertEqual(outgoing.status_code, 201, outgoing.content)
+        self.assertEqual(outgoing.json()["drawer_cash_after"], "10.00")
+        summary = self.client.get(f"/api/v1/pos/sessions/{session_id}/summary/").json()
+        self.assertEqual(summary["expected_cash_total"], "10.00")
+        self.assertEqual(summary["cash_in"], "25.00")
+        self.assertEqual(summary["cash_out"], "5.00")
+        self.assertEqual(summary["drawer_cash_in"], "0.00")
+        self.assertEqual(summary["drawer_cash_out"], "0.00")
+        yape_summary = next(item for item in summary["payments"] if item["name"] == "Yape")
+        self.assertEqual(yape_summary["expected_amount"], "20.00")
+        self.assertEqual(yape_summary["operations"], 2)
+
+        closed = self._post(
+            f"/api/v1/pos/sessions/{session_id}/close/",
+            {
+                "counted_cash_total": "10.00",
+                "tender_counts": [
+                    {"means_of_payment_id": str(wallet.pk), "counted_amount": "20.00"}
+                ],
+            },
+        )
+        self.assertEqual(closed.status_code, 200, closed.content)
+
     def test_withdrawal_requires_specific_authorization_permission(self):
         session_id = self._open_session(opening="100.00")
         payload = {

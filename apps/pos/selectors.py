@@ -29,9 +29,12 @@ def calculate_cash_session_totals(cash_session: CashSession) -> dict:
         ).aggregate(total=Sum("amount"))["total"]
         or Decimal("0.00")
     )
+    cash_movement_queryset = cash_session.cash_movements.filter(
+        Q(means_of_payment__isnull=True) | Q(means_of_payment__kind=MeansOfPayment.Kind.CASH)
+    )
     movements = {
         row["movement_type"]: row["total"]
-        for row in cash_session.cash_movements.values("movement_type").annotate(total=Sum("amount"))
+        for row in cash_movement_queryset.values("movement_type").annotate(total=Sum("amount"))
     }
     cash_in = movements.get(CashMovement.MovementType.PAY_IN, Decimal("0.00"))
     cash_out = sum(
@@ -168,14 +171,8 @@ def get_cash_session_summary(cash_session: CashSession) -> dict:
         row.setdefault("refund_total", Decimal("0.00"))
         row.setdefault("refund_operations", 0)
 
-    movements = {
-        row["movement_type"]: row
-        for row in cash_session.cash_movements.values("movement_type")
-        .annotate(total=Sum("amount"), operations=Count("id"))
-    }
-    payment_total = sum((row["total"] for row in payments), Decimal("0.00"))
-    refund_total = sum((row["total"] for row in refunds), Decimal("0.00"))
-    cash_sales = sum(
+    sales_payment_total = sum((row["total"] for row in payments), Decimal("0.00"))
+    sales_cash_total = sum(
         (
             row["total"]
             for row in payments
@@ -183,6 +180,49 @@ def get_cash_session_summary(cash_session: CashSession) -> dict:
         ),
         Decimal("0.00"),
     )
+    tender_movements = list(
+        cash_session.cash_movements.exclude(means_of_payment__isnull=True)
+        .values(
+            "means_of_payment_id",
+            "means_of_payment__name",
+            "means_of_payment__kind",
+            "movement_type",
+        )
+        .annotate(total=Sum("amount"), operations=Count("id"))
+    )
+    for movement in tender_movements:
+        means_id = str(movement["means_of_payment_id"])
+        direction = (
+            Decimal("1.00")
+            if movement["movement_type"] == CashMovement.MovementType.PAY_IN
+            else Decimal("-1.00")
+        )
+        adjustment = movement["total"] * direction
+        row = payments_by_means.get(means_id)
+        if row is None:
+            row = {
+                "means_of_payment_id": movement["means_of_payment_id"],
+                "means_of_payment__name": movement["means_of_payment__name"],
+                "means_of_payment__kind": movement["means_of_payment__kind"],
+                "total": Decimal("0.00"),
+                "gross_total": Decimal("0.00"),
+                "refund_total": Decimal("0.00"),
+                "operations": 0,
+                "refund_operations": 0,
+            }
+            payments.append(row)
+            payments_by_means[means_id] = row
+        row["total"] = (row["total"] + adjustment).quantize(MONEY_QUANTUM)
+        row["operations"] += movement["operations"]
+
+    movements = {
+        row["movement_type"]: row
+        for row in cash_session.cash_movements.values("movement_type")
+        .annotate(total=Sum("amount"), operations=Count("id"))
+    }
+    payment_total = sales_payment_total
+    refund_total = sum((row["total"] for row in refunds), Decimal("0.00"))
+    cash_sales = sales_cash_total
     cash_totals = calculate_cash_session_totals(cash_session)
     transaction_counts = cash_session.transactions.aggregate(
         total=Count("id"),
@@ -224,8 +264,22 @@ def get_cash_session_summary(cash_session: CashSession) -> dict:
         "refund_total": refund_total.quantize(MONEY_QUANTUM),
         "cash_sales": cash_sales.quantize(MONEY_QUANTUM),
         "non_cash_sales": (payment_total - cash_sales).quantize(MONEY_QUANTUM),
-        "cash_in": cash_totals["cash_in"],
-        "cash_out": cash_totals["cash_out"],
+        "cash_in": movements.get(CashMovement.MovementType.PAY_IN, {}).get(
+            "total", Decimal("0.00")
+        ),
+        "cash_out": sum(
+            (
+                movements.get(movement_type, {}).get("total", Decimal("0.00"))
+                for movement_type in (
+                    CashMovement.MovementType.PAY_OUT,
+                    CashMovement.MovementType.WITHDRAWAL,
+                    CashMovement.MovementType.DEPOSIT,
+                )
+            ),
+            Decimal("0.00"),
+        ),
+        "drawer_cash_in": cash_totals["cash_in"],
+        "drawer_cash_out": cash_totals["cash_out"],
         "expected_cash_total": (
             cash_session.expected_cash_total
             if cash_session.expected_cash_total is not None
