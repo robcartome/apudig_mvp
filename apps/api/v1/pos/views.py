@@ -588,6 +588,8 @@ class CashMovementAPIView(PosAPIView):
             amount=data["amount"],
             description=data["description"],
             reason_code=data.get("reason_code", ""),
+            means_of_payment_id=data.get("means_of_payment_id"),
+            operation_reference=data.get("operation_reference", ""),
             created_by=request.user,
             authorized_by=request.user if can_authorize_movement else None,
         )
@@ -595,6 +597,13 @@ class CashMovementAPIView(PosAPIView):
             "id": str(movement.pk),
             "movement_type": movement.movement_type,
             "amount": str(movement.amount),
+            "means_of_payment_id": (
+                str(movement.means_of_payment_id) if movement.means_of_payment_id else None
+            ),
+            "means_of_payment_name": (
+                movement.means_of_payment.name if movement.means_of_payment_id else "Efectivo"
+            ),
+            "operation_reference": movement.operation_reference,
             "description": movement.description,
             "created_at": movement.created_at,
             "drawer_cash_after": str(movement.drawer_cash_after),
@@ -614,7 +623,7 @@ class CashSessionSummaryAPIView(PosAPIView):
         )
         summary = selectors.get_cash_session_summary(cash_session)
         movement_details = cash_session.cash_movements.select_related(
-            "created_by"
+            "created_by", "means_of_payment"
         ).order_by("-created_at")
         session_sales = cash_session.transactions.select_related(
             "sales_document__customer", "sales_document__document_type"
@@ -628,6 +637,8 @@ class CashSessionSummaryAPIView(PosAPIView):
             "non_cash_sales": str(summary["non_cash_sales"]),
             "cash_in": str(summary["cash_in"]),
             "cash_out": str(summary["cash_out"]),
+            "drawer_cash_in": str(summary["drawer_cash_in"]),
+            "drawer_cash_out": str(summary["drawer_cash_out"]),
             "expected_cash_total": str(summary["expected_cash_total"]),
             "payments": [
                 {
@@ -663,6 +674,13 @@ class CashSessionSummaryAPIView(PosAPIView):
                     "movement_type": item.movement_type,
                     "movement_type_label": item.get_movement_type_display(),
                     "amount": str(item.amount),
+                    "means_of_payment_id": (
+                        str(item.means_of_payment_id) if item.means_of_payment_id else None
+                    ),
+                    "means_of_payment_name": (
+                        item.means_of_payment.name if item.means_of_payment_id else "Efectivo"
+                    ),
+                    "operation_reference": item.operation_reference,
                     "reason_code": item.reason_code,
                     "description": item.description,
                     "created_at": item.created_at,

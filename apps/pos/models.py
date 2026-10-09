@@ -268,6 +268,11 @@ class CashMovement(TimeStampedModel):
     )
     movement_type = models.CharField(max_length=20, choices=MovementType.choices)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    means_of_payment = models.ForeignKey(
+        "sales.MeansOfPayment", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="cash_movements",
+    )
+    operation_reference = models.CharField(max_length=120, blank=True)
     reason_code = models.CharField(max_length=40, blank=True)
     description = models.CharField(max_length=500)
     created_by = models.ForeignKey(
@@ -297,6 +302,12 @@ class CashMovement(TimeStampedModel):
             and not self.authorized_by_id
         ):
             errors["authorized_by"] = "Los retiros y depositos requieren autorizacion."
+        if (
+            self.cash_session_id
+            and self.means_of_payment_id
+            and self.means_of_payment.company_id != self.cash_session.company_id
+        ):
+            errors["means_of_payment"] = "El medio de pago debe pertenecer a la empresa de la caja."
         if errors:
             raise ValidationError(errors)
 

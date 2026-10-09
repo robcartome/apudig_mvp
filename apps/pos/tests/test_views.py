@@ -86,6 +86,10 @@ class PosWorkspaceViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "pos/sale.html")
         self.assertContains(response, "Nueva venta")
+        self.assertContains(response, 'id="quick-new-sale"')
+        self.assertContains(response, "Alt+N")
+        self.assertContains(response, 'id="open-close-session"')
+        self.assertContains(response, 'id="quick-close-session"')
         self.assertContains(response, "/api/v1/pos/sales/checkout/")
         self.assertContains(response, 'id="checkout-review-dialog"')
         self.assertContains(response, "Esta es una precuenta")
@@ -130,7 +134,8 @@ class PosWorkspaceViewTest(TestCase):
         self.assertTrue(response["Content-Type"].startswith("text/javascript"))
         self.assertEqual(response["Service-Worker-Allowed"], "/pos/")
         self.assertIn("no-cache", response["Cache-Control"])
-        self.assertContains(response, "apudig-pos-static-v13")
+        self.assertContains(response, "apudig-pos-static-v16")
+        self.assertContains(response, "/static/js/pos.js?v=20261009-3")
         self.assertContains(response, "ApuDig POS necesita")
         self.assertNotContains(response, "'/api/")
 
@@ -159,6 +164,26 @@ class PosWorkspaceViewTest(TestCase):
         self.assertIn('Ref. interna POS:', script)
         self.assertIn('BORRADOR · NO ES COMPROBANTE DE PAGO.', script)
         self.assertNotIn('<small>Ticket ', script)
+
+    def test_pos_javascript_keeps_draft_when_starting_new_sale_and_toggles_cash_action(self):
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn("function startNewSale()", script)
+        self.assertIn("El borrador guardado no se modificará", script)
+        self.assertIn("function handleCashSessionAction()", script)
+        self.assertIn("state.session ? 'Cerrar caja' : 'Abrir caja'", script)
+        self.assertIn("hasPermission('open.pos.cash')", script)
+
+    def test_pos_success_alerts_auto_hide_but_errors_remain_visible(self):
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn("if (kind === 'success')", script)
+        self.assertIn("window.setTimeout(hideAlert, 5000)", script)
+        self.assertNotIn("if (kind === 'error')", script)
 
     def test_barcode_scanner_releases_camera_and_uses_local_zxing(self):
         scanner_path = finders.find("js/pos-barcode-scanner.js")

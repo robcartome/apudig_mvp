@@ -211,7 +211,7 @@ def open_cash_session(
 @transaction.atomic
 def register_cash_movement(
     *, cash_session_id, movement_type, amount, description, created_by,
-    reason_code="", authorized_by=None,
+    reason_code="", authorized_by=None, means_of_payment_id=None, operation_reference="",
 ) -> CashMovement:
     session = CashSession.objects.select_for_update().get(pk=cash_session_id)
     if session.status != CashSession.Status.OPEN:
@@ -223,6 +223,13 @@ def register_cash_movement(
         raise PosDomainError("INVALID_CASH_MOVEMENT", "El tipo de movimiento no es valido.")
     if not (description or "").strip():
         raise PosDomainError("CASH_MOVEMENT_REASON_REQUIRED", "Debe indicar el motivo del movimiento.")
+    means_of_payment = None
+    if means_of_payment_id:
+        means_of_payment = MeansOfPayment.objects.filter(
+            pk=means_of_payment_id, company_id=session.company_id, active=True,
+        ).first()
+        if means_of_payment is None:
+            raise PosDomainError("INVALID_MEANS_OF_PAYMENT", "El medio de pago no es valido.")
     if (
         movement_type in (CashMovement.MovementType.WITHDRAWAL, CashMovement.MovementType.DEPOSIT)
         and authorized_by is None
@@ -236,6 +243,8 @@ def register_cash_movement(
         cash_session=session,
         movement_type=movement_type,
         amount=amount,
+        means_of_payment=means_of_payment,
+        operation_reference=(operation_reference or "").strip(),
         reason_code=(reason_code or "").strip(),
         description=description.strip(),
         created_by=created_by,
@@ -247,6 +256,8 @@ def register_cash_movement(
     _audit(
         movement, "REGISTER", created_by,
         cash_session_id=str(session.pk), movement_type=movement_type, amount=str(amount),
+        means_of_payment_id=(str(means_of_payment.pk) if means_of_payment else None),
+        operation_reference=movement.operation_reference,
         reason_code=movement.reason_code, description=movement.description,
         authorized_by_id=(str(authorized_by.pk) if authorized_by else None),
         drawer_cash_after=str(movement.drawer_cash_after),
@@ -1744,6 +1755,21 @@ def close_cash_session(
         means_id = str(row["means_of_payment"])
         expected_by_tender[means_id] = (
             expected_by_tender.get(means_id, Decimal("0.00")) - row["total"]
+        )
+    movement_tender_rows = list(
+        session.cash_movements.exclude(means_of_payment__isnull=True)
+        .values("means_of_payment", "movement_type")
+        .annotate(total=Sum("amount"))
+    )
+    for row in movement_tender_rows:
+        means_id = str(row["means_of_payment"])
+        direction = (
+            Decimal("1.00")
+            if row["movement_type"] == CashMovement.MovementType.PAY_IN
+            else Decimal("-1.00")
+        )
+        expected_by_tender[means_id] = (
+            expected_by_tender.get(means_id, Decimal("0.00")) + row["total"] * direction
         )
     required_tender_ids = {
         means_id
