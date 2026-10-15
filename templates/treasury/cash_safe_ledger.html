@@ -1,0 +1,115 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Caja fuerte de tienda | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/pos_admin.css' %}?v=20261015-1" rel="stylesheet"><link href="{% static 'css/components/cash-count.css' %}?v=20261015-1" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="pos-admin-page pos-safe-page">
+<div class="page-header pos-page-heading d-print-none"><div class="row align-items-center"><div class="col"><div class="page-pretitle">Tesorería · {{ active_store.name }}</div><h2 class="page-title">Caja fuerte de tienda</h2><div class="text-muted">Control de ingresos, salidas y efectivo bajo custodia.</div></div><div class="col-auto pos-page-actions"><a class="btn btn-success" href="{% url 'treasury:cash_safe_income_create' %}"><i class="ti ti-arrow-down me-1"></i>Registrar ingreso</a><button class="btn btn-danger" type="button" data-bs-toggle="collapse" data-bs-target="#safe-movement-form"><i class="ti ti-arrow-up me-1"></i>Registrar salida</button><a class="btn btn-outline-warning" href="{% url 'treasury:cash_safe_deposit_list' %}"><i class="ti ti-truck-delivery me-1"></i>En tránsito</a><a class="btn btn-outline-primary" href="{% url 'treasury:cash_safe_count_list' %}"><i class="ti ti-calculator me-1"></i>Arqueos</a><a class="btn btn-outline-secondary" href="{% url 'pos:cash_session_list' %}"><i class="ti ti-report-money me-1"></i>Cierres</a><a class="btn btn-success" href="{% url 'treasury:cash_safe_export_xlsx' %}?{{ request.GET.urlencode }}"><i class="ti ti-file-spreadsheet me-1"></i>Reporte Excel</a><a class="btn btn-outline-secondary" href="{% url 'treasury:cash_safe_export' %}?{{ request.GET.urlencode }}"><i class="ti ti-download me-1"></i>CSV</a></div></div></div>
+
+{% if pending_approval_count or in_transit_count or pending_count_count or count_overdue %}<div class="row g-2 mb-3 d-print-none">
+  {% if pending_approval_count %}<div class="col-md-6 col-xl-3"><a class="alert alert-warning d-block h-100 mb-0 text-decoration-none" href="?direction=OUT"><strong>{{ pending_approval_count }} pendiente{{ pending_approval_count|pluralize }}</strong><div class="small">Movimientos esperando aprobación.</div></a></div>{% endif %}
+  {% if in_transit_count %}<div class="col-md-6 col-xl-3"><a class="alert alert-warning d-block h-100 mb-0 text-decoration-none" href="{% url 'treasury:cash_safe_deposit_list' %}?status=IN_TRANSIT"><strong>{{ in_transit_count }} depósito{{ in_transit_count|pluralize }} en tránsito</strong><div class="small">Falta confirmar el ingreso al banco.</div></a></div>{% endif %}
+  {% if pending_count_count %}<div class="col-md-6 col-xl-3"><a class="alert alert-info d-block h-100 mb-0 text-decoration-none" href="{% url 'treasury:cash_safe_count_list' %}?status=PENDING"><strong>{{ pending_count_count }} arqueo{{ pending_count_count|pluralize }} por revisar</strong><div class="small">Requiere cierre o rechazo.</div></a></div>{% endif %}
+  {% if count_overdue %}<div class="col-md-6 col-xl-3"><a class="alert alert-danger d-block h-100 mb-0 text-decoration-none" href="{% url 'treasury:cash_safe_count_list' %}"><strong>{{ overdue_count_count }} arqueo{{ overdue_count_count|pluralize }} mensual{{ overdue_count_count|pluralize:" pendiente,es pendientes" }}</strong><div class="small">{% if last_closed_count %}Último cierre: {{ last_closed_count.counted_at|date:"d/m/Y" }}{% else %}No existe un arqueo cerrado.{% endif %}</div></a></div>{% endif %}
+</div>{% endif %}
+
+<section class="pos-safe-balance-grid">{% for item in balances %}<article class="card pos-safe-balance-card"><div class="card-body"><div class="d-flex justify-content-between"><div><div class="text-muted text-uppercase small fw-bold">Saldo bajo custodia</div><div class="text-muted small">{{ item.currency }}</div></div><span class="pos-safe-icon"><i class="ti ti-vault"></i></span></div><div class="pos-safe-balance">{{ item.currency|currency_symbol }} {{ item.balance|floatformat:2 }}</div><div class="pos-safe-balance-detail"><span><small>Ingresos acumulados</small><strong class="text-success">+ {{ item.currency|currency_symbol }} {{ item.incoming|floatformat:2 }}</strong></span><span><small>Salidas acumuladas</small><strong class="text-danger">− {{ item.currency|currency_symbol }} {{ item.outgoing|floatformat:2 }}</strong></span></div></div></article>{% endfor %}<article class="card pos-safe-status-card"><div class="card-body"><div class="text-muted text-uppercase small fw-bold">Actividad de hoy</div><div class="d-flex gap-4 mt-3"><div><div class="text-muted small">Ingresos</div><strong class="text-success">+ {{ today_incoming|floatformat:2 }}</strong></div><div><div class="text-muted small">Salidas</div><strong class="text-danger">− {{ today_outgoing|floatformat:2 }}</strong></div></div><div class="small text-muted mt-3">{% if last_movement %}Último movimiento: {{ last_movement.created_at|date:"d/m/Y H:i" }}{% else %}Todavía no hay movimientos.{% endif %}</div></div></article></section>
+
+<div class="alert alert-info py-2 d-print-none"><i class="ti ti-info-circle me-1"></i>El reporte Excel conserva el rango de fechas y todos los filtros aplicados al libro de movimientos.</div>
+
+<form method="get" class="card card-body d-print-none mb-2"><div class="row align-items-end g-2"><div class="col-md-5"><label class="form-label">Fondo físico</label><select class="form-select" name="fund"><option value="">Todos los fondos</option>{% for fund in funds %}<option value="{{ fund.pk }}"{% if selected_fund == fund.pk|stringformat:'s' %} selected{% endif %}>{{ fund.name }} · {{ fund.get_fund_type_display }}</option>{% endfor %}</select></div><div class="col-auto"><button class="btn btn-outline-primary" type="submit"><i class="ti ti-box me-1"></i>Aplicar fondo</button></div><div class="col-auto"><a class="btn btn-outline-secondary" href="{% url 'treasury:treasury_fund_list' %}">Configurar fondos</a></div></div></form>
+
+<form class="card card-body d-print-none" method="get"><div class="row g-2 align-items-end"><div class="col-sm-6 col-lg-2"><label class="form-label">Desde</label><input class="form-control" type="date" name="date_from" value="{{ date_from }}"></div><div class="col-sm-6 col-lg-2"><label class="form-label">Hasta</label><input class="form-control" type="date" name="date_to" value="{{ date_to }}"></div><div class="col-sm-6 col-lg-2"><label class="form-label">Moneda</label><select class="form-select" name="currency"><option value="">Todas</option><option value="PEN"{% if selected_currency == 'PEN' %} selected{% endif %}>Soles</option><option value="USD"{% if selected_currency == 'USD' %} selected{% endif %}>Dólares</option></select></div><div class="col-sm-6 col-lg-2"><label class="form-label">Movimiento</label><select class="form-select" name="direction"><option value="">Todos</option>{% for value,label in direction_choices %}<option value="{{ value }}"{% if selected_direction == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col-sm-6 col-lg-2"><label class="form-label">Tipo</label><select class="form-select" name="movement_type"><option value="">Todos</option>{% for value,label in all_movement_types %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col-sm-6 col-lg-2"><label class="form-label">Buscar</label><input class="form-control" name="q" value="{{ search }}" placeholder="Persona o referencia"></div><div class="col-12 pos-filter-actions mt-3"><a class="btn btn-outline-secondary" href="{% url 'treasury:cash_safe_ledger' %}">Limpiar</a><button class="btn btn-outline-primary" type="submit"><i class="ti ti-filter me-1"></i>Filtrar</button></div></div></form>
+
+<div class="row row-cards">
+  <div class="col-12 collapse {% if form_data %}show{% endif %}" id="safe-movement-form"><form method="post" class="card pos-safe-form">{% csrf_token %}<div class="card-header"><div><h3 class="card-title mb-0">Registrar salida</h3><div class="text-muted small">Documenta quién recibe el efectivo y cuál será su destino.</div></div></div><div class="card-body">{% if withdrawal_form.errors %}<div class="alert alert-danger" role="alert">Revise los datos ingresados.{% for field in withdrawal_form %}{% for error in field.errors %}<div>{{ field.label }}: {{ error }}</div>{% endfor %}{% endfor %}</div>{% endif %}<div class="row g-3">
+    <div class="col-md-4"><label class="form-label required">Motivo</label><select class="form-select" name="movement_type" required>{% for value,label in movement_types %}<option value="{{ value }}"{% if form_data.movement_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">Moneda</label><select class="form-select" name="currency"><option value="PEN">S/.</option><option value="USD"{% if form_data.currency == 'USD' %} selected{% endif %}>$</option></select></div><div class="col-md-3"><label class="form-label required">Importe</label><input class="form-control text-end" name="amount" value="{{ form_data.amount }}" type="number" min="0.01" step="0.01" required></div><div class="col-md-3"><label class="form-label required">Entregado a / retirado por</label><input class="form-control" name="recipient_name" value="{{ form_data.recipient_name }}" maxlength="200" required></div><div class="col-md-4" id="bank-account-field"><label class="form-label">Cuenta bancaria destino</label><select class="form-select" name="bank_account"><option value="">No aplica</option>{% for account in withdrawal_form.fields.bank_account.queryset %}<option value="{{ account.pk }}"{% if form_data.bank_account == account.pk|stringformat:'s' %} selected{% endif %}>{{ account }}</option>{% endfor %}</select><div class="form-hint">Obligatoria para depósitos bancarios.</div></div><div class="col-md-4"><label class="form-label">Destino adicional</label><input class="form-control" name="destination" value="{{ form_data.destination }}" maxlength="200"></div><div class="col-md-3"><label class="form-label">N.º operación o referencia</label><input class="form-control" name="reference" value="{{ form_data.reference }}" maxlength="120"></div><div class="col-md-5"><label class="form-label">Observación</label><input class="form-control" name="notes" value="{{ form_data.notes }}" maxlength="500"></div>
+    <div class="col-md-4"><label class="form-label required">{{ withdrawal_form.fund.label }}</label>{{ withdrawal_form.fund }}<div class="form-hint">El saldo se valida únicamente en este fondo.</div></div>
+    <div class="col-md-4" id="fund-destination-field"><label class="form-label">{{ withdrawal_form.destination_fund.label }}</label>{{ withdrawal_form.destination_fund }}<div class="form-hint">Obligatorio solo para transferencias entre fondos.</div></div>
+    <div class="col-md-4" id="register-destination-field"><label class="form-label">{{ withdrawal_form.destination_register.label }}</label>{{ withdrawal_form.destination_register }}<div class="form-hint">Obligatoria solo para transferencias a gaveta.</div></div>
+    <div class="col-md-4"><div class="cash-count-comparison h-100" id="withdrawal-balance-preview"><div class="small text-muted">Saldo después de confirmar</div><div class="d-flex justify-content-between mt-2"><span>Saldo actual</span><strong data-current>—</strong></div><div class="d-flex justify-content-between"><span>Salida</span><strong class="text-danger" data-outgoing>—</strong></div><hr class="my-2"><div class="d-flex justify-content-between"><span>Saldo resultante</span><strong data-result>—</strong></div></div></div>
+    <div class="col-12 payment-document-field"><hr class="my-1"><div class="small fw-bold text-uppercase text-muted">Relación documental opcional</div></div>
+    <div class="col-md-4 payment-document-field"><label class="form-label">Proveedor</label>{{ withdrawal_form.supplier }}</div>
+    <div class="col-md-4 payment-document-field"><label class="form-label">Documento de compra</label>{{ withdrawal_form.purchase_document }}</div>
+    <div class="col-md-4 payment-document-field"><label class="form-label">Categoría del gasto</label>{{ withdrawal_form.expense_category }}</div>
+    <div class="col-md-4 payment-document-field"><label class="form-label">N.º de comprobante</label>{{ withdrawal_form.supporting_document_number }}</div>
+    <div class="col-12 payment-document-field"><div class="form-hint">Después de registrar podrá adjuntar factura, recibo o voucher desde el detalle del movimiento.</div></div>
+  </div></div><div class="card-footer d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#safe-movement-form">Cancelar</button><button class="btn btn-danger" type="submit">Enviar salida a aprobación</button></div></form></div>
+  {{ fund_balance_data|json_script:"fund-balance-data" }}
+  <div class="col-12"><div class="card pos-data-card">
+    <div class="card-header"><div><h3 class="card-title mb-0">Libro de movimientos</h3><div class="text-muted small">Resultado confirmado: + {{ filtered_incoming|floatformat:2 }} ingresos · − {{ filtered_outgoing|floatformat:2 }} salidas</div></div><span class="badge bg-blue-lt ms-auto">{{ page_obj.paginator.count }} movimientos</span></div>
+    <div class="table-responsive"><table class="table table-vcenter card-table pos-data-table pos-safe-table"><thead><tr><th>Fecha</th><th>Documento / tipo</th><th>Responsable y destino</th><th>Estado / control</th><th class="text-end">Entrada</th><th class="text-end">Salida</th><th class="text-end">Saldo</th></tr></thead><tbody>
+    {% for item in movements %}<tr>
+      <td data-label="Fecha">{{ item.created_at|date:"d/m/Y H:i" }}</td>
+      <td data-label="Documento / tipo"><a class="fw-semibold" href="{% url 'treasury:cash_safe_movement_detail' item.pk %}">{{ item.movement_number|default:"Pendiente de numeración" }}</a><div class="small">{{ item.get_movement_type_display }}</div><div class="small text-muted"><i class="ti ti-box me-1"></i>{{ item.fund.name }}</div>{% if item.cash_session_id %}<div class="small"><a href="{% url 'pos:cash_session_detail' item.cash_session_id %}">Cierre N.º {{ item.cash_session.session_number }}</a></div>{% endif %}</td>
+      <td data-label="Responsable / destino">{{ item.recipient_name|default:item.destination|default:"Caja fuerte de tienda" }}{% if item.destination and item.recipient_name %}<div class="small text-muted">{{ item.destination }}</div>{% endif %}{% if item.notes %}<div class="small text-muted">{{ item.notes }}</div>{% endif %}<div class="small text-muted">Ref. {{ item.reference|default:"—" }} · {{ item.created_by.display_name|default:"Sistema" }}</div></td>
+      <td data-label="Estado / control"><span class="badge {% if item.status == 'POSTED' %}bg-green-lt{% elif item.status == 'PENDING' %}bg-yellow-lt{% elif item.status == 'REJECTED' %}bg-secondary-lt{% else %}bg-red-lt{% endif %}">{{ item.get_status_display }}</span>{% if item.authorized_by %}<div class="small text-muted mt-1">Confirmado por {{ item.authorized_by.display_name }}{% if item.authorized_at %} · {{ item.authorized_at|date:"d/m/Y H:i" }}{% endif %}</div>{% endif %}{% if can_authorize_safe and item.status == 'PENDING' and item.created_by_id != user.id or can_authorize_safe and item.status == 'PENDING' and can_self_authorize_safe %}<div class="d-flex flex-wrap gap-1 mt-2"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve"><input type="hidden" name="movement_id" value="{{ item.pk }}"><button class="btn btn-sm btn-success" type="submit">Verificar y confirmar</button></form><details><summary class="btn btn-sm btn-outline-danger">Rechazar</summary><form method="post" class="mt-1">{% csrf_token %}<input type="hidden" name="action" value="reject"><input type="hidden" name="movement_id" value="{{ item.pk }}"><input class="form-control form-control-sm mb-1" name="reason" placeholder="Motivo" required><button class="btn btn-sm btn-danger" type="submit">Confirmar rechazo</button></form></details></div>{% elif can_authorize_safe and item.status == 'POSTED' %}<details class="mt-2"><summary class="btn btn-sm btn-outline-danger">Revertir</summary><form method="post" class="mt-1">{% csrf_token %}<input type="hidden" name="action" value="reverse"><input type="hidden" name="movement_id" value="{{ item.pk }}"><input class="form-control form-control-sm mb-1" name="reason" placeholder="Motivo obligatorio" required><button class="btn btn-sm btn-danger" type="submit">Confirmar reversión</button></form></details>{% endif %}</td>
+      <td data-label="Entrada" class="text-end text-success fw-semibold">{% if item.direction == 'IN' %}+ {{ item.currency|currency_symbol }} {{ item.amount|floatformat:2 }}{% else %}—{% endif %}</td>
+      <td data-label="Salida" class="text-end text-danger fw-semibold">{% if item.direction == 'OUT' %}− {{ item.currency|currency_symbol }} {{ item.amount|floatformat:2 }}{% else %}—{% endif %}</td>
+      <td data-label="Saldo" class="text-end fw-bold">{% if item.running_balance is not None %}{{ item.currency|currency_symbol }} {{ item.running_balance|floatformat:2 }}{% else %}<span class="text-muted">Pendiente</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-5">No existen movimientos para los filtros seleccionados.</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if page_obj.has_other_pages %}<div class="card-footer d-flex align-items-center"><span class="text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><ul class="pagination m-0 ms-auto">{% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>{% endif %}{% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a></li>{% endif %}</ul></div>{% endif %}
+  </div></div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const selectedFund = '{{ selected_fund|escapejs }}';
+  if (selectedFund) {
+    document.querySelectorAll('form[method="get"]').forEach(function (form) {
+      if (form.querySelector('[name="fund"]')) return;
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = 'fund'; input.value = selectedFund;
+      form.appendChild(input);
+    });
+  }
+  const type = document.querySelector('#safe-movement-form [name="movement_type"]');
+  const field = document.getElementById('fund-destination-field');
+  const destination = document.getElementById('{{ withdrawal_form.destination_fund.id_for_label }}');
+  const registerField = document.getElementById('register-destination-field');
+  const destinationRegister = document.getElementById('{{ withdrawal_form.destination_register.id_for_label }}');
+  const bankField = document.getElementById('bank-account-field');
+  const bankAccount = document.querySelector('#safe-movement-form [name="bank_account"]');
+  const paymentFields = document.querySelectorAll('.payment-document-field');
+  const fund = document.getElementById('{{ withdrawal_form.fund.id_for_label }}');
+  const currency = document.querySelector('#safe-movement-form [name="currency"]');
+  const amount = document.querySelector('#safe-movement-form [name="amount"]');
+  const balanceData = JSON.parse(document.getElementById('fund-balance-data').textContent || '{}');
+  const preview = document.getElementById('withdrawal-balance-preview');
+  if (!type || !field || !destination || !registerField || !destinationRegister || !bankField || !bankAccount) return;
+  function updateMovementFields() {
+    const isTransfer = type.value === 'FUND_TRANSFER';
+    const isBankDeposit = type.value === 'BANK_DEPOSIT';
+    const isDrawerTransfer = type.value === 'DRAWER_TRANSFER';
+    const isPayment = type.value === 'CASH_PAYMENT';
+    field.classList.toggle('d-none', !isTransfer);
+    destination.required = isTransfer;
+    if (!isTransfer) destination.value = '';
+    registerField.classList.toggle('d-none', !isDrawerTransfer);
+    destinationRegister.required = isDrawerTransfer;
+    if (!isDrawerTransfer) destinationRegister.value = '';
+    bankField.classList.toggle('d-none', !isBankDeposit);
+    bankAccount.required = isBankDeposit;
+    if (!isBankDeposit) bankAccount.value = '';
+    paymentFields.forEach(function (item) { item.classList.toggle('d-none', !isPayment); });
+    updateBalancePreview();
+  }
+  function updateBalancePreview() {
+    const symbol = currency.value === 'USD' ? '$' : 'S/';
+    const current = Number(balanceData[fund.value + ':' + currency.value] || 0);
+    const outgoing = Number(amount.value || 0);
+    const result = current - outgoing;
+    preview.querySelector('[data-current]').textContent = symbol + ' ' + current.toFixed(2);
+    preview.querySelector('[data-outgoing]').textContent = '− ' + symbol + ' ' + outgoing.toFixed(2);
+    const resultNode = preview.querySelector('[data-result]');
+    resultNode.textContent = symbol + ' ' + result.toFixed(2);
+    resultNode.className = result < 0 ? 'text-danger' : 'text-success';
+  }
+  type.addEventListener('change', updateMovementFields);
+  fund.addEventListener('change', updateBalancePreview);
+  currency.addEventListener('change', updateBalancePreview);
+  amount.addEventListener('input', updateBalancePreview);
+  updateMovementFields();
+});
+</script>
+</div>
+{% endblock %}

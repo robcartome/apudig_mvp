@@ -863,6 +863,7 @@ def configuracion(request):
     from apps.inventory.models import Brand, Category, Unit, Warehouse, WarehouseLocation
     from apps.purchases.models import PurchaseCategory
     from apps.sales.models import PaymentMethod, MeansOfPayment
+    from apps.treasury.models import BankAccount
 
     company = _get_active_company(request)
     item = request.GET.get("item", None)
@@ -928,7 +929,12 @@ def configuracion(request):
             item_delete_url = "sales:payment_method_delete"
         elif item == "medios_pago":
             item_label = "Medios de Pago"
-            qs = MeansOfPayment.objects.filter(company=company).order_by("name") if company else MeansOfPayment.objects.none()
+            qs = (
+                MeansOfPayment.objects.filter(company=company).select_related(
+                    "bank_account__bank"
+                ).order_by("name")
+                if company else MeansOfPayment.objects.none()
+            )
             item_objects = list(qs)
             item_add_url = reverse("sales:means_of_payment_create")
             item_edit_url = "sales:means_of_payment_update"
@@ -940,6 +946,15 @@ def configuracion(request):
             item_add_url = reverse("purchases:expense_category_create")
             item_edit_url = "purchases:expense_category_update"
             item_delete_url = "purchases:expense_category_delete"
+        elif item == "cuentas_bancarias":
+            item_label = "Cuentas bancarias"
+            qs = (
+                BankAccount.objects.filter(company=company).select_related("bank")
+                if company else BankAccount.objects.none()
+            )
+            item_objects = list(qs.order_by("bank__name", "name"))
+            item_add_url = reverse("treasury:bank_account_create")
+            item_edit_url = "treasury:bank_account_update"
 
     return render(request, "admin_panel/configuracion.html", {
         "active_tab": "configuracion",

@@ -27,6 +27,8 @@ def active_company_context(request):
         "can_access_pos": False,
         "can_manage_pos": False,
         "can_view_cash_sessions": False,
+        "can_manage_cash_safe": False,
+        "can_access_treasury": False,
         "active_store_role": None,
     }
 
@@ -67,6 +69,15 @@ def active_company_context(request):
         company_id,
         "read.pos.cash_sessions",
         store_id,
+    )
+    ctx["can_manage_cash_safe"] = user_has_company_permission(
+        request.user,
+        company_id,
+        "manage.treasury.cash_safe",
+        store_id,
+    )
+    ctx["can_access_treasury"] = user_has_company_permission(
+        request.user, company_id, "read.treasury", store_id
     )
 
     all_accesses = list(get_user_selectable_accesses(request.user))

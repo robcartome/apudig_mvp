@@ -45,6 +45,9 @@ class PosRegisterSerializer(serializers.ModelSerializer):
 class CashSessionSerializer(serializers.ModelSerializer):
     register_code = serializers.CharField(source="register.code", read_only=True)
     opened_by_name = serializers.CharField(source="opened_by.display_name", read_only=True)
+    bank_deposit_account_name = serializers.CharField(
+        source="bank_deposit_account", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = CashSession
@@ -53,6 +56,7 @@ class CashSessionSerializer(serializers.ModelSerializer):
             "opening_total", "opening_note", "closed_at", "expected_cash_total",
             "counted_cash_total", "cash_difference", "next_opening_total",
             "safe_deposit_total", "bank_deposit_total", "bank_deposit_destination",
+            "bank_deposit_account", "bank_deposit_account_name",
             "closing_note", "version",
         )
 
@@ -316,6 +320,7 @@ class CashSessionCloseRequestSerializer(serializers.Serializer):
     bank_deposit_destination = serializers.CharField(
         max_length=200, required=False, allow_blank=True
     )
+    bank_deposit_account_id = serializers.UUIDField(required=False, allow_null=True)
     note = serializers.CharField(max_length=500, required=False, allow_blank=True)
     tender_counts = TenderCountInputSerializer(many=True, required=False)
 

@@ -15,6 +15,7 @@
 
 {% block extra_css %}
   <link href="{% static 'css/pos.css' %}?v=20261008-2" rel="stylesheet">
+  <link href="{% static 'css/components/cash-count.css' %}?v=20261012-1" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -354,7 +355,7 @@
       <div class="pos-money-input"><span id="opening-currency-symbol">S/.</span><input id="opening-total" type="number" min="0" step="0.01" value="0.00" required></div>
       <details class="pos-cash-details">
         <summary>Contar por denominaciones</summary>
-        <div id="opening-denominations" class="pos-denomination-grid"></div>
+        <div id="opening-denominations" class="pos-denomination-grid cash-count-grid"></div>
       </details>
       <label for="opening-note">Nota <span>(opcional)</span></label>
       <textarea id="opening-note" rows="2" maxlength="500"></textarea>
@@ -437,7 +438,7 @@
       <div id="cash-difference-preview" class="pos-cash-difference"></div>
       <details class="pos-cash-details">
         <summary>Contar efectivo por denominaciones</summary>
-        <div id="closing-denominations" class="pos-denomination-grid"></div>
+        <div id="closing-denominations" class="pos-denomination-grid cash-count-grid"></div>
       </details>
       <div id="close-tender-counts" class="pos-tender-counts"></div>
       <label for="next-opening-total">Fondo para la siguiente apertura</label>
@@ -445,10 +446,13 @@
       <div class="pos-closing-allocation">
         <label for="safe-deposit-total"><span>Guardar en caja fuerte</span><small>Queda bajo custodia de la tienda</small></label>
         <div class="pos-money-input"><span>S/.</span><input id="safe-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
-        <label for="bank-deposit-total"><span>Enviar directamente al banco</span><small>Dinero separado para depósito</small></label>
+        <label for="bank-deposit-total"><span>Depositado directamente al banco</span><small>Genera el ingreso bancario conciliable al cerrar</small></label>
         <div class="pos-money-input"><span>S/.</span><input id="bank-deposit-total" type="number" min="0" step="0.01" value="0.00" required></div>
-        <label id="bank-deposit-destination-label" for="bank-deposit-destination" hidden><span>Banco / cuenta destino</span><small>Ej.: BCP cuenta corriente</small></label>
-        <input id="bank-deposit-destination" class="form-control" maxlength="200" placeholder="Banco y cuenta destino" hidden>
+        <label id="bank-deposit-account-label" for="bank-deposit-account" hidden><span>Cuenta bancaria destino</span><small>El ingreso bancario se registrará al cerrar la caja</small></label>
+        <select id="bank-deposit-account" class="form-select" hidden>
+          <option value="">Seleccione una cuenta</option>
+          {% for account in bank_accounts %}<option value="{{ account.pk }}" data-currency="{{ account.currency }}">{{ account.bank.name }} · {{ account.name }} · {{ account.masked_number }} · {{ account.currency }}</option>{% endfor %}
+        </select>
       </div>
       <div id="cash-allocation-preview" class="pos-cash-difference"></div>
       <label for="closing-note">Observación <span id="closing-note-hint">(opcional)</span></label>

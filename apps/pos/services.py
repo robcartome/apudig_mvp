@@ -25,7 +25,6 @@ from apps.sales.services import (
 from .models import (
     CashDenominationCount,
     CashMovement,
-    CashSafeMovement,
     CashSession,
     CashTenderDeclaration,
     PosRegister,
@@ -36,6 +35,7 @@ from .models import (
     SalesDocumentSource,
     SalesPayment,
 )
+from apps.treasury.models import CashSafeMovement
 from .selectors import calculate_cash_session_totals
 
 
@@ -706,6 +706,18 @@ def refund_pos_transaction(
     )
     refund_payment.full_clean()
     refund_payment.save()
+    _register_linked_bank_movement(
+        means=means,
+        amount=refund_payment.amount,
+        currency=cash_session.currency,
+        operation_date=timezone.localdate(),
+        reference=refund_payment.operation_reference or str(pos_return.pk)[:8].upper(),
+        description=f"Devolución POS · {source_document.series_code}-{source_document.number}",
+        source_type="POS_REFUND_PAYMENT",
+        source_id=refund_payment.pk,
+        created_by=created_by,
+        direction="OUT",
+    )
     _audit(
         pos_return,
         "REFUND",
@@ -781,6 +793,36 @@ def issue_pos_debit_note(
         return issue_sales_document(note.pk, issued_by=created_by), True
     except (ValueError, ValidationError) as exc:
         raise PosDomainError("INVALID_DEBIT_NOTE", str(exc)) from exc
+
+
+def _register_linked_bank_movement(
+    *, means, amount, currency, operation_date, reference, description,
+    source_type, source_id, created_by, direction="IN",
+):
+    if not means.bank_account_id:
+        return None
+    account = means.bank_account
+    if account.currency != currency:
+        raise PosDomainError(
+            "BANK_ACCOUNT_CURRENCY_MISMATCH",
+            f"La cuenta vinculada a {means.name} opera en {account.currency}, no en {currency}.",
+        )
+    from apps.treasury.services import TreasuryDomainError, register_linked_collection
+
+    try:
+        return register_linked_collection(
+            account=account,
+            amount=amount,
+            operation_date=operation_date,
+            reference=reference,
+            description=description,
+            source_type=source_type,
+            source_id=source_id,
+            user=created_by,
+            direction=direction,
+        )
+    except TreasuryDomainError as exc:
+        raise PosDomainError("BANK_MOVEMENT_ERROR", str(exc)) from exc
 
 
 @transaction.atomic
@@ -889,6 +931,17 @@ def register_sales_payment(
     )
     payment.full_clean()
     payment.save()
+    _register_linked_bank_movement(
+        means=means,
+        amount=payment.amount,
+        currency=payment.currency,
+        operation_date=timezone.localtime(payment.paid_at).date(),
+        reference=payment.operation_reference or f"{document.series_code}-{document.number}",
+        description=f"Cobro {means.name} · {document.series_code}-{document.number}",
+        source_type="POS_SALE_PAYMENT",
+        source_id=payment.pk,
+        created_by=created_by,
+    )
     if pos_transaction is not None and pos_transaction.status == PosTransaction.Status.COMPLETED:
         paid_total = (
             document.pos_payments.filter(status=SalesPayment.Status.REGISTERED)
@@ -1672,7 +1725,8 @@ def _expected_cash(session: CashSession) -> Decimal:
 def close_cash_session(
     *, cash_session_id, closed_by, counted_cash_total, denominations=None,
     next_opening_total=0, safe_deposit_total=None, bank_deposit_total=0,
-    bank_deposit_destination="", note="", tender_counts=None,
+    bank_deposit_destination="", bank_deposit_account_id=None,
+    note="", tender_counts=None,
     difference_authorized_by=None,
 ) -> CashSession:
     session = CashSession.objects.select_for_update().get(pk=cash_session_id)
@@ -1715,10 +1769,28 @@ def close_cash_session(
             "El efectivo contado debe distribuirse totalmente entre gaveta, caja fuerte y banco.",
         )
     bank_destination = (bank_deposit_destination or "").strip()
-    if bank_deposit > 0 and not bank_destination:
-        raise PosDomainError(
-            "BANK_DESTINATION_REQUIRED", "Indique el banco o destino del depósito."
-        )
+    bank_account = None
+    if bank_deposit > 0:
+        if not bank_deposit_account_id:
+            raise PosDomainError(
+                "BANK_ACCOUNT_REQUIRED", "Seleccione la cuenta bancaria destino."
+            )
+        from apps.treasury.models import BankAccount
+
+        try:
+            bank_account = BankAccount.objects.select_for_update().get(
+                pk=bank_deposit_account_id, company_id=session.company_id, active=True
+            )
+        except BankAccount.DoesNotExist as exc:
+            raise PosDomainError(
+                "BANK_ACCOUNT_INVALID", "La cuenta bancaria no está disponible."
+            ) from exc
+        if bank_account.currency != session.currency:
+            raise PosDomainError(
+                "BANK_ACCOUNT_CURRENCY_MISMATCH",
+                "La cuenta bancaria debe utilizar la moneda de la sesión.",
+            )
+        bank_destination = str(bank_account)
     if denominations is not None:
         denomination_total = _create_denomination_counts(
             session, CashDenominationCount.Phase.CLOSING, denominations
@@ -1837,19 +1909,26 @@ def close_cash_session(
     session.safe_deposit_total = safe_deposit
     session.bank_deposit_total = bank_deposit
     session.bank_deposit_destination = bank_destination
+    session.bank_deposit_account = bank_account
     session.closing_note = clean_note
     session.version += 1
     session.full_clean()
     session.save()
     if safe_deposit > 0:
-        CashSafeMovement.objects.create(
-            company=session.company, store=session.store, cash_session=session,
-            direction=CashSafeMovement.Direction.IN,
-            movement_type=CashSafeMovement.MovementType.CLOSING_DEPOSIT,
-            amount=safe_deposit, currency=session.currency,
-            destination="Caja fuerte de tienda",
-            notes=f"Cierre de caja N.º {session.session_number}",
-            created_by=closed_by, authorized_by=closed_by,
+        from apps.treasury.services import register_closing_deposit
+        register_closing_deposit(cash_session=session, amount=safe_deposit, user=closed_by)
+    if bank_deposit > 0:
+        from apps.treasury.services import register_linked_collection
+
+        register_linked_collection(
+            account=bank_account,
+            amount=bank_deposit,
+            operation_date=timezone.localdate(session.closed_at),
+            reference=f"Cierre POS {session.register.code}-{session.session_number}",
+            description=f"Depósito directo del cierre de caja {session.register.code}-{session.session_number}",
+            source_type="POS_CASH_CLOSE_DEPOSIT",
+            source_id=session.pk,
+            user=closed_by,
         )
     _audit(
         session, "CLOSE", closed_by,
@@ -1864,6 +1943,7 @@ def close_cash_session(
         safe_deposit_total=str(safe_deposit),
         bank_deposit_total=str(bank_deposit),
         bank_deposit_destination=bank_destination,
+        bank_deposit_account_id=str(bank_account.pk) if bank_account else None,
         closing_note=clean_note,
         difference_authorized_by_id=(
             str(difference_authorized_by.pk) if difference_authorized_by else None

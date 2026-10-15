@@ -112,6 +112,10 @@ class CashSession(TimeStampedModel):
     safe_deposit_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     bank_deposit_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     bank_deposit_destination = models.CharField(max_length=200, blank=True)
+    bank_deposit_account = models.ForeignKey(
+        "treasury.BankAccount", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="direct_pos_cash_deposits",
+    )
     closing_note = models.CharField(max_length=500, blank=True)
     version = models.PositiveIntegerField(default=1)
 
@@ -147,6 +151,11 @@ class CashSession(TimeStampedModel):
             errors["currency"] = "La moneda de la sesion debe ser S/. o $."
         if self.status == self.Status.CLOSED and (not self.closed_at or not self.closed_by_id):
             errors["status"] = "Una sesion cerrada requiere fecha y responsable de cierre."
+        if self.bank_deposit_account_id:
+            if str(self.bank_deposit_account.company_id) != str(self.company_id):
+                errors["bank_deposit_account"] = "La cuenta bancaria debe pertenecer a la empresa."
+            elif self.bank_deposit_account.currency != self.currency:
+                errors["bank_deposit_account"] = "La cuenta bancaria debe usar la moneda de la sesión."
         if (
             self.status == self.Status.CLOSED
             and self.cash_difference not in (None, Decimal("0.00"))
@@ -166,57 +175,6 @@ class CashSession(TimeStampedModel):
 
     def __str__(self):
         return f"{self.register} / Sesion {self.session_number}"
-
-
-class CashSafeMovement(TimeStampedModel):
-    class Direction(models.TextChoices):
-        IN = "IN", "Ingreso"
-        OUT = "OUT", "Salida"
-
-    class MovementType(models.TextChoices):
-        CLOSING_DEPOSIT = "CLOSING_DEPOSIT", "Guardado desde cierre de caja"
-        BANK_DEPOSIT = "BANK_DEPOSIT", "Entrega para depósito bancario"
-        OWNER_HANDOVER = "OWNER_HANDOVER", "Entrega a dueño o administrador"
-        CASH_PAYMENT = "CASH_PAYMENT", "Pago en efectivo"
-        DRAWER_TRANSFER = "DRAWER_TRANSFER", "Transferencia a gaveta"
-        ADJUSTMENT = "ADJUSTMENT", "Ajuste autorizado"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    company = models.ForeignKey(
-        "companies.Company", on_delete=models.PROTECT, related_name="cash_safe_movements"
-    )
-    store = models.ForeignKey(
-        "companies.Store", on_delete=models.PROTECT, related_name="cash_safe_movements"
-    )
-    cash_session = models.ForeignKey(
-        CashSession, on_delete=models.PROTECT, null=True, blank=True,
-        related_name="safe_movements",
-    )
-    direction = models.CharField(max_length=3, choices=Direction.choices)
-    movement_type = models.CharField(max_length=30, choices=MovementType.choices)
-    amount = models.DecimalField(max_digits=14, decimal_places=2)
-    currency = models.CharField(max_length=3, choices=(("PEN", "Soles"), ("USD", "Dólares")), default="PEN")
-    recipient_name = models.CharField(max_length=200, blank=True)
-    destination = models.CharField(max_length=200, blank=True)
-    reference = models.CharField(max_length=120, blank=True)
-    notes = models.CharField(max_length=500, blank=True)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
-        related_name="created_cash_safe_movements",
-    )
-    authorized_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="authorized_cash_safe_movements",
-    )
-
-    class Meta:
-        db_table = "pos_cash_safe_movements"
-        ordering = ("-created_at",)
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(amount__gt=0), name="cash_safe_movement_amount_gt_zero"
-            ),
-        ]
 
 
 class CashDenominationCount(models.Model):

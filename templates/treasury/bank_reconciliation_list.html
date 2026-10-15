@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Conciliación bancaria | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/pos_admin.css' %}?v=20261010-2" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="pos-admin-page">
+  <div class="page-header pos-page-heading">
+    <div class="row align-items-center">
+      <div class="col"><div class="page-pretitle">Tesorería</div><h2 class="page-title">Conciliación bancaria</h2><div class="text-muted">Compara el extracto del banco con los movimientos registrados en el sistema.</div></div>
+      <div class="col-auto"><button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#import-statement"><i class="ti ti-file-upload me-1"></i>Importar extracto</button></div>
+    </div>
+  </div>
+
+  <div class="card mb-3"><div class="card-body py-2"><div class="nav nav-pills gap-2"><a class="nav-link" href="{% url 'treasury:dashboard' %}">Consolidado</a><a class="nav-link" href="{% url 'treasury:bank_income_list' %}">Ingresos</a><a class="nav-link" href="{% url 'treasury:bank_expense_list' %}">Egresos</a><a class="nav-link active" href="{% url 'treasury:bank_reconciliation_list' %}">Conciliación</a></div></div></div>
+
+  <form method="get" class="card mb-3"><div class="card-body"><div class="row g-3 align-items-end">
+    <div class="col-md-4"><label class="form-label">Cuenta bancaria</label><select name="account" class="form-select"><option value="">Todas</option>{% for account in accounts %}<option value="{{ account.pk }}" {% if selected_account == account.pk|stringformat:'s' %}selected{% endif %}>{{ account.bank.name }} · {{ account.name }} · {{ account.masked_number }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><label class="form-label">Desde</label><input type="date" name="date_from" value="{{ date_from }}" class="form-control"></div>
+    <div class="col-md-2"><label class="form-label">Hasta</label><input type="date" name="date_to" value="{{ date_to }}" class="form-control"></div>
+    <div class="col-md-2"><label class="form-label">Estado</label><select name="status" class="form-select"><option value="">Todos</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="col-md-2 d-flex gap-2"><button class="btn btn-primary flex-fill"><i class="ti ti-filter me-1"></i>Filtrar</button><a class="btn btn-outline-secondary" href="{% url 'treasury:bank_reconciliation_list' %}" title="Limpiar"><i class="ti ti-eraser"></i></a></div>
+  </div></div></form>
+
+  <div class="collapse {% if form.errors %}show{% endif %} mb-3" id="import-statement">
+    <form method="post" enctype="multipart/form-data" class="card">{% csrf_token %}
+      <div class="card-header"><h3 class="card-title">Nueva conciliación</h3></div>
+      <div class="card-body">
+        {% include "components/form_errors_alert.html" with form=form %}
+        <div class="row g-3">
+          {% for field in form %}<div class="{% if field.name == 'statement_file' %}col-12{% else %}col-md-4{% endif %}"><label class="form-label{% if field.field.required %} required{% endif %}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>{% endfor %}
+        </div>
+        <div class="alert alert-info mt-3 mb-0"><strong>Formato aceptado:</strong> CSV o XLSX con <code>fecha, descripcion, referencia, cargo, abono</code>; también se acepta una sola columna <code>monto</code> (positivo = ingreso, negativo = egreso).</div>
+      </div>
+      <div class="card-footer text-end"><button class="btn btn-primary" type="submit">Crear e importar</button></div>
+    </form>
+  </div>
+
+  <div class="card pos-data-card">
+    <div class="card-header"><h3 class="card-title">Periodos de conciliación</h3></div>
+    <div class="table-responsive"><table class="table table-vcenter card-table pos-data-table">
+      <thead><tr><th>Cuenta</th><th>Periodo</th><th>Archivo</th><th>Avance</th><th class="text-end">Saldo final banco</th><th>Estado</th><th></th></tr></thead>
+      <tbody>{% for item in statements %}<tr>
+        <td><strong>{{ item.account.bank.name }}</strong><div class="small text-muted">{{ item.account.name }} · {{ item.account.masked_number }}</div></td>
+        <td>{{ item.date_from|date:"d/m/Y" }} — {{ item.date_to|date:"d/m/Y" }}</td>
+        <td>{{ item.source_filename }}</td>
+        <td>{{ item.matched_count }} / {{ item.line_count }}</td>
+        <td class="text-end">{{ item.account.currency|currency_symbol }} {{ item.closing_balance|floatformat:2 }}</td>
+        <td>{% if item.status == 'RECONCILED' %}<span class="badge bg-success-lt text-success">Conciliado</span>{% else %}<span class="badge bg-yellow-lt text-yellow">En conciliación</span>{% endif %}</td>
+        <td><a class="btn btn-sm btn-outline-primary" href="{% url 'treasury:bank_reconciliation_detail' item.pk %}">Revisar</a></td>
+      </tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-5">No existen periodos de conciliación. Importe el primer extracto bancario.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.purchases.apps.PurchasesConfig",
     "apps.sales.apps.SalesConfig",
     "apps.pos.apps.PosConfig",
+    "apps.treasury.apps.TreasuryConfig",
     "apps.billing.apps.BillingConfig",
     "apps.web.apps.WebConfig",
 ]
@@ -151,6 +152,10 @@ PRODUCT_IMAGE_MAX_PIXELS = int(os.getenv("PRODUCT_IMAGE_MAX_PIXELS", "40000000")
 PRODUCT_IMAGE_WEBP_QUALITY = int(os.getenv("PRODUCT_IMAGE_WEBP_QUALITY", "82"))
 PRODUCT_IMAGE_THUMBNAIL_DIMENSION = int(os.getenv("PRODUCT_IMAGE_THUMBNAIL_DIMENSION", "480"))
 PRODUCT_IMAGE_THUMBNAIL_QUALITY = int(os.getenv("PRODUCT_IMAGE_THUMBNAIL_QUALITY", "78"))
+
+# Documentos privados de Tesorería. Se sirven únicamente mediante vistas autenticadas.
+MEDIA_ROOT = BASE_DIR / "media"
+TREASURY_ATTACHMENT_MAX_SIZE = int(os.getenv("TREASURY_ATTACHMENT_MAX_SIZE", str(5 * 1024 * 1024)))
 
 
 # ── Django REST Framework ────────────────────────────────────────────────────

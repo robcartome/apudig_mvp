@@ -17,15 +17,16 @@ from django.db import transaction
 from django.db.models import Count, Q, Sum
 
 from apps.users.permissions import user_has_company_permission
-from apps.companies.models import CompanyOperationalSettings
+from apps.companies.models import CompanyOperationalSettings, Store
 from apps.companies.views import select_company_context
 from apps.inventory.models import Product, Warehouse
 from apps.partners.models import Customer
 from apps.sales.models import DocumentSeries, MeansOfPayment
 from apps.pos.forms import PosRegisterForm
 from apps.pos.models import (
-    CashMovement, CashSafeMovement, CashSession, PosRegister, PosTransaction, SalesPayment,
+    CashMovement, CashSession, PosRegister, PosTransaction, SalesPayment,
 )
+from apps.treasury.models import BankAccount, CashSafeMovement
 from apps.core.models import AuditLog
 from apps.core.currency import currency_symbol
 from apps.pos.selectors import (
@@ -120,7 +121,12 @@ def sale_workspace(request):
         if operational_settings
         else CompanyOperationalSettings.PosProductSearchMode.SEARCH
     )
-    return render(request, "pos/sale.html", {"pos_product_search_mode": search_mode})
+    return render(request, "pos/sale.html", {
+        "pos_product_search_mode": search_mode,
+        "bank_accounts": BankAccount.objects.filter(
+            company_id=company_id, active=True
+        ).select_related("bank").order_by("bank__name", "name"),
+    })
 
 
 @login_required
@@ -271,11 +277,72 @@ def cash_session_list(request):
         "pagination_query": query.urlencode(),
         "can_audit_all": can_audit_all,
         "can_manage_safe": user_has_company_permission(
-            request.user, company_id, "manage.pos.cash_safe", store_id
+            request.user, company_id, "manage.treasury.cash_safe", store_id
         ),
         "daily_date": daily_date.isoformat(),
         "daily_totals": daily_totals,
     })
+
+
+@login_required
+def cash_session_export(request):
+    company_id, store_id, response, can_audit_all = _cash_session_access(request)
+    if response:
+        return response
+    sessions = get_cash_session_history(company_id=company_id, store_id=store_id)
+    if not can_audit_all:
+        sessions = sessions.filter(opened_by=request.user)
+    date_from = parse_date(request.GET.get("date_from", ""))
+    date_to = parse_date(request.GET.get("date_to", ""))
+    daily_date = parse_date(request.GET.get("daily_date", ""))
+    if daily_date:
+        date_from = daily_date
+        date_to = daily_date
+    if date_from and date_to and date_to < date_from:
+        return HttpResponse("El rango de fechas no es válido.", status=400)
+    if date_from:
+        sessions = sessions.filter(opened_at__date__gte=date_from)
+    if date_to:
+        sessions = sessions.filter(opened_at__date__lte=date_to)
+    status = request.GET.get("status", "")
+    if status in dict(CashSession.Status.choices):
+        sessions = sessions.filter(status=status)
+    try:
+        register_id = UUID(request.GET.get("register", ""))
+    except (TypeError, ValueError, AttributeError):
+        register_id = None
+    if register_id:
+        sessions = sessions.filter(register_id=register_id)
+    if can_audit_all:
+        try:
+            cashier_id = UUID(request.GET.get("cashier", ""))
+        except (TypeError, ValueError, AttributeError):
+            cashier_id = None
+        if cashier_id:
+            sessions = sessions.filter(opened_by_id=cashier_id)
+    rows = list(sessions)
+    for item in rows:
+        item.display_expected_cash_total = (
+            item.expected_cash_total
+            if item.expected_cash_total is not None
+            else get_cash_session_summary(item)["expected_cash_total"]
+        )
+    from .reports import build_cash_session_report
+
+    content = build_cash_session_report(
+        rows,
+        store_name=Store.objects.get(pk=store_id, company_id=company_id).name,
+        date_from=date_from, date_to=date_to,
+    )
+    filename = "reporte_cierres_caja"
+    if date_from or date_to:
+        filename += f"_{date_from or 'inicio'}_{date_to or 'actual'}"
+    export = HttpResponse(
+        content,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    export["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
+    return export
 
 
 @login_required
@@ -330,10 +397,14 @@ def cash_session_detail(request, pk):
 
 @login_required
 def cash_safe_ledger(request):
-    company_id, store_id, response = _pos_context(request, "manage.pos.cash_safe")
+    """Compatibility redirect; treasury owns cash custody workflows."""
+    return redirect("treasury:cash_safe_ledger")
+
+    # Legacy implementation retained temporarily for migration traceability.
+    company_id, store_id, response = _pos_context(request, "manage.treasury.cash_safe")
     if response:
         return response
-    movements = CashSafeMovement.objects.filter(
+    base_movements = CashSafeMovement.objects.filter(
         company_id=company_id, store_id=store_id
     ).select_related("cash_session", "created_by", "authorized_by")
 
@@ -354,7 +425,7 @@ def cash_safe_ledger(request):
             CashSafeMovement.MovementType.CASH_PAYMENT,
             CashSafeMovement.MovementType.DRAWER_TRANSFER,
         }
-        balance = movements.filter(currency=currency).aggregate(
+        balance = base_movements.filter(currency=currency).aggregate(
             incoming=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.IN)),
             outgoing=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.OUT)),
         )
@@ -393,15 +464,69 @@ def cash_safe_ledger(request):
 
     balances = []
     for currency in ("PEN", "USD"):
-        totals = movements.filter(currency=currency).aggregate(
+        totals = base_movements.filter(currency=currency).aggregate(
             incoming=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.IN)),
             outgoing=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.OUT)),
         )
         incoming = totals["incoming"] or Decimal("0.00")
         outgoing = totals["outgoing"] or Decimal("0.00")
         balances.append({"currency": currency, "incoming": incoming, "outgoing": outgoing, "balance": incoming - outgoing})
-    return render(request, "pos/cash_safe_ledger.html", {
-        "movements": movements[:200], "balances": balances,
+    movements = base_movements
+    date_from = parse_date(request.GET.get("date_from", ""))
+    date_to = parse_date(request.GET.get("date_to", ""))
+    selected_currency = request.GET.get("currency", "")
+    selected_direction = request.GET.get("direction", "")
+    selected_type = request.GET.get("movement_type", "")
+    search = request.GET.get("q", "").strip()
+    if date_from:
+        movements = movements.filter(created_at__date__gte=date_from)
+    if date_to:
+        movements = movements.filter(created_at__date__lte=date_to)
+    if selected_currency in {"PEN", "USD"}:
+        movements = movements.filter(currency=selected_currency)
+    else:
+        selected_currency = ""
+    if selected_direction in dict(CashSafeMovement.Direction.choices):
+        movements = movements.filter(direction=selected_direction)
+    else:
+        selected_direction = ""
+    if selected_type in dict(CashSafeMovement.MovementType.choices):
+        movements = movements.filter(movement_type=selected_type)
+    else:
+        selected_type = ""
+    if search:
+        movements = movements.filter(
+            Q(recipient_name__icontains=search)
+            | Q(destination__icontains=search)
+            | Q(reference__icontains=search)
+            | Q(notes__icontains=search)
+        )
+    filtered_totals = movements.aggregate(
+        incoming=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.IN)),
+        outgoing=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.OUT)),
+    )
+    page_obj = Paginator(movements, 50).get_page(request.GET.get("page"))
+    query = request.GET.copy()
+    query.pop("page", None)
+    today_totals = base_movements.filter(created_at__date=timezone.localdate()).aggregate(
+        incoming=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.IN)),
+        outgoing=Sum("amount", filter=Q(direction=CashSafeMovement.Direction.OUT)),
+    )
+    return render(request, "treasury/cash_safe_ledger.html", {
+        "page_obj": page_obj, "movements": page_obj.object_list, "balances": balances,
+        "last_movement": base_movements.first(),
+        "today_incoming": today_totals["incoming"] or Decimal("0.00"),
+        "today_outgoing": today_totals["outgoing"] or Decimal("0.00"),
+        "filtered_incoming": filtered_totals["incoming"] or Decimal("0.00"),
+        "filtered_outgoing": filtered_totals["outgoing"] or Decimal("0.00"),
+        "date_from": date_from.isoformat() if date_from else "",
+        "date_to": date_to.isoformat() if date_to else "",
+        "selected_currency": selected_currency, "selected_direction": selected_direction,
+        "selected_type": selected_type, "search": search,
+        "direction_choices": CashSafeMovement.Direction.choices,
+        "all_movement_types": CashSafeMovement.MovementType.choices,
+        "pagination_query": query.urlencode(),
+        "form_data": request.POST if request.method == "POST" else {},
         "movement_types": [
             choice for choice in CashSafeMovement.MovementType.choices
             if choice[0] != CashSafeMovement.MovementType.CLOSING_DEPOSIT

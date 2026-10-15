@@ -10,13 +10,15 @@
       <div class="text-muted">Consulta cajas activas y cierres anteriores. Cada cierre corresponde a un turno de caja.</div>
     </div>
     <div class="col-auto pos-page-actions">
-      {% if can_manage_safe %}<a class="btn btn-outline-primary" href="{% url 'pos:cash_safe_ledger' %}"><i class="ti ti-building-bank me-1"></i>Caja fuerte</a>{% endif %}
+      <a class="btn btn-success" href="{% url 'pos:cash_session_export' %}?{{ request.GET.urlencode }}"><i class="ti ti-file-spreadsheet me-1"></i>Descargar reporte</a>
+      {% if can_manage_safe %}<a class="btn btn-outline-primary" href="{% url 'treasury:cash_safe_ledger' %}"><i class="ti ti-building-bank me-1"></i>Caja fuerte</a>{% endif %}
       <a class="btn btn-outline-secondary" href="{% url 'pos:transaction_list' %}">Ventas por caja</a>
       <a class="btn btn-primary" href="{% url 'pos:sale' %}"><i class="ti ti-device-desktop me-1"></i>Abrir POS</a>
     </div>
   </div>
 </div>
 
+<div class="alert alert-info py-2 d-print-none"><i class="ti ti-info-circle me-1"></i>El rango se aplica a la fecha de apertura del turno. El reporte descargado conserva los filtros de caja, cajero y estado.</div>
 <form class="card card-body mb-3 d-print-none" method="get">
   <div class="row g-2 align-items-end">
     <div class="col-sm-6 col-lg-2"><label class="form-label">Desde</label><input class="form-control" type="date" name="date_from" value="{{ date_from }}"></div>
