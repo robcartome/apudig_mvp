@@ -2,7 +2,8 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from .views import (
-    cash_safe_ledger, cash_session_detail, cash_session_list, receipt_a4, register_create,
+    cash_safe_ledger, cash_session_detail, cash_session_export, cash_session_list,
+    receipt_a4, register_create,
     register_list, register_update, sale_workspace, transaction_list, pos_manifest,
     pos_select_context, pos_service_worker,
 )
@@ -23,6 +24,7 @@ urlpatterns = [
     path("configuracion/", register_list, name="register_list"),
     path("ventas/", transaction_list, name="transaction_list"),
     path("sesiones/", cash_session_list, name="cash_session_list"),
+    path("sesiones/reporte.xlsx", cash_session_export, name="cash_session_export"),
     path("sesiones/<uuid:pk>/", cash_session_detail, name="cash_session_detail"),
     path("caja-fuerte/", cash_safe_ledger, name="cash_safe_ledger"),
     path("configuracion/nueva/", register_create, name="register_create"),

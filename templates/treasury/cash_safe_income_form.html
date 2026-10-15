@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Nuevo ingreso a caja fuerte | APUDIG{% endblock %}
+{% block extra_css %}<link href="{% static 'css/pos_admin.css' %}?v=20261014-1" rel="stylesheet"><link href="{% static 'css/components/financial-report.css' %}?v=20261014-1" rel="stylesheet">{% endblock %}
+{% block content %}
+<div class="pos-admin-page">
+  <div class="page-header pos-page-heading"><div class="row align-items-center"><div class="col"><div class="page-pretitle">Tesorería · {{ active_store.name }}</div><h2 class="page-title">Registrar ingreso de efectivo</h2><div class="text-muted">Reposiciones, devoluciones y otros ingresos que no provienen del cierre POS.</div></div><div class="col-auto"><a class="btn btn-outline-secondary" href="{% url 'treasury:cash_safe_ledger' %}"><i class="ti ti-arrow-left me-1"></i>Volver al libro</a></div></div></div>
+  <section class="report-kpis mb-3">{% for balance in balances %}<article class="report-kpi"><div class="report-kpi__top"><span>Saldo total {{ balance.currency }}</span><span class="report-kpi__icon"><i class="ti ti-vault"></i></span></div><strong>{{ balance.currency|currency_symbol }} {{ balance.balance|floatformat:2 }}</strong><small>Suma de los fondos físicos de la tienda</small></article>{% endfor %}</section>
+  <form method="post" class="card mx-auto" style="max-width:900px">{% csrf_token %}
+    <div class="card-header"><div><h3 class="card-title mb-0">Datos del ingreso</h3><div class="small text-muted">Identifica el fondo, la procedencia y el motivo.</div></div></div>
+    <div class="card-body">{% include "components/form_errors_alert.html" with form=form %}<div class="row g-3">
+      <div class="col-md-6"><label class="form-label required">{{ form.fund.label }}</label>{{ form.fund }}<div class="form-hint">Ubicación donde quedará custodiado el efectivo.</div></div>
+      <div class="col-md-3"><label class="form-label required">Moneda</label>{{ form.currency }}</div>
+      <div class="col-md-3"><label class="form-label required">{{ form.amount.label }}</label>{{ form.amount }}</div>
+      <div class="col-md-6"><label class="form-label required">{{ form.source_name.label }}</label>{{ form.source_name }}</div>
+      <div class="col-md-6"><label class="form-label">{{ form.reference.label }}</label>{{ form.reference }}</div>
+      <div class="col-12"><label class="form-label required">{{ form.notes.label }}</label>{{ form.notes }}</div>
+    </div><div class="alert alert-info mt-3 mb-0"><i class="ti ti-info-circle me-1"></i>Quedará pendiente y no modificará el saldo del fondo hasta que un usuario autorizado lo confirme.</div></div>
+    <div class="card-footer d-flex justify-content-end gap-2"><a class="btn btn-outline-secondary" href="{% url 'treasury:cash_safe_ledger' %}">Cancelar</a><button class="btn btn-success" type="submit"><i class="ti ti-arrow-down me-1"></i>Enviar a aprobación</button></div>
+  </form>
+</div>
+{% endblock %}

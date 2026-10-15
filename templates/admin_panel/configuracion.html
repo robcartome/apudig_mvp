@@ -128,7 +128,9 @@
           <a href="?item=categorias_gasto" class="cfg-item {% if item == 'categorias_gasto' %}active{% endif %}">
             <i class="ti ti-receipt-tax"></i>Categorías de gasto
           </a>
-          <span class="cfg-item disabled"><i class="ti ti-building-bank"></i>Cuentas Bancarias</span>
+          <a href="?item=cuentas_bancarias" class="cfg-item {% if item == 'cuentas_bancarias' %}active{% endif %}">
+            <i class="ti ti-building-bank"></i>Cuentas Bancarias
+          </a>
           <span class="cfg-item disabled"><i class="ti ti-transfer"></i>Tipos de Op. Bancaria</span>
           <span class="cfg-item disabled"><i class="ti ti-chart-arrows"></i>Flujo de Caja</span>
           <span class="cfg-item disabled"><i class="ti ti-percentage"></i>Tasas de Interés</span>
@@ -231,9 +233,11 @@
           {% elif item == "condiciones_pago" %}
           <th>Nombre</th><th class="text-center">Modalidad</th><th class="text-center">Vuelto</th><th class="text-center">Días</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
           {% elif item == "medios_pago" %}
-          <th>Nombre</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
+          <th>Nombre</th><th>Tipo</th><th>Cuenta bancaria</th><th class="text-center">Activo</th><th class="w-1">Acciones</th>
           {% elif item == "categorias_gasto" %}
           <th>Código</th><th>Nombre</th><th class="text-center">Estado</th><th class="w-1">Acciones</th>
+          {% elif item == "cuentas_bancarias" %}
+          <th>Banco / cuenta</th><th>Número</th><th>Moneda</th><th>Tipo</th><th>Cuenta contable</th><th class="text-end">Límite</th><th class="text-center">Estado</th><th class="w-1">Acciones</th>
           {% endif %}
         </tr>
       </thead>
@@ -317,6 +321,8 @@
 
           {% elif item == "medios_pago" %}
           <td>{{ obj.name }}</td>
+          <td>{{ obj.get_kind_display }}</td>
+          <td>{% if obj.bank_account %}<strong>{{ obj.bank_account.bank.name }}</strong><div class="small text-muted">{{ obj.bank_account.name }} · {{ obj.bank_account.masked_number }}</div>{% else %}<span class="text-muted">No vinculada</span>{% endif %}</td>
           <td class="text-center">
             {% if obj.active %}<span class="badge bg-success-lt text-success">Activo</span>
             {% else %}<span class="badge bg-secondary-lt text-secondary">Inactivo</span>{% endif %}
@@ -332,6 +338,18 @@
             <a href="{% url 'purchases:expense_category_update' obj.pk %}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="ti ti-pencil"></i></a>
             <form method="post" action="{% url 'purchases:expense_category_toggle' obj.pk %}">{% csrf_token %}<button class="btn btn-sm {% if obj.active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}" title="{% if obj.active %}Desactivar{% else %}Activar{% endif %}"><i class="ti {% if obj.active %}ti-toggle-right{% else %}ti-toggle-left{% endif %}"></i></button></form>
             <a href="{% url 'purchases:expense_category_delete' obj.pk %}" class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="ti ti-trash"></i></a>
+          </div></td>
+          {% elif item == "cuentas_bancarias" %}
+          <td><strong>{{ obj.bank.name }}</strong><div class="small text-muted">{{ obj.name }}</div></td>
+          <td><code>{{ obj.masked_number }}</code>{% if obj.cci %}<div class="small text-muted">CCI registrado</div>{% endif %}</td>
+          <td>{{ obj.currency }}</td>
+          <td>{{ obj.get_account_type_display }}{% if obj.is_detracciones %}<div><span class="badge bg-orange-lt text-orange">Detracciones</span></div>{% endif %}</td>
+          <td>{% if obj.accounting_account %}<code>{{ obj.accounting_account }}</code>{% else %}—{% endif %}</td>
+          <td class="text-end">{% if obj.max_transfer_amount %}{{ obj.currency|currency_symbol }} {{ obj.max_transfer_amount|floatformat:2 }}{% else %}<span class="text-muted">Sin límite</span>{% endif %}</td>
+          <td class="text-center">{% if obj.active %}<span class="badge bg-success-lt text-success">Activa</span>{% else %}<span class="badge bg-secondary-lt text-secondary">Inactiva</span>{% endif %}</td>
+          <td><div class="d-flex gap-1">
+            <a href="{% url 'treasury:bank_account_update' obj.pk %}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="ti ti-pencil"></i></a>
+            <form method="post" action="{% url 'treasury:bank_account_toggle' obj.pk %}">{% csrf_token %}<button class="btn btn-sm {% if obj.active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}" title="{% if obj.active %}Desactivar{% else %}Activar{% endif %}"><i class="ti {% if obj.active %}ti-toggle-right{% else %}ti-toggle-left{% endif %}"></i></button></form>
           </div></td>
           {% endif %}
         </tr>

@@ -100,6 +100,33 @@
         </li>
         {% endif %}
 
+        {% if can_access_treasury %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.resolver_match.namespace == 'treasury' %}active{% endif %}"
+             href="#sidebar-treasury"
+             data-bs-toggle="collapse"
+             data-section-url="{% url 'treasury:dashboard' %}"
+             data-tooltip-label="Tesorería"
+             aria-expanded="{% if request.resolver_match.namespace == 'treasury' %}true{% else %}false{% endif %}">
+            <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-building-bank fs-2"></i></span>
+            <span class="nav-link-title">Tesorería</span>
+            <span class="nav-link-arrow"></span>
+          </a>
+          <div class="collapse {% if request.resolver_match.namespace == 'treasury' %}show{% endif %}" id="sidebar-treasury">
+            <ul class="navbar-nav ps-lg-3">
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_ledger' %}active{% endif %}" href="{% url 'treasury:cash_safe_ledger' %}">Caja fuerte de tienda</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_deposit_list' %}active{% endif %}" href="{% url 'treasury:cash_safe_deposit_list' %}">Depósitos en tránsito</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_count_list' %}active{% endif %}" href="{% url 'treasury:cash_safe_count_list' %}">Arqueos de caja fuerte</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'treasury_fund_list' %}active{% endif %}" href="{% url 'treasury:treasury_fund_list' %}">Fondos y cajas</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.namespace == 'treasury' %}active{% endif %}" href="{% url 'treasury:dashboard' %}">Cuentas y movimientos</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'bank_income_list' %}active{% endif %}" href="{% url 'treasury:bank_income_list' %}">Ingresos bancarios</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'bank_expense_list' %}active{% endif %}" href="{% url 'treasury:bank_expense_list' %}">Egresos bancarios</a></li>
+              <li class="nav-item"><a class="nav-link {% if 'bank_reconciliation' in request.resolver_match.url_name|default:'' %}active{% endif %}" href="{% url 'treasury:bank_reconciliation_list' %}">Conciliación bancaria</a></li>
+            </ul>
+          </div>
+        </li>
+        {% endif %}
+
         <li class="nav-item">
           <a class="nav-link {% if '/sales/' in request.path %}active{% endif %}"
              href="#sidebar-sales"

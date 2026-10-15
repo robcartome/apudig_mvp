@@ -5,6 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.managers import filter_by_company
@@ -140,10 +141,11 @@ class PaymentMethodForm(forms.ModelForm):
 class MeansOfPaymentForm(forms.ModelForm):
     class Meta:
         model = MeansOfPayment
-        fields = ("name", "kind", "requires_reference", "active")
+        fields = ("name", "kind", "bank_account", "requires_reference", "active")
         widgets = {
             "name": forms.TextInput(attrs={**_text, "placeholder": "Ej: Efectivo, Yape, Plin"}),
             "kind": forms.Select(attrs=_select),
+            "bank_account": forms.Select(attrs=_select),
             "requires_reference": forms.CheckboxInput(attrs=_check),
             "active": forms.CheckboxInput(attrs=_check),
         }
@@ -151,6 +153,16 @@ class MeansOfPaymentForm(forms.ModelForm):
     def __init__(self, *args, company_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.company_id = company_id or self.instance.company_id
+        from apps.treasury.models import BankAccount
+
+        accounts = BankAccount.objects.filter(company_id=self.company_id, active=True)
+        if self.instance.pk and self.instance.bank_account_id:
+            accounts = BankAccount.objects.filter(company_id=self.company_id).filter(
+                Q(active=True) | Q(pk=self.instance.bank_account_id)
+            )
+        self.fields["bank_account"].queryset = accounts.select_related("bank")
+        self.fields["bank_account"].required = False
+        self.fields["bank_account"].empty_label = "Sin cuenta bancaria vinculada"
 
     def clean_name(self):
         name = self.cleaned_data["name"].strip()
@@ -160,6 +172,15 @@ class MeansOfPaymentForm(forms.ModelForm):
         ).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError("Ya existe un medio de pago con este nombre.")
         return name
+
+    def clean(self):
+        cleaned = super().clean()
+        account = cleaned.get("bank_account")
+        if account and cleaned.get("kind") == MeansOfPayment.Kind.CASH:
+            self.add_error(
+                "bank_account", "El efectivo se controla en caja y no debe vincularse a un banco."
+            )
+        return cleaned
 
 
 # ── Cotizaciones ──────────────────────────────────────────────────────────────

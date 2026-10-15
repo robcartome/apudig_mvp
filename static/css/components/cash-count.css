@@ -1,0 +1,8 @@
+.cash-count-panel, #count-form > .card { overflow: hidden; border: 1px solid #dfe5ec; border-radius: 16px; box-shadow: 0 8px 24px rgba(16, 24, 40, .06); }
+.cash-count-panel .card-header, #count-form > .card .card-header { padding: 18px 20px; background: linear-gradient(135deg, color-mix(in srgb, var(--company-primary) 7%, white), #fff); }
+.cash-count-grid { display: grid; grid-template-columns: repeat(6, minmax(90px, 1fr)); gap: 10px; }
+.cash-count-grid > div, .cash-count-grid > label { width: auto; min-width: 0; padding: 10px; border: 1px solid #e4e7ec; border-radius: 11px; background: #f8fafc; }
+.cash-count-grid input { width: 100%; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cash-count-comparison { padding: 14px; border-radius: 12px; background: #f8fafc; }
+@media (max-width: 992px) { .cash-count-grid { grid-template-columns: repeat(3, minmax(90px, 1fr)); } }
+@media (max-width: 576px) { .cash-count-grid { grid-template-columns: repeat(2, minmax(90px, 1fr)); } }

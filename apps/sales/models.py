@@ -2,6 +2,7 @@ import uuid
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.managers import CompanyScopedManager
@@ -105,7 +106,25 @@ class MeansOfPayment(TimeStampedModel):
     name = models.CharField(max_length=100, verbose_name="Nombre")
     kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.OTHER)
     requires_reference = models.BooleanField(default=False)
+    bank_account = models.ForeignKey(
+        "treasury.BankAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="means_of_payments",
+        verbose_name="Cuenta bancaria de destino",
+    )
     active = models.BooleanField(default=True)
+
+    def clean(self):
+        errors = {}
+        if self.bank_account_id and self.company_id:
+            if str(self.bank_account.company_id) != str(self.company_id):
+                errors["bank_account"] = "La cuenta bancaria debe pertenecer a la misma empresa."
+            if self.kind == self.Kind.CASH:
+                errors["bank_account"] = "El efectivo no debe vincularse a una cuenta bancaria."
+        if errors:
+            raise ValidationError(errors)
 
     class Meta:
         db_table = "means_of_payments"

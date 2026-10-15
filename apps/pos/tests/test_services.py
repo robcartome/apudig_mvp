@@ -17,13 +17,13 @@ from apps.pos import selectors
 from apps.pos.models import (
     CashDenominationCount,
     CashMovement,
-    CashSafeMovement,
     CashSession,
     CashTenderDeclaration,
     PosRegister,
     PosTransaction,
     SalesDocumentSource,
 )
+from apps.treasury.models import Bank, BankAccount, BankMovement, CashSafeMovement
 from apps.pos.services import (
     PosDomainError,
     close_cash_session,
@@ -355,6 +355,38 @@ class PosServiceTest(TestCase):
 
         self.assertEqual(payment.operation_reference, "")
 
+    def test_wallet_payment_creates_reconcilable_bank_movement(self):
+        bank = Bank.objects.create(company=self.company, name="BCP")
+        account = BankAccount.objects.create(
+            company=self.company,
+            bank=bank,
+            name="Recaudación Yape",
+            account_number="001-YAPE-POS",
+            opening_balance=Decimal("0.00"),
+            opening_balance_date=timezone.localdate(),
+        )
+        self.wallet.bank_account = account
+        self.wallet.save(update_fields=("bank_account", "updated_at"))
+        session = self._session()
+        document = self._document()
+
+        payment = register_sales_payment(
+            sales_document_id=document.pk,
+            cash_session_id=session.pk,
+            means_of_payment_id=self.wallet.pk,
+            amount=document.total,
+            operation_reference="YAPE-BCP-001",
+            created_by=self.user,
+        )
+
+        movement = BankMovement.objects.get(
+            source_type="POS_SALE_PAYMENT", source_id=str(payment.pk)
+        )
+        self.assertEqual(movement.account, account)
+        self.assertEqual(movement.direction, BankMovement.Direction.IN)
+        self.assertEqual(movement.amount, payment.amount)
+        self.assertEqual(movement.reference, "YAPE-BCP-001")
+
     def test_payment_cannot_exceed_document_total(self):
         session = self._session()
         document = self._document()
@@ -499,6 +531,34 @@ class PosServiceTest(TestCase):
             )
 
         self.assertEqual(error.exception.code, "CASH_ALLOCATION_MISMATCH")
+
+    def test_direct_bank_allocation_creates_reconcilable_bank_income(self):
+        session = self._session(opening="100.00")
+        bank = Bank.objects.create(company=self.company, name="BCP")
+        account = BankAccount.objects.create(
+            company=self.company, bank=bank, name="Cuenta POS",
+            account_number="001-99001", currency="PEN",
+            opening_balance=Decimal("0.00"),
+            opening_balance_date=timezone.localdate(),
+        )
+
+        closed = close_cash_session(
+            cash_session_id=session.pk,
+            closed_by=self.user,
+            counted_cash_total="100.00",
+            next_opening_total="0.00",
+            safe_deposit_total="0.00",
+            bank_deposit_total="100.00",
+            bank_deposit_account_id=account.pk,
+        )
+
+        self.assertEqual(closed.bank_deposit_account, account)
+        movement = BankMovement.objects.get(
+            source_type="POS_CASH_CLOSE_DEPOSIT", source_id=str(closed.pk)
+        )
+        self.assertEqual(movement.account, account)
+        self.assertEqual(movement.direction, BankMovement.Direction.IN)
+        self.assertEqual(movement.amount, Decimal("100.00"))
 
     def test_cash_session_summary_separates_cash_tenders_and_movements(self):
         session = self._session(opening="100.00")

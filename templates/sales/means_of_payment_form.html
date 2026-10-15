@@ -39,6 +39,13 @@
             {% if form.kind.errors %}<div class="text-danger small mt-1">{{ form.kind.errors.0 }}</div>{% endif %}
           </div>
 
+          <div class="mb-3" id="bank-account-field">
+            <label class="form-label">Cuenta bancaria de destino</label>
+            {{ form.bank_account }}
+            <div class="form-hint">Opcional. Los cobros con este medio generarán un ingreso bancario para su conciliación. Ejemplo: Yape → cuenta BCP.</div>
+            {% if form.bank_account.errors %}<div class="text-danger small mt-1">{{ form.bank_account.errors.0 }}</div>{% endif %}
+          </div>
+
           <div class="mb-3">
             <label class="form-check">
               {{ form.requires_reference }}
@@ -65,4 +72,20 @@
     </div>
   </div>
 </div>
+<script>
+  (() => {
+    const kind = document.getElementById('{{ form.kind.id_for_label }}');
+    const wrapper = document.getElementById('bank-account-field');
+    const account = document.getElementById('{{ form.bank_account.id_for_label }}');
+    if (!kind || !wrapper || !account) return;
+    const update = () => {
+      const isCash = kind.value === 'CASH';
+      wrapper.classList.toggle('opacity-50', isCash);
+      account.disabled = isCash;
+      if (isCash) account.value = '';
+    };
+    kind.addEventListener('change', update);
+    update();
+  })();
+</script>
 {% endblock %}

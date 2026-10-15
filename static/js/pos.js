@@ -260,9 +260,16 @@
         : `Falta distribuir ${currencySymbol()} ${fixed(difference)}`;
     preview.classList.toggle('is-difference', difference !== 0);
     const showBank = bank > 0;
-    byId('bank-deposit-destination').hidden = !showBank;
-    byId('bank-deposit-destination-label').hidden = !showBank;
-    byId('bank-deposit-destination').required = showBank;
+    const bankAccount = byId('bank-deposit-account');
+    [...bankAccount.options].forEach((option) => {
+      if (!option.value) return;
+      option.hidden = Boolean(state.session?.currency) && option.dataset.currency !== state.session.currency;
+      option.disabled = option.hidden;
+    });
+    if (bankAccount.selectedOptions[0]?.disabled) bankAccount.value = '';
+    bankAccount.hidden = !showBank;
+    byId('bank-deposit-account-label').hidden = !showBank;
+    bankAccount.required = showBank;
     byId('close-session-submit').disabled = !state.cashSummary?.can_close || difference !== 0;
   }
 
@@ -2219,7 +2226,7 @@
     byId('counted-cash').value = fixed(summary.expected_cash_total);
     byId('next-opening-total').value = '0.00';
     byId('bank-deposit-total').value = '0.00';
-    byId('bank-deposit-destination').value = '';
+    byId('bank-deposit-account').value = '';
     updateCashAllocation(true);
   }
 
@@ -2278,7 +2285,7 @@
         next_opening_total: fixed(byId('next-opening-total').value),
         safe_deposit_total: fixed(byId('safe-deposit-total').value),
         bank_deposit_total: fixed(byId('bank-deposit-total').value),
-        bank_deposit_destination: byId('bank-deposit-destination').value.trim(),
+        bank_deposit_account_id: byId('bank-deposit-account').value || null,
         note: byId('closing-note').value.trim(),
       };
       if (denominations.length) payload.denominations = denominations;

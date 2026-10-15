@@ -4,10 +4,12 @@ sales/tests/test_catalogs.py â€” Tests de vistas de catÃ¡logos de ventas.
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.partners.models import DocumentType
 from apps.sales.models import DocumentSeries, MeansOfPayment
+from apps.treasury.models import Bank, BankAccount
 from apps.users.models import UserStore
 
 User = get_user_model()
@@ -98,15 +100,26 @@ class CatalogViewsTest(TestCase):
         self.assertFalse(obj.active)
 
     def test_means_of_payment_form_renders_and_creates_all_required_fields(self):
+        bank = Bank.objects.create(company=self.company, name="BCP")
+        account = BankAccount.objects.create(
+            company=self.company,
+            bank=bank,
+            name="Cuenta Yape",
+            account_number="001-YAPE",
+            opening_balance=0,
+            opening_balance_date=timezone.localdate(),
+        )
         get_response = self.client.get(reverse("sales:means_of_payment_create"))
 
         self.assertEqual(get_response.status_code, 200)
         self.assertContains(get_response, 'name="kind"')
         self.assertContains(get_response, 'name="requires_reference"')
+        self.assertContains(get_response, 'name="bank_account"')
 
         response = self.client.post(reverse("sales:means_of_payment_create"), {
             "name": "Yape",
             "kind": "DIGITAL_WALLET",
+            "bank_account": str(account.pk),
             "requires_reference": "on",
             "active": "on",
         })
@@ -119,6 +132,29 @@ class CatalogViewsTest(TestCase):
         means = MeansOfPayment.objects.get(company=self.company, name="Yape")
         self.assertEqual(means.kind, MeansOfPayment.Kind.DIGITAL_WALLET)
         self.assertTrue(means.requires_reference)
+        self.assertEqual(means.bank_account, account)
+
+    def test_cash_means_cannot_be_linked_to_bank_account(self):
+        bank = Bank.objects.create(company=self.company, name="Interbank")
+        account = BankAccount.objects.create(
+            company=self.company,
+            bank=bank,
+            name="Cuenta principal",
+            account_number="001-CASH",
+            opening_balance=0,
+            opening_balance_date=timezone.localdate(),
+        )
+
+        response = self.client.post(reverse("sales:means_of_payment_create"), {
+            "name": "Efectivo banco",
+            "kind": "CASH",
+            "bank_account": str(account.pk),
+            "active": "on",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "no debe vincularse a un banco")
+        self.assertFalse(MeansOfPayment.objects.filter(name="Efectivo banco").exists())
 
     # â”€â”€ BusinessDocumentType â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

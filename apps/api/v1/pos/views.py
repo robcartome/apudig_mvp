@@ -735,6 +735,7 @@ class CashSessionCloseAPIView(PosAPIView):
             safe_deposit_total=data.get("safe_deposit_total"),
             bank_deposit_total=data.get("bank_deposit_total", 0),
             bank_deposit_destination=data.get("bank_deposit_destination", ""),
+            bank_deposit_account_id=data.get("bank_deposit_account_id"),
             note=data.get("note", ""),
             tender_counts=data.get("tender_counts"),
             difference_authorized_by=request.user if can_authorize_difference else None,
