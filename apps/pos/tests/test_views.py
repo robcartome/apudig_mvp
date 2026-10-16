@@ -134,8 +134,8 @@ class PosWorkspaceViewTest(TestCase):
         self.assertTrue(response["Content-Type"].startswith("text/javascript"))
         self.assertEqual(response["Service-Worker-Allowed"], "/pos/")
         self.assertIn("no-cache", response["Cache-Control"])
-        self.assertContains(response, "apudig-pos-static-v16")
-        self.assertContains(response, "/static/js/pos.js?v=20261009-3")
+        self.assertContains(response, "apudig-pos-static-v17")
+        self.assertContains(response, "/static/js/pos.js?v=20261016-1")
         self.assertContains(response, "ApuDig POS necesita")
         self.assertNotContains(response, "'/api/")
 
@@ -147,6 +147,19 @@ class PosWorkspaceViewTest(TestCase):
             script = script_file.read()
         self.assertIn('new CustomEvent("pos:scan-requested"', script)
         self.assertIn('barcodeField: "barcode"', script)
+
+    def test_cash_close_uses_bank_account_field_from_current_markup(self):
+        self.activate_context()
+
+        response = self.client.get("/pos/")
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertContains(response, 'id="bank-deposit-account"')
+        self.assertContains(response, "/static/js/pos.js?v=20261016-1")
+        self.assertIn("byId('bank-deposit-account').value = '';", script)
+        self.assertNotIn("bank-deposit-destination", script)
 
     def test_pos_javascript_opens_draft_receipt_and_discounts_final_total(self):
         script_path = finders.find("js/pos.js")
