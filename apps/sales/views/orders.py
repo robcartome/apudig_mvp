@@ -21,6 +21,11 @@ from django.utils import timezone
 
 from apps.sales.forms import SaleOrderHeaderForm, SaleOrderLineFormSet
 from apps.sales.models import SaleOrder, SALE_ORDER_STATUS_CHOICES, SalesQuotation
+from apps.sales.printing import (
+    CommercialPrintDocument,
+    commercial_pdf_response,
+    render_commercial_print,
+)
 from apps.sales.selectors import search_orders, get_order_detail, get_series_for_store
 from apps.sales.services import (
     cancel_order,
@@ -303,12 +308,25 @@ def order_pdf(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
-    try:
-        order = get_order_detail(pk)
-    except SaleOrder.DoesNotExist:
-        raise Http404
-    company = order.store.company if order.store else None
-    return render(request, "sales/pdf/order_pdf.html", {"order": order, "company": company})
+    _, store_id = _get_ids(request)
+    order = get_object_or_404(SaleOrder, pk=pk, store_id=store_id)
+    order = get_order_detail(order.pk)
+    return commercial_pdf_response(request, CommercialPrintDocument(order, "order"))
+
+
+def order_print(request, pk):
+    redirect_resp = _require_auth(request)
+    if redirect_resp:
+        return redirect_resp
+    _, store_id = _get_ids(request)
+    order = get_object_or_404(SaleOrder, pk=pk, store_id=store_id)
+    order = get_order_detail(order.pk)
+    return render_commercial_print(
+        request,
+        CommercialPrintDocument(order, "order"),
+        back_url=reverse("sales:order_detail", args=[order.pk]),
+        pdf_url=reverse("sales:order_pdf", args=[order.pk]),
+    )
 
 
 # ── Copiar orden ──────────────────────────────────────────────────────────────

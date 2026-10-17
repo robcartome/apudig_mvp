@@ -1,16 +1,19 @@
 ﻿"""
 sales/tests/test_quotations.py â€” Tests del mÃ³dulo de cotizaciones.
 """
+from datetime import timedelta
 from decimal import Decimal
 
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.companies.models import Company, Store
+from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Category, Product, Unit
 from apps.partners.models import Customer, DocumentType
 from apps.sales.models import DocumentSeries, SalesDocument, SalesQuotation
+from apps.sales.forms import QuotationHeaderForm
+from apps.users.models import UserStore
 from apps.sales.services import (
     approve_quotation,
     cancel_quotation,
@@ -47,6 +50,22 @@ def _make_line(product, qty="2", price="100.00"):
         "tax_type": "10",
         "igv_rate": Decimal("18"),
         "memo": "",
+    }
+
+
+def _make_manual_line(unit, description="Servicio especial", price="80.00"):
+    return {
+        "product": None,
+        "description": description,
+        "product_code": "SERV-EXT",
+        "is_manual": True,
+        "unit": unit.pk,
+        "quantity": Decimal("2"),
+        "unit_price": Decimal(price),
+        "discount_amount": Decimal("0"),
+        "tax_type": "10",
+        "igv_rate": Decimal("18"),
+        "memo": "Alcance por confirmar",
     }
 
 
@@ -175,6 +194,29 @@ class QuotationServiceTest(TestCase):
         self.assertEqual(q.igv_total, Decimal("0.00"))
         self.assertEqual(q.total, q.subtotal)
 
+    def test_create_manual_line_without_catalog_product(self):
+        q = self._create(lines=[_make_manual_line(self.product.unit)])
+
+        line = q.lines.get()
+        self.assertTrue(line.is_manual)
+        self.assertEqual(line.description, "Servicio especial")
+        self.assertEqual(line.product_code, "SERV-EXT")
+        self.assertFalse(line.product.active)
+        self.assertFalse(line.product.tracks_inventory)
+        self.assertEqual(q.total, Decimal("188.80"))
+
+    def test_update_preserves_manual_line(self):
+        q = self._create()
+        update_quotation(
+            q.pk,
+            lines=[_make_manual_line(self.product.unit, description="Instalación")],
+            issue_date=timezone.localdate(),
+        )
+
+        line = q.lines.get()
+        self.assertTrue(line.is_manual)
+        self.assertEqual(line.description, "Instalación")
+
     def test_approved_quotation_converts_once_and_copies_commercial_data(self):
         quotation = self._create()
         quotation.exchange_rate = Decimal("3.750000")
@@ -205,11 +247,31 @@ class QuotationServiceTest(TestCase):
                 register_inventory_movement=False,
             )
 
+    def test_manual_line_converts_preserving_quoted_description(self):
+        quotation = self._create(
+            lines=[_make_manual_line(self.product.unit, description="Consultoría externa")]
+        )
+        approve_quotation(quotation.pk)
+
+        document = create_document_from_quotation(
+            quotation.pk,
+            document_type=DocumentType.objects.get(code="NV"),
+            series=self.sales_series,
+            register_inventory_movement=False,
+        )
+
+        line = document.lines.get()
+        self.assertEqual(line.description, "Consultoría externa")
+        self.assertEqual(line.product_code, "SERV-EXT")
+        self.assertFalse(line.product.tracks_inventory)
+
 
 class QuotationViewsTest(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(email="test@demo.com", password="pass1234")
+        self.user = User.objects.create_user(
+            email="test@demo.com", password="pass1234", is_staff=True, is_superuser=True
+        )
         self.company = Company.objects.create(name="Demo", ruc="20000000001")
         self.store = Store.objects.create(company=self.company, name="T1")
         self.customer = Customer.objects.create(
@@ -224,6 +286,9 @@ class QuotationViewsTest(TestCase):
             company=self.company, store=self.store, document_type=DocumentType.objects.get_or_create(code="NV", defaults={"name": "NV", "category": "INTERNAL"})[0], series="NV01"
         )
         self.client.login(username="test@demo.com", password="pass1234")
+        UserCompanyAccess.objects.create(
+            user=self.user, company=self.company, store=self.store, is_default=True
+        )
         s = self.client.session
         s["active_company_id"] = str(self.company.id)
         s["active_store_id"] = str(self.store.id)
@@ -245,8 +310,38 @@ class QuotationViewsTest(TestCase):
         self.assertTrue(
             resp.context["header_form"].initial["issue_date"].startswith(today)
         )
-        self.assertTrue(
-            resp.context["header_form"].initial["valid_until"].startswith(today)
+        expected_validity = (timezone.localdate() + timedelta(days=15)).isoformat()
+        self.assertEqual(resp.context["header_form"].initial["valid_until"], expected_validity)
+        self.assertContains(resp, 'id="add-manual-line"')
+
+    def test_admin_seller_selector_lists_active_store_users(self):
+        seller = User.objects.create_user(
+            email="seller@demo.com", name="Vendedor Demo", password="pass1234"
+        )
+        UserStore.objects.create(user=seller, store=self.store, role="SELLER")
+
+        response = self.client.get(reverse("sales:quotation_create"))
+
+        choices = dict(response.context["header_form"].fields["seller_name"].choices)
+        self.assertIn("Vendedor Demo", choices)
+        self.assertIn("Vendedor", choices["Vendedor Demo"])
+
+    def test_non_admin_seller_selector_defaults_to_logged_user(self):
+        seller = User.objects.create_user(
+            email="cashier@demo.com", name="Caja Principal", password="pass1234"
+        )
+        UserStore.objects.create(user=seller, store=self.store, role="CASHIER")
+
+        form = QuotationHeaderForm(
+            company_id=self.company.pk,
+            store_id=self.store.pk,
+            user=seller,
+        )
+
+        self.assertEqual(form.initial["seller_name"], "Caja Principal")
+        self.assertEqual(
+            [value for value, _label in form.fields["seller_name"].choices if value],
+            ["Caja Principal"],
         )
 
     def test_create_shows_line_formset_errors(self):
@@ -313,6 +408,59 @@ class QuotationViewsTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(SalesQuotation.objects.count(), 1)
 
+    def test_create_manual_line_from_form(self):
+        data = {
+            "store": str(self.store.id),
+            "series": str(self.series.id),
+            "customer": str(self.customer.id),
+            "issue_date": timezone.localdate().isoformat(),
+            "valid_until": "",
+            "currency": "PEN",
+            "lines-TOTAL_FORMS": "1",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "1",
+            "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-product": "",
+            "lines-0-description": "Consultoría especializada",
+            "lines-0-product_code": "CONS-01",
+            "lines-0-is_manual": "on",
+            "lines-0-unit": str(self.product.unit_id),
+            "lines-0-quantity": "3",
+            "lines-0-unit_price": "100",
+            "lines-0-discount_amount": "0",
+            "lines-0-tax_type": "10",
+            "lines-0-igv_rate": "18",
+            "lines-0-memo": "",
+        }
+
+        response = self.client.post(reverse("sales:quotation_create"), data)
+
+        self.assertEqual(response.status_code, 302)
+        line = SalesQuotation.objects.get().lines.get()
+        self.assertTrue(line.is_manual)
+        self.assertEqual(line.description, "Consultoría especializada")
+
+    def test_customer_is_required(self):
+        data = {
+            "store": str(self.store.id),
+            "series": str(self.series.id),
+            "customer": "",
+            "issue_date": timezone.localdate().isoformat(),
+            "currency": "PEN",
+            "lines-TOTAL_FORMS": "1",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "1",
+            "lines-MAX_NUM_FORMS": "1000",
+            "lines-0-product": str(self.product.id),
+            "lines-0-quantity": "1",
+            "lines-0-unit_price": "100",
+            "lines-0-tax_type": "10",
+            "lines-0-igv_rate": "18",
+        }
+        response = self.client.post(reverse("sales:quotation_create"), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context["header_form"], "customer", "Este campo es requerido.")
+
     def test_duplicate_number_shows_form_error(self):
         self._post_create(number=7)
         response = self._post_create(number=7)
@@ -364,6 +512,31 @@ class QuotationViewsTest(TestCase):
         q = SalesQuotation.objects.first()
         resp = self.client.get(reverse("sales:quotation_pdf", args=[q.pk]))
         self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertTrue(resp.content.startswith(b"%PDF-"))
+        self.assertIn("attachment", resp["Content-Disposition"])
+
+    def test_ticket_pdf_and_print_view(self):
+        self._post_create()
+        quotation = SalesQuotation.objects.get()
+
+        pdf_response = self.client.get(
+            reverse("sales:quotation_pdf", args=[quotation.pk]),
+            {"format": "TICKET"},
+        )
+        print_response = self.client.get(
+            reverse("sales:quotation_print", args=[quotation.pk]),
+            {"format": "TICKET"},
+        )
+
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertTrue(pdf_response.content.startswith(b"%PDF-"))
+        self.assertIn("ticket.pdf", pdf_response["Content-Disposition"])
+        self.assertEqual(print_response.status_code, 200)
+        self.assertContains(print_response, "Ticket 80 mm")
+        self.assertContains(print_response, "Descargar PDF")
+        self.assertContains(print_response, "SON:")
+        self.assertContains(print_response, "SOLES")
 
     def test_approve_view(self):
         self._post_create()

@@ -1,0 +1,206 @@
+{% load formatters %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ quotation.document_label }} {{ quotation.reference }}</title>
+  <style>
+    :root { --brand: {{ branding.primary_color|default:"#1769aa" }}; --ink: #26323c; --line: #9ca8b1; --soft: #eef3f6; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #edf0f3; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+    body { padding: 20px; font-size: 11px; }
+    .toolbar { max-width: 210mm; margin: 0 auto 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+    .toolbar-group { display: flex; flex-wrap: wrap; gap: 7px; }
+    .btn { border: 1px solid #aab3ba; border-radius: 5px; padding: 8px 12px; color: #26323c; background: white; text-decoration: none; cursor: pointer; font-size: 12px; }
+    .btn-primary { border-color: var(--brand); color: white; background: var(--brand); }
+    .sheet { width: 210mm; min-height: 297mm; margin: auto; padding: 13mm 14mm 16mm; background: white; box-shadow: 0 3px 18px rgba(20, 30, 40, .12); }
+    .header { display: grid; grid-template-columns: 1fr 62mm; gap: 10mm; align-items: start; margin-bottom: 5mm; }
+    .logo { width: 90mm; height: 30mm; object-fit: contain; object-position: left center; display: block; margin-bottom: 2mm; }
+    .company-name { margin: 0 0 2mm; color: var(--brand); font-size: 18px; }
+    .company p { margin: 1mm 0; }
+    .document-box { border: 1.5px solid var(--ink); text-align: center; padding: 4mm 3mm; }
+    .document-box .ruc { font-size: 14px; font-weight: 700; }
+    .document-box .type { margin: 2mm 0; font-size: 16px; font-weight: 700; }
+    .document-box .number { font-size: 15px; font-weight: 700; }
+    .status { display: inline-block; margin-top: 2mm; padding: 1mm 2mm; background: var(--soft); border-radius: 3px; font-size: 9px; font-weight: 700; }
+    .info-box { border: 1px solid var(--line); margin-bottom: 2mm; }
+    .info-row { display: grid; grid-template-columns: 28mm 1fr 24mm 55mm; border-bottom: 1px solid #d7dde1; }
+    .info-row:last-child { border-bottom: 0; }
+    .info-row > div { padding: 2mm; }
+    .label { background: var(--soft); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+    .meta { width: 100%; border-collapse: collapse; margin-bottom: 3mm; table-layout: fixed; }
+    .meta th, .meta td { border: 1px solid var(--line); text-align: center; padding: 1.6mm; }
+    .meta th { background: var(--soft); font-size: 8px; text-transform: uppercase; }
+    .lines { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .lines th { padding: 1.7mm 1.2mm; background: var(--brand); color: white; border: 1px solid var(--brand); font-size: 8px; }
+    .lines td { padding: 1.8mm 1.2mm; border: 1px solid #bbc4ca; vertical-align: top; }
+    .right { text-align: right; }
+    .center { text-align: center; }
+    .muted { color: #697680; font-size: 9px; }
+    .closing { display: grid; grid-template-columns: 1fr 70mm; gap: 8mm; align-items: start; margin-top: 3mm; }
+    .notes-title { margin: 0 0 1.5mm; color: var(--brand); font-size: 10px; text-transform: uppercase; }
+    .totals { width: 100%; border-collapse: collapse; border: 1px solid var(--line); }
+    .totals td { padding: 1.6mm 2.5mm; }
+    .totals tr:last-child { border-top: 1.5px solid var(--brand); background: var(--soft); font-size: 12px; font-weight: 700; }
+    .footer { margin-top: 12mm; padding-top: 2mm; border-top: 1px solid #d7dde1; color: #74808a; text-align: center; font-size: 9px; }
+
+    body.ticket { padding: 12px; font-size: 10px; }
+    body.ticket .toolbar { max-width: 80mm; }
+    body.ticket .sheet { width: 80mm; min-height: auto; padding: 5mm 6mm 7mm; }
+    .ticket-header { text-align: center; }
+    .ticket-header .logo { width: 62mm; height: 28mm; object-position: center; margin: 0 auto 2mm; }
+    .ticket-header h1 { margin: 1mm 0; font-size: 15px; }
+    .ticket-header p { margin: .7mm 0; }
+    .ticket-title { margin: 3mm 0 2mm; padding: 2mm 0; border-top: 1px dashed #333; border-bottom: 1px dashed #333; text-align: center; }
+    .ticket-title strong { display: block; font-size: 14px; }
+    .ticket-customer { margin-bottom: 2mm; line-height: 1.35; }
+    .ticket-lines { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .ticket-lines th { padding: 1.3mm .5mm; border-top: 1px solid #222; border-bottom: 1px solid #222; font-size: 8px; }
+    .ticket-lines td { padding: 1.5mm .5mm; border-bottom: 1px dotted #aaa; vertical-align: top; }
+    .ticket-total { margin: 2mm 0; padding-top: 1mm; border-top: 1px solid #222; }
+    .ticket-total div { display: flex; justify-content: space-between; padding: .7mm 0; }
+    .ticket-total .grand { font-size: 13px; font-weight: 700; }
+    .ticket-footer { margin-top: 4mm; text-align: center; line-height: 1.4; }
+    .qr { width: 27mm; height: 27mm; object-fit: contain; }
+    .ticket-qr { display: block; width: 25mm; height: 25mm; margin: 3mm auto 1mm; }
+
+    @page { size: A4; margin: 0; }
+    {% if pdf_format == "TICKET" %}@page { size: 80mm auto; margin: 0; }{% endif %}
+    @media print {
+      html, body { background: white; }
+      body { padding: 0; }
+      .no-print { display: none !important; }
+      .sheet { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body class="{% if pdf_format == 'TICKET' %}ticket{% endif %}">
+  <div class="toolbar no-print">
+    <div class="toolbar-group">
+      <a class="btn" href="{{ back_url }}">← Volver</a>
+      <a class="btn {% if pdf_format == 'A4' %}btn-primary{% endif %}" href="?format=A4">A4</a>
+      <a class="btn {% if pdf_format == 'TICKET' %}btn-primary{% endif %}" href="?format=TICKET">Ticket 80 mm</a>
+    </div>
+    <div class="toolbar-group">
+      <button class="btn btn-primary" type="button" onclick="window.print()">Imprimir</button>
+      <a class="btn" href="{{ pdf_url }}">Descargar PDF</a>
+    </div>
+  </div>
+
+  {% if pdf_format == "TICKET" %}
+  <main class="sheet">
+    <header class="ticket-header">
+      {% if company_logo_url %}<img class="logo" src="{{ company_logo_url }}" alt="Logo de {{ company.name }}">{% endif %}
+      <h1>{{ company.name }}</h1>
+      <p><strong>RUC: {{ company.ruc }}</strong></p>
+      {% if company.address %}<p>{{ company.address }}</p>{% endif %}
+      {% if company.phone %}<p>{{ company.phone }}</p>{% endif %}
+    </header>
+    <section class="ticket-title">
+      <span>{{ quotation.document_label|upper }}</span>
+      <strong>{{ quotation.reference }}</strong>
+      <span>{{ quotation.issue_date|date:"d/m/Y" }}</span>
+    </section>
+    <section class="ticket-customer">
+      <div><strong>Cliente:</strong> {{ quotation.customer_legal_name }}</div>
+      <div><strong>Documento:</strong> {{ quotation.customer_document_number }}</div>
+      {% if quotation.customer_address %}<div><strong>Dirección:</strong> {{ quotation.customer_address }}</div>{% endif %}
+      {% if quotation.pos_transaction %}<div><strong>Caja:</strong> {{ quotation.pos_transaction.register.name }}</div><div><strong>Cajero:</strong> {{ quotation.pos_transaction.cashier.display_name }}</div>{% endif %}
+    </section>
+    <table class="ticket-lines">
+      <thead><tr><th style="width:52%;text-align:left">Descripción</th><th style="width:28%" class="right">Cant. × P.U.</th><th style="width:20%" class="right">Total</th></tr></thead>
+      <tbody>
+      {% for line in quotation.lines.all %}
+        <tr>
+          <td>{% if line.product_code %}<span class="muted">{{ line.product_code }}</span><br>{% endif %}{% if line.is_manual %}{{ line.description }}{% else %}{{ line.product.name }}{% endif %}</td>
+          <td class="right">{{ line.quantity|smart_number }} × {{ line.price_unit|floatformat:2 }}</td>
+          <td class="right">{{ line.total|floatformat:2 }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="3"><strong>{{ quotation.amount_in_words }}</strong></td></tr></tfoot>
+    </table>
+    <section class="ticket-total">
+      <div><span>Subtotal</span><strong>{{ quotation.currency|currency_symbol }} {{ quotation.subtotal|floatformat:2 }}</strong></div>
+      <div><span>Descuentos</span><strong>- {{ quotation.currency|currency_symbol }} {{ quotation.total_discount|floatformat:2 }}</strong></div>
+      <div><span>IGV</span><strong>{{ quotation.currency|currency_symbol }} {{ quotation.igv_total|floatformat:2 }}</strong></div>
+      <div class="grand"><span>TOTAL</span><span>{{ quotation.currency|currency_symbol }} {{ quotation.total|floatformat:2 }}</span></div>
+    </section>
+    {% if quotation.valid_until %}<div class="center"><strong>Válido hasta:</strong> {{ quotation.valid_until|date:"d/m/Y" }}</div>{% endif %}
+    {% if quotation.seller_name %}<div class="center"><strong>Vendedor:</strong> {{ quotation.seller_name }}</div>{% endif %}
+    {% if quotation.notes %}<p><strong>Notas:</strong> {{ quotation.notes }}</p>{% endif %}
+    {% if qr_data_uri %}<img class="ticket-qr" src="{{ qr_data_uri }}" alt="Código QR del comprobante">{% endif %}
+    <footer class="ticket-footer">{{ document_settings.footer_text|default:"Gracias por su preferencia." }}<br>Documento generado por APUDIG</footer>
+  </main>
+  {% else %}
+  <main class="sheet">
+    <header class="header">
+      <div class="company">
+        {% if company_logo_url %}<img class="logo" src="{{ company_logo_url }}" alt="Logo de {{ company.name }}">{% endif %}
+        <h1 class="company-name">{{ company.name }}</h1>
+        <p><strong>RUC: {{ company.ruc }}</strong></p>
+        {% if company.address %}<p>{{ company.address }}</p>{% endif %}
+        {% if company.phone or company.email %}<p>{{ company.phone }}{% if company.phone and company.email %} · {% endif %}{{ company.email }}</p>{% endif %}
+        <p><strong>Sucursal:</strong> {{ quotation.store.name }}</p>
+      </div>
+      <div class="document-box">
+        <div class="ruc">RUC: {{ company.ruc }}</div>
+        <div class="type">{{ quotation.document_label|upper }}</div>
+        <div class="number">{{ quotation.reference }}</div>
+        <span class="status">{{ quotation.get_status_display|upper }}</span>
+      </div>
+    </header>
+
+    <section class="info-box">
+      <div class="info-row"><div class="label">Razón social</div><div>{{ quotation.customer_legal_name }}</div><div class="label">Documento</div><div>{{ quotation.customer_document_number }}</div></div>
+      <div class="info-row"><div class="label">Dirección</div><div>{{ quotation.customer_address|default:"—" }}</div><div class="label">Vendedor</div><div>{{ quotation.seller_name|default:"—" }}</div></div>
+    </section>
+    {% if quotation.pos_transaction %}
+    <h3 class="notes-title">Datos de la operación POS</h3>
+    <section class="info-box">
+      <div class="info-row"><div class="label">Operación POS</div><div>{{ quotation.pos_transaction.ticket_code }}</div><div class="label">Caja / Cajero</div><div>{{ quotation.pos_transaction.register.name }} · {{ quotation.pos_transaction.cashier.display_name }}</div></div>
+    </section>
+    {% endif %}
+    <table class="meta">
+      <thead><tr><th>Fecha de emisión</th><th>{{ quotation.validity_label }}</th><th>Condición de pago</th><th>Moneda</th></tr></thead>
+      <tbody><tr><td>{{ quotation.issue_date|date:"d/m/Y" }}</td><td>{{ quotation.valid_until|date:"d/m/Y"|default:"—" }}</td><td>{{ quotation.payment_method|default:"—" }}</td><td>{{ quotation.currency }}</td></tr></tbody>
+    </table>
+    <table class="lines">
+      <thead><tr><th style="width:12%">Código</th><th style="width:9%">Cantidad</th><th style="width:9%">Unidad</th><th style="width:40%">Descripción</th><th style="width:11%">Valor unit.</th><th style="width:10%">P. unit.</th><th style="width:10%">Total</th></tr></thead>
+      <tbody>
+      {% for line in quotation.lines.all %}
+        <tr>
+          <td>{% if line.product_code %}{{ line.product_code }}{% elif not line.is_manual %}{{ line.product.sku }}{% endif %}</td>
+          <td class="right">{{ line.quantity|smart_number }}</td>
+          <td class="center">{{ line.unit_code }}</td>
+          <td><strong>{% if line.is_manual %}{{ line.description }}{% else %}{{ line.product.name }}{% endif %}</strong>{% if not line.is_manual and line.description %}<br><span class="muted">{{ line.description }}</span>{% endif %}{% if line.memo %}<br><span class="muted">{{ line.memo }}</span>{% endif %}</td>
+          <td class="right">{{ line.unit_price|floatformat:2 }}</td>
+          <td class="right">{{ line.price_unit|floatformat:2 }}</td>
+          <td class="right"><strong>{{ line.total|floatformat:2 }}</strong></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="7"><strong>{{ quotation.amount_in_words }}</strong></td></tr></tfoot>
+    </table>
+    <section class="closing">
+      <div>
+        {% if qr_data_uri %}<img class="qr" src="{{ qr_data_uri }}" alt="Código QR del comprobante">{% endif %}
+        {% if quotation.notes %}<h3 class="notes-title">Información adicional</h3><p>{{ quotation.notes }}</p>{% endif %}
+        {% if quotation.internal_reference %}<p class="muted"><strong>Referencia:</strong> {{ quotation.internal_reference }}</p>{% endif %}
+        <p><strong>Importe total: {{ quotation.currency|currency_symbol }} {{ quotation.total|floatformat:2 }}</strong></p>
+      </div>
+      <table class="totals">
+        <tr><td>Op. gravadas</td><td class="right">{{ quotation.currency|currency_symbol }} {{ quotation.taxable_amount|floatformat:2 }}</td></tr>
+        <tr><td>Op. exoneradas</td><td class="right">{{ quotation.currency|currency_symbol }} {{ quotation.exempt_amount|floatformat:2 }}</td></tr>
+        <tr><td>Op. inafectas</td><td class="right">{{ quotation.currency|currency_symbol }} {{ quotation.unaffected_amount|floatformat:2 }}</td></tr>
+        <tr><td>Total descuentos</td><td class="right">{{ quotation.currency|currency_symbol }} {{ quotation.total_discount|floatformat:2 }}</td></tr>
+        <tr><td>IGV</td><td class="right">{{ quotation.currency|currency_symbol }} {{ quotation.igv_total|floatformat:2 }}</td></tr>
+        <tr><td>TOTAL</td><td class="right">{{ quotation.currency|currency_symbol }} {{ quotation.total|floatformat:2 }}</td></tr>
+      </table>
+    </section>
+    <footer class="footer">{{ document_settings.footer_text|default:"Documento generado por APUDIG" }}</footer>
+  </main>
+  {% endif %}
+</body>
+</html>

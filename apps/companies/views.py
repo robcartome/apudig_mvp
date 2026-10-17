@@ -1,9 +1,12 @@
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseBadRequest
+import mimetypes
+
+from django.http import FileResponse, Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from .models import Company, Store, UserCompanyAccess
+from .models import Company, CompanyBranding, Store, UserCompanyAccess
+from .logo_images import normalized_logo_stream
 from .selectors import get_user_selectable_accesses
 
 
@@ -73,3 +76,27 @@ def select_company_context(request):
 @login_required
 def select_company(request):
     return select_company_context(request)
+
+
+@login_required
+def branding_logo(request, pk):
+    """Entrega el logo cargado sin publicar el resto de MEDIA_ROOT."""
+    from apps.users.permissions import user_can_access_context
+
+    if not user_can_access_context(request.user, pk):
+        raise Http404
+    branding = get_object_or_404(CompanyBranding, company_id=pk)
+    if not branding.logo_file:
+        raise Http404
+    branding.logo_file.open("rb")
+    try:
+        logo_stream = normalized_logo_stream(branding.logo_file)
+        branding.logo_file.close()
+        content_type = "image/png"
+    except (OSError, ValueError):
+        branding.logo_file.seek(0)
+        logo_stream = branding.logo_file
+        content_type = mimetypes.guess_type(branding.logo_file.name)[0] or "application/octet-stream"
+    response = FileResponse(logo_stream, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=3600"
+    return response

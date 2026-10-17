@@ -1,20 +1,19 @@
-"""
-sales/views/pdf.py — Vista PDF de cotizaciones (HTML print-ready).
-
-Genera una página HTML sin el layout base, optimizada para impresión A4.
-El navegador la puede imprimir como PDF con Ctrl+P / window.print().
-"""
+"""Impresión y exportación de cotizaciones."""
 from io import BytesIO
 
 from django.http import Http404, HttpResponse
+from django.urls import reverse
 from django.utils.text import slugify
-from django.http import Http404
-from django.shortcuts import render
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from apps.sales.models import SalesQuotation
+from apps.sales.printing import (
+    CommercialPrintDocument,
+    commercial_pdf_response,
+    render_commercial_print,
+)
 from apps.sales.selectors import get_quotation_detail, search_quotations
 from apps.core.list_filters import read_list_filters
 
@@ -26,25 +25,40 @@ def _require_auth(request):
     return None
 
 
+def _quotation_for_print(request, pk):
+    store_id = getattr(request, "active_store_id", None) or request.session.get("active_store_id")
+    try:
+        quotation = get_quotation_detail(pk)
+    except SalesQuotation.DoesNotExist:
+        raise Http404
+    if not store_id or str(quotation.store_id) != str(store_id):
+        raise Http404
+    return quotation
+
+
+def quotation_print(request, pk):
+    redirect_resp = _require_auth(request)
+    if redirect_resp:
+        return redirect_resp
+
+    quotation = _quotation_for_print(request, pk)
+    return render_commercial_print(
+        request,
+        CommercialPrintDocument(quotation, "quotation"),
+        back_url=reverse("sales:quotation_detail", args=[quotation.pk]),
+        pdf_url=reverse("sales:quotation_pdf", args=[quotation.pk]),
+    )
+
+
 def quotation_pdf(request, pk):
     redirect_resp = _require_auth(request)
     if redirect_resp:
         return redirect_resp
 
-    try:
-        quotation = get_quotation_detail(pk)
-    except SalesQuotation.DoesNotExist:
-        raise Http404
-
-    # Obtener la empresa/compañía para el encabezado del PDF
-    company = None
-    if quotation.store:
-        company = quotation.store.company
-
-    return render(request, "sales/pdf/quotation_pdf.html", {
-        "quotation": quotation,
-        "company": company,
-    })
+    quotation = _quotation_for_print(request, pk)
+    return commercial_pdf_response(
+        request, CommercialPrintDocument(quotation, "quotation")
+    )
 
 
 def quotation_xlsx(request):

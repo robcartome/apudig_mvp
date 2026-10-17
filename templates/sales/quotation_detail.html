@@ -15,9 +15,32 @@
       </nav>
     </div>
     <div class="col-auto d-flex gap-2">
-      <a href="{% url 'sales:quotation_pdf' quotation.pk %}" class="btn btn-sm btn-outline-secondary" target="_blank">
-        <i class="ti ti-printer me-1"></i>PDF
-      </a>
+      <div class="btn-group">
+        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="ti ti-printer me-1"></i>Imprimir
+        </button>
+        <div class="dropdown-menu">
+          <a class="dropdown-item" href="{% url 'sales:quotation_print' quotation.pk %}?format=A4" target="_blank">
+            <i class="ti ti-file-text me-2"></i>Formato A4
+          </a>
+          <a class="dropdown-item" href="{% url 'sales:quotation_print' quotation.pk %}?format=TICKET" target="_blank">
+            <i class="ti ti-receipt me-2"></i>Ticket 80 mm
+          </a>
+        </div>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="ti ti-download me-1"></i>Descargar PDF
+        </button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <a class="dropdown-item" href="{% url 'sales:quotation_pdf' quotation.pk %}?format=A4">
+            <i class="ti ti-file-type-pdf me-2"></i>PDF A4
+          </a>
+          <a class="dropdown-item" href="{% url 'sales:quotation_pdf' quotation.pk %}?format=TICKET">
+            <i class="ti ti-file-type-pdf me-2"></i>PDF ticket
+          </a>
+        </div>
+      </div>
       {% if quotation.status == "DRAFT" %}
       <a href="{% url 'sales:quotation_update' quotation.pk %}" class="btn btn-sm btn-outline-primary">
         <i class="ti ti-edit me-1"></i>Editar
@@ -82,6 +105,12 @@
             <div class="text-muted small">Referencia interna</div>
             <div>{{ quotation.internal_reference|default:"—" }}</div>
           </div>
+          {% if quotation.seller_name %}
+          <div class="col-12 mb-2">
+            <div class="text-muted small">Vendedor</div>
+            <div>{{ quotation.seller_name }}</div>
+          </div>
+          {% endif %}
           {% if quotation.notes %}
           <div class="col-12">
             <div class="text-muted small">Notas</div>
@@ -172,10 +201,15 @@
         <tr>
           <td class="text-muted">{{ forloop.counter }}</td>
           <td>
+            {% if line.is_manual %}
+            <div class="fw-semibold">{{ line.description }}</div>
+            <div class="small text-muted">{{ line.product_code|default:"Sin código" }} · Línea libre</div>
+            {% else %}
             <div class="fw-semibold">{{ line.product.name }}</div>
             <div class="small">{% include "components/unit_equivalence.html" with item=line %}</div>
+            {% endif %}
           </td>
-          <td class="text-muted small">{{ line.description|default:"—" }}</td>
+          <td class="text-muted small">{% if line.is_manual %}Producto o servicio no registrado{% else %}{{ line.description|default:"—" }}{% endif %}</td>
           <td class="text-end">{{ line.quantity|smart_number }}</td>
           <td class="text-end">{{ item.unit_price_ex|floatformat:2 }}</td>
           <td class="text-end">{{ item.unit_price_inc|floatformat:2 }}</td>

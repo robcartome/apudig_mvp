@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <link rel="stylesheet" href="{% static 'css/inventory/movement_form.css' %}">
+<link rel="stylesheet" href="{% static 'css/sales/quotation-form.css' %}?v=20261016-1">
 <style>
   #lines-table td.num-cell { text-align:right; padding-right:.6rem; }
   #lines-table .readonly-cell { background:#f8f9fa; color:#495057; }
@@ -190,18 +191,18 @@
 
     {# Toolbar: búsqueda por código de barra + lista de precios #}
     <div class="card-body border-bottom py-2">
-      <div class="d-flex align-items-end justify-content-between gap-3">
-        <div style="flex:0 0 45%">
-          <label class="form-label mb-1 small text-muted">Buscar por código de barra</label>
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-lg-7">
+          <label class="form-label mb-1 small text-muted">Buscar producto registrado</label>
           <div class="input-group input-group-sm">
             <input type="text" id="barcode-search" class="form-control"
-                   placeholder="Escanea o escribe el código…" autocomplete="off">
+                   placeholder="Nombre, SKU o código de barras…" autocomplete="off">
             <button type="button" id="barcode-btn" class="btn btn-outline-secondary" title="Buscar">
               <i class="ti ti-search"></i>
             </button>
           </div>
         </div>
-        <div style="flex:0 0 45%">
+        <div class="col-12 col-lg-5">
           <label class="form-label mb-1 small text-muted">
             Lista de precios
             <i class="ti ti-info-circle text-muted" title="Selecciona una lista para aplicar precios automáticamente"></i>
@@ -247,6 +248,7 @@
               data-init-unit="{{ lf.initial.product_unit|default:'' }}"
               data-base-unit-id="{{ lf.initial.base_unit_id|default:'' }}"
               data-base-unit-code="{{ lf.initial.base_unit_code|default:'' }}"
+              data-is-manual="{{ lf.is_manual.value|yesno:'true,false' }}"
               data-init-price-igv="{{ lf.initial.price_with_igv|default:'' }}">
 
             <td class="text-center text-muted line-num">{{ forloop.counter }}</td>
@@ -255,23 +257,50 @@
             <td style="min-width:220px">
               {{ lf.product }}{# hidden #}
               {{ lf.description }}{# hidden #}
-              <select class="product-select w-100">
-                {% if lf.initial.product %}
-                <option value="{{ lf.initial.product }}" selected>{{ lf.initial.product_name|default:'' }}</option>
-                {% endif %}
-              </select>
+              {{ lf.product_code }}
+              {{ lf.is_manual }}
+              <div class="catalog-product-field {% if lf.is_manual.value %}d-none{% endif %}">
+                <select class="product-select w-100">
+                  {% if lf.initial.product %}
+                  <option value="{{ lf.initial.product }}" selected>{{ lf.initial.product_name|default:'' }}</option>
+                  {% endif %}
+                </select>
+              </div>
+              <div class="manual-line-fields {% if not lf.is_manual.value %}d-none{% endif %}">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                  <span class="badge bg-azure-lt text-azure">Línea libre · sin stock</span>
+                  <button type="button"
+                          class="btn btn-sm btn-ghost-secondary manual-code-toggle {% if lf.product_code.value %}d-none{% endif %}"
+                          title="Agregar código opcional" aria-label="Agregar código opcional">
+                    <i class="ti ti-barcode"></i>
+                  </button>
+                </div>
+                <input type="text" class="form-control form-control-sm manual-description-input mb-1"
+                       maxlength="500" value="{{ lf.description.value|default:'' }}"
+                       placeholder="Descripción del producto o servicio">
+                <input type="text" class="form-control form-control-sm manual-code-input {% if not lf.product_code.value %}d-none{% endif %}"
+                       maxlength="50" value="{{ lf.product_code.value|default:'' }}"
+                       placeholder="Código opcional">
+              </div>
               {% if lf.product.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.product.errors.0 }}</div>{% endif %}
+              {% if lf.description.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.description.errors.0 }}</div>{% endif %}
             </td>
 
             {# Unidad (display only) #}
             <td>
               {{ lf.unit }}
               <select class="form-select form-select-sm product-unit-select">
+                {% if lf.is_manual.value %}
+                {% for unit in units %}
+                <option value="{{ unit.pk }}" data-code="{{ unit.code }}" data-factor="1" {% if unit.pk|stringformat:'s' == lf.unit.value|stringformat:'s' %}selected{% endif %}>{{ unit.code }} - {{ unit.name }}</option>
+                {% endfor %}
+                {% else %}
                 {% for conversion in lf.initial.product_units %}
                 <option value="{{ conversion.unit_id }}" data-code="{{ conversion.unit.code }}" data-factor="{{ conversion.conversion_factor }}" data-price="{{ conversion.sale_price|default_if_none:'' }}" {% if conversion.unit_id|stringformat:'s' == lf.initial.product_unit_id|stringformat:'s' %}selected{% endif %}>{{ conversion.unit.code }} - {{ conversion.unit.name }}</option>
                 {% empty %}
                 <option value="{{ lf.initial.product_unit_id|default:'' }}">{{ lf.initial.product_unit|default:'—' }}</option>
                 {% endfor %}
+                {% endif %}
               </select>
               <div class="unit-equivalence text-muted mt-1" style="font-size:.7rem"></div>
             </td>
@@ -280,7 +309,7 @@
             <td>
               <div class="input-group input-group-sm">
                 {{ lf.quantity }}
-                <button type="button" class="btn btn-outline-secondary stock-info-btn" title="Ver stock por almacén" aria-label="Ver stock por almacén"><i class="ti ti-info-circle"></i></button>
+                <button type="button" class="btn btn-outline-secondary stock-info-btn {% if lf.is_manual.value %}d-none{% endif %}" title="Ver stock por almacén" aria-label="Ver stock por almacén"><i class="ti ti-info-circle"></i></button>
               </div>
               {% if lf.quantity.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.quantity.errors.0 }}</div>{% endif %}
             </td>
@@ -332,12 +361,20 @@
     </div>
 
     {# Botón agregar #}
-    <div class="card-body py-2">
+    <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
       <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
-        <i class="ti ti-plus me-1"></i>Agregar nuevo ítem
+        <i class="ti ti-package me-1"></i>Agregar producto
       </button>
+      <button type="button" class="btn btn-sm btn-primary" id="add-manual-line">
+        <i class="ti ti-file-plus me-1"></i>Agregar línea libre
+      </button>
+      <span class="text-muted small">Para productos o servicios que no están registrados.</span>
     </div>
   </div>
+
+  <template id="manual-unit-options">
+    {% for unit in units %}<option value="{{ unit.pk }}" data-code="{{ unit.code }}" data-factor="1">{{ unit.code }} - {{ unit.name }}</option>{% endfor %}
+  </template>
 
   {# ── Información adicional + Totales ── #}
   <div class="row g-3 mb-4">
@@ -361,7 +398,7 @@
 
     {# Totales #}
     <div class="col-12 col-md-7">
-      <div class="card h-100">
+      <div class="card h-100 quotation-summary-card">
         <div class="card-header"><h3 class="card-title">Resumen</h3></div>
         <div class="card-body p-0">
           <table class="table table-sm mb-0">
@@ -468,7 +505,7 @@
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260905-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20261016-2"></script>
 <script>
 (function () {
   const cfg = document.getElementById('sales-form-config');

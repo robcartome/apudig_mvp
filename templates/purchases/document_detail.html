@@ -59,9 +59,9 @@
     >
       {% csrf_token %}<button
         class="btn btn-outline-danger btn-sm"
-        onclick="return confirm('Cancelar el documento?');"
+        onclick="return confirm('{% if purchase_document.document_status == 'DRAFT' %}¿Descartar este borrador de compra? La operación quedará cancelada.{% else %}¿Anular toda la compra? Se cancelará el documento y, si generó inventario, se registrará su reversión.{% endif %}');"
       >
-        Cancelar
+        {% if purchase_document.document_status == 'DRAFT' %}Descartar borrador{% else %}Anular compra{% endif %}
       </button>
     </form>
     {% endif %}

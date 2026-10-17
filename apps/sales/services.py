@@ -17,7 +17,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.core.models import AuditLog
-from apps.inventory.models import MovementOrigin, ProductUnit, StockByWarehouse
+from apps.inventory.models import MovementOrigin, Product, ProductUnit, StockByWarehouse, Unit
 from apps.inventory.pricing import money
 from apps.inventory.services import (
     confirm_movement,
@@ -205,6 +205,64 @@ def _normalize_lines_uom(lines):
     return [_normalize_line_uom(line) for line in lines]
 
 
+QUOTATION_MANUAL_PRODUCT_SKU = "VARIOS-COT"
+
+
+def _manual_quotation_product(company_id, unit_id) -> Product:
+    """Producto técnico no inventariable para conceptos libres de cotización."""
+    unit = Unit.objects.filter(pk=unit_id).first()
+    if unit is None:
+        raise ValueError("Seleccione una unidad válida para la línea libre.")
+    product, _ = Product.objects.get_or_create(
+        company_id=company_id,
+        sku=QUOTATION_MANUAL_PRODUCT_SKU,
+        defaults={
+            "name": "Concepto libre de cotización",
+            "description": "Producto técnico para conceptos no registrados.",
+            "unit": unit,
+            "price_sale": Decimal("0.00"),
+            "tax_affectation": "10",
+            "tracks_inventory": False,
+            "active": False,
+        },
+    )
+    update_fields = []
+    if product.tracks_inventory:
+        product.tracks_inventory = False
+        update_fields.append("tracks_inventory")
+    if product.active:
+        product.active = False
+        update_fields.append("active")
+    if update_fields:
+        product.save(update_fields=update_fields)
+    ProductUnit.objects.get_or_create(
+        product=product,
+        unit=unit,
+        defaults={
+            "conversion_factor": 1,
+            "is_default_sale": product.unit_id == unit.pk,
+            "is_default_purchase": product.unit_id == unit.pk,
+            "active": True,
+        },
+    )
+    return product
+
+
+def _prepare_quotation_lines(lines, company_id):
+    prepared = []
+    for raw in lines:
+        line = dict(raw)
+        if line.get("is_manual"):
+            description = (line.get("description") or "").strip()
+            if not description:
+                raise ValueError("Ingrese la descripción del producto o servicio.")
+            line["product"] = _manual_quotation_product(company_id, line.get("unit"))
+            line["description"] = description
+            line["product_code"] = (line.get("product_code") or "").strip()
+        prepared.append(line)
+    return prepared
+
+
 
 @transaction.atomic
 def create_quotation(store_id: str, customer, series: DocumentSeries, lines: list[dict], created_by=None, **kwargs) -> SalesQuotation:
@@ -217,7 +275,7 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
     requested_number = kwargs.pop("number", None)
     series, number = _reserve_quotation_number(series, requested_number)
 
-    lines = _normalize_lines_uom(lines)
+    lines = _normalize_lines_uom(_prepare_quotation_lines(lines, series.company_id))
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
     igv_total = sum(l["igv_amount"] for l in calculated_lines)
@@ -256,6 +314,7 @@ def create_quotation(store_id: str, customer, series: DocumentSeries, lines: lis
             igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
+            is_manual=bool(raw.get("is_manual")),
             memo=raw.get("memo", ""),
             subtotal=calc["subtotal"],
             igv_amount=calc["igv_amount"],
@@ -286,10 +345,21 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
     quotation.series_code = series.series
     quotation.number = number
 
+    customer = kwargs.get("customer")
+    if customer is not None:
+        kwargs.update({
+            "customer_document_type": customer.document_type,
+            "customer_document_number": customer.document_number,
+            "customer_legal_name": customer.legal_name,
+            "customer_address": getattr(customer, "address", ""),
+            "customer_ubigeo": getattr(customer, "ubigeo", ""),
+        })
+
     for attr, value in kwargs.items():
         setattr(quotation, attr, value)
 
-    lines = _normalize_lines_uom(lines)
+    company_id = quotation.store.company_id if quotation.store_id else series.company_id
+    lines = _normalize_lines_uom(_prepare_quotation_lines(lines, company_id))
     calculated_lines = [_calculate_line(l) for l in lines]
     subtotal = sum(l["subtotal"] for l in calculated_lines)
     igv_total = sum(l["igv_amount"] for l in calculated_lines)
@@ -320,6 +390,7 @@ def update_quotation(quotation_id, lines: list[dict], created_by=None, **kwargs)
             igv_rate=raw.get("igv_rate", Decimal("0")),
             sunat_product_code=raw.get("sunat_product_code", ""),
             product_code=raw.get("product_code", ""),
+            is_manual=bool(raw.get("is_manual")),
             memo=raw.get("memo", ""),
             subtotal=calc["subtotal"],
             igv_amount=calc["igv_amount"],

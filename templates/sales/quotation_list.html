@@ -68,10 +68,10 @@
             {% else %}<span class="badge bg-muted-lt">{{ q.get_status_display }}</span>{% endif %}
           </td>
           <td>
-            <a href="{% url 'sales:quotation_pdf' q.pk %}"
+            <a href="{% url 'sales:quotation_print' q.pk %}?format=A4"
                class="btn btn-sm btn-outline-secondary"
                target="_blank"
-               title="Abrir PDF">
+               title="Imprimir cotización A4">
               <i class="ti ti-printer"></i>
             </a>
           </td>

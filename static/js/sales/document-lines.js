@@ -199,7 +199,7 @@
     const calculatedRows = [];
 
     linesBody.querySelectorAll('.line-row').forEach(row => {
-      if (row.style.opacity === '0.3') return;          // deleted rows
+      if (row.classList.contains('d-none')) return;     // deleted rows
       const calculated = calcRow(
         row,
         row === preserveValueRow,
@@ -263,9 +263,11 @@
   function totalForms() { return document.getElementById('id_lines-TOTAL_FORMS'); }
 
   function renumber() {
-    linesBody.querySelectorAll('.line-row').forEach((row, i) => {
+    let visibleIndex = 0;
+    linesBody.querySelectorAll('.line-row').forEach(row => {
       const num = row.querySelector('.line-num');
-      if (num) num.textContent = i + 1;
+      if (!row.classList.contains('d-none')) visibleIndex += 1;
+      if (num) num.textContent = visibleIndex;
     });
   }
 
@@ -293,7 +295,22 @@
       <td style="min-width:220px">
         <input type="hidden" name="lines-${index}-product" id="id_lines-${index}-product" value="">
         <input type="hidden" name="lines-${index}-description" id="id_lines-${index}-description" value="">
-        <select class="product-select w-100"></select>
+        <input type="hidden" name="lines-${index}-product_code" id="id_lines-${index}-product_code" value="">
+        <input type="hidden" name="lines-${index}-is_manual" id="id_lines-${index}-is_manual" value="">
+        <div class="catalog-product-field"><select class="product-select w-100"></select></div>
+        <div class="manual-line-fields d-none">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-azure-lt text-azure">Línea libre · sin stock</span>
+            <button type="button" class="btn btn-sm btn-ghost-secondary manual-code-toggle"
+                    title="Agregar código opcional" aria-label="Agregar código opcional">
+              <i class="ti ti-barcode"></i>
+            </button>
+          </div>
+          <input type="text" class="form-control form-control-sm manual-description-input mb-1"
+                 maxlength="500" placeholder="Descripción del producto o servicio">
+          <input type="text" class="form-control form-control-sm manual-code-input d-none"
+                 maxlength="50" placeholder="Código opcional">
+        </div>
       </td>
 
       <td>
@@ -355,6 +372,34 @@
     return row;
   }
 
+  function activateManualRow(row, focus = true) {
+    row.dataset.isManual = 'true';
+    row.classList.add('is-manual');
+    row.querySelector('input[name*="-is_manual"]').value = 'on';
+    row.querySelector('input[name$="-product"]').value = '';
+    row.querySelector('.catalog-product-field')?.classList.add('d-none');
+    row.querySelector('.manual-line-fields')?.classList.remove('d-none');
+    row.querySelector('.stock-info-btn')?.classList.add('d-none');
+    const unitSelect = row.querySelector('.product-unit-select');
+    const options = document.getElementById('manual-unit-options')?.innerHTML.trim();
+    if (unitSelect && options) {
+      const unitHidden = row.querySelector('input[name*="-unit"]');
+      const currentUnit = unitHidden?.value || unitSelect.value;
+      unitSelect.innerHTML = options;
+      const preferred = Array.from(unitSelect.options).find(option => option.dataset.code === 'NIU');
+      if (currentUnit && Array.from(unitSelect.options).some(option => option.value === currentUnit)) {
+        unitSelect.value = currentUnit;
+      } else if (preferred) {
+        unitSelect.value = preferred.value;
+      }
+      if (unitHidden) unitHidden.value = unitSelect.value;
+    }
+    if (focus) {
+      const description = row.querySelector('.manual-description-input');
+      description?.focus();
+    }
+  }
+
   // ── Product selected event ─────────────────────────────────────────────────
   linesBody.addEventListener('product-picker:selected', event => {
     const row     = event.target.closest('.line-row');
@@ -413,7 +458,13 @@
 
   // ── Input events for recalculation ────────────────────────────────────────
   linesBody.addEventListener('input', event => {
-    if (event.target.matches('.line-total') && editTotal) {
+    if (event.target.matches('.manual-description-input, .manual-code-input')) {
+      const row = event.target.closest('.line-row');
+      const selector = event.target.matches('.manual-description-input')
+        ? 'input[name*="-description"]' : 'input[name*="-product_code"]';
+      const hidden = row?.querySelector(selector);
+      if (hidden) hidden.value = event.target.value;
+    } else if (event.target.matches('.line-total') && editTotal) {
       const row = event.target.closest('.line-row');
       const qty = parseFloat(row?.querySelector('input[name*="-quantity"]')?.value) || 0;
       const discount = parseFloat(row?.querySelector('input[name*="-discount_amount"]')?.value) || 0;
@@ -477,24 +528,55 @@
     ProductPicker.open(row);
   });
 
+  document.getElementById('add-manual-line')?.addEventListener('click', () => {
+    const reusableRow = Array.from(linesBody.querySelectorAll('.line-row')).find(row => (
+      !row.classList.contains('d-none')
+      && row.dataset.isManual !== 'true'
+      && !row.querySelector('input[name$="-product"]')?.value
+      && !row.querySelector('input[name*="-description"]')?.value
+    ));
+    if (reusableRow) {
+      ProductPicker.destroy(reusableRow);
+      activateManualRow(reusableRow);
+      updateSummary();
+      return;
+    }
+    const index = parseInt(totalForms().value, 10);
+    const row = buildRow(index);
+    linesBody.appendChild(row);
+    totalForms().value = index + 1;
+    renumber();
+    activateManualRow(row);
+    updateSummary();
+  });
+
   linesBody.addEventListener('click', event => {
+    const codeToggle = event.target.closest('.manual-code-toggle');
+    if (codeToggle) {
+      const row = codeToggle.closest('.line-row');
+      const codeInput = row?.querySelector('.manual-code-input');
+      codeInput?.classList.remove('d-none');
+      codeToggle.classList.add('d-none');
+      codeInput?.focus();
+      return;
+    }
+
     const btn = event.target.closest('.remove-line');
     if (!btn) return;
 
     const row      = btn.closest('.line-row');
     const delCheck = row.querySelector('input[type=checkbox][name$="-DELETE"]');
 
-    if (linesBody.querySelectorAll('.line-row:not([style*="opacity"])').length <= 1) return;
-
     if (delCheck) {
       delCheck.checked = true;
-      row.style.opacity    = '0.3';
-      row.style.pointerEvents = 'none';
+      ProductPicker.destroy(row);
+      row.classList.add('d-none');
     } else {
       ProductPicker.destroy(row);
       row.remove();
       reindex();
     }
+    renumber();
     updateSummary();
   });
 
@@ -513,7 +595,7 @@
     if (!plId) { pendingPriceListId = null; hidePriceAlert(); return; }
 
     // Check if any product is already selected
-    const hasProducts = !!linesBody.querySelector('input[name*="-product"][value]:not([value=""])');
+    const hasProducts = !!linesBody.querySelector('input[name$="-product"][value]:not([value=""])');
     if (!hasProducts) {
       // No products yet — apply silently when products are added
       pendingPriceListId = plId;
@@ -542,7 +624,7 @@
 
   async function applyPriceList(plId) {
     const productIds = [];
-    linesBody.querySelectorAll('input[name*="-product"]').forEach(el => {
+    linesBody.querySelectorAll('input[name$="-product"]').forEach(el => {
       if (el.value) productIds.push(el.value);
     });
     if (!productIds.length) return;
@@ -554,7 +636,7 @@
       const prices = data.prices || {};
 
       linesBody.querySelectorAll('.line-row').forEach(row => {
-        const productId = row.querySelector('input[name*="-product"]')?.value;
+        const productId = row.querySelector('input[name$="-product"]')?.value;
         if (!productId || !(productId in prices)) return;
 
         const priceInput = row.querySelector('input.price-unit-input');
@@ -587,7 +669,7 @@
         renumber();
         ProductPicker.init(row);
 
-        const productHidden = row.querySelector('input[name*="-product"]');
+        const productHidden = row.querySelector('input[name$="-product"]');
         if (productHidden) productHidden.value = product.id;
 
         const productSelect = row.querySelector('.product-select');
@@ -616,7 +698,11 @@
     const unitId    = row.dataset.initUnitId || '';
     setUnitSelect(row, unitId, unitLabel);
     updateUnitEquivalence(row);
-    ProductPicker.init(row);
+    if (row.dataset.isManual === 'true') {
+      activateManualRow(row, false);
+    } else {
+      ProductPicker.init(row);
+    }
 
     // If unit_price (ex-tax) is set but price-unit-input is empty, compute inc-tax
     const priceInput = row.querySelector('input.price-unit-input');

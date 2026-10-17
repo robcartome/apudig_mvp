@@ -3,7 +3,7 @@ from django.urls import path
 
 from .views import (
     cash_safe_ledger, cash_session_detail, cash_session_export, cash_session_list,
-    receipt_a4, register_create,
+    receipt_a4, receipt_pdf, register_create,
     register_list, register_update, sale_workspace, transaction_list, pos_manifest,
     pos_select_context, pos_service_worker,
 )
@@ -30,4 +30,5 @@ urlpatterns = [
     path("configuracion/nueva/", register_create, name="register_create"),
     path("configuracion/<uuid:pk>/editar/", register_update, name="register_update"),
     path("comprobantes/<uuid:transaction_id>/a4/", receipt_a4, name="receipt_a4"),
+    path("comprobantes/<uuid:transaction_id>/pdf/", receipt_pdf, name="receipt_pdf"),
 ]

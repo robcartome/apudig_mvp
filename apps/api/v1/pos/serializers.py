@@ -217,6 +217,10 @@ class PosTransactionSerializer(serializers.ModelSerializer):
             branding = company.branding
         except ObjectDoesNotExist:
             return ""
+        if branding.logo_file:
+            logo_url = reverse("company_branding_logo", args=[company.pk])
+            request = self.context.get("request")
+            return request.build_absolute_uri(logo_url) if request else logo_url
         return branding.pdf_logo_url or branding.app_logo_url or ""
 
     def get_store_name(self, obj):

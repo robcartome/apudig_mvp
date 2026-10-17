@@ -42,6 +42,7 @@ from .orders import (
     order_from_quot,
     order_list,
     order_pdf,
+    order_print,
     order_update,
 )
 from .documents import (
@@ -58,9 +59,10 @@ from .documents import (
     document_list,
     document_preview,
     document_pdf,
+    document_print,
     document_void,
 )
-from .pdf import quotation_pdf
+from .pdf import quotation_pdf, quotation_print
 from .pdf import quotation_xlsx
 
 __all__ = [
@@ -75,12 +77,12 @@ __all__ = [
     # Quotations
     "quotation_list", "quotation_create", "quotation_detail", "quotation_update",
     "quotation_approve", "quotation_reject", "quotation_cancel", "quotation_copy",
-    "quotation_pdf", "quotation_xlsx", "api_series_next_number", "quotation_preview",
+    "quotation_pdf", "quotation_print", "quotation_xlsx", "api_series_next_number", "quotation_preview",
     # Orders
     "order_list", "order_create", "order_from_quot", "order_detail", "order_update",
-    "order_confirm", "order_cancel", "order_copy", "order_pdf",
+    "order_confirm", "order_cancel", "order_copy", "order_pdf", "order_print",
     # Sales documents
     "document_list", "document_create", "document_copy", "document_delete", "document_edit", "document_from_order", "document_from_quotation", "document_detail", "document_preview",
-    "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf",
+    "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf", "document_print",
 ]
 

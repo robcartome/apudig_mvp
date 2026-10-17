@@ -30,7 +30,7 @@ from apps.sales.services import (
     reject_quotation,
     update_quotation,
 )
-from apps.inventory.models import PriceList, Warehouse
+from apps.inventory.models import PriceList, Unit, Warehouse
 from apps.inventory.pricing import tax_rate_for_company
 from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.users.permissions import user_has_company_permission
@@ -67,7 +67,7 @@ def _lines_from_formset(formset) -> list[dict]:
     for form in formset:
         if not form.cleaned_data or form.cleaned_data.get("DELETE"):
             continue
-        if not form.cleaned_data.get("product"):   # fila vacía (extra row sin producto)
+        if not form.cleaned_data.get("product") and not form.cleaned_data.get("is_manual"):
             continue
         lines.append(form.cleaned_data)
     return lines
@@ -87,7 +87,8 @@ def _build_lines_view(quotation) -> list[dict]:
     for line in quotation.lines.all():
         unit_price_ex = Decimal(str(line.unit_price or 0))
         igv_rate = Decimal(str(line.igv_rate or 0))
-        unit_price_inc = (unit_price_ex * (Decimal("1") + (igv_rate / Decimal("100")))).quantize(Decimal("0.01"))
+        multiplier = Decimal("1") + (igv_rate / Decimal("100")) if line.tax_type == "10" else Decimal("1")
+        unit_price_inc = (unit_price_ex * multiplier).quantize(Decimal("0.01"))
         lines_view.append({
             "line": line,
             "unit_price_ex": unit_price_ex,
@@ -161,7 +162,9 @@ def quotation_create(request):
     default_series = _default_quotation_series(company_id, store_id)
 
     if request.method == "POST":
-        header_form = QuotationHeaderForm(request.POST, company_id=company_id, store_id=store_id)
+        header_form = QuotationHeaderForm(
+            request.POST, company_id=company_id, store_id=store_id, user=request.user
+        )
         line_formset = QuotationLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
@@ -182,6 +185,7 @@ def quotation_create(request):
                         "price_lists": price_lists,
                         "default_price_list_id": str(default_pl.pk) if default_pl else "",
                         "igv_rate": tax_rate_for_company(company_id),
+                        "units": Unit.objects.all(),
                     })
                 try:
                     q = create_quotation(
@@ -200,6 +204,7 @@ def quotation_create(request):
                         internal_reference=cd.get("internal_reference", ""),
                         payment_method=cd.get("payment_method"),
                         means_of_payment=cd.get("means_of_payment"),
+                        seller_name=cd.get("seller_name", ""),
                     )
                     messages.success(request, format_html("Cotización creada: {}.", _quotation_reference(q)))
                     return redirect("sales:quotation_detail", pk=q.pk)
@@ -208,7 +213,7 @@ def quotation_create(request):
     else:
         header_form = QuotationHeaderForm(
             initial={"store": store_id, "series": default_series.pk if default_series else None},
-            company_id=company_id, store_id=store_id,
+            company_id=company_id, store_id=store_id, user=request.user,
         )
         line_formset = QuotationLineFormSet(prefix="lines")
 
@@ -219,6 +224,7 @@ def quotation_create(request):
         "price_lists": price_lists,
         "default_price_list_id": str(default_pl.pk) if default_pl else "",
         "igv_rate": tax_rate_for_company(company_id),
+        "units": Unit.objects.all(),
     })
 
 
@@ -289,7 +295,10 @@ def quotation_update(request, pk):
         return redirect("sales:quotation_detail", pk=pk)
 
     if request.method == "POST":
-        header_form = QuotationHeaderForm(request.POST, instance=quotation, company_id=company_id, store_id=store_id)
+        header_form = QuotationHeaderForm(
+            request.POST, instance=quotation, company_id=company_id,
+            store_id=store_id, user=request.user,
+        )
         line_formset = QuotationLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
@@ -309,14 +318,20 @@ def quotation_update(request, pk):
                         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
                         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
                         "igv_rate": tax_rate_for_company(company_id),
+                        "units": Unit.objects.all(),
                     })
                 try:
                     update_quotation(
                         quotation_id=pk,
                         lines=lines,
+                        store=cd["store"],
+                        customer=cd["customer"],
                         issue_date=cd["issue_date"],
+                        valid_until=cd.get("valid_until"),
+                        currency=cd.get("currency", "PEN"),
                         payment_method=cd.get("payment_method"),
                         means_of_payment=cd.get("means_of_payment"),
+                        seller_name=cd.get("seller_name", ""),
                         series=series,
                         number=cd.get("number"),
                         exchange_rate=cd.get("exchange_rate", 1),
@@ -329,18 +344,23 @@ def quotation_update(request, pk):
                 except ValueError as exc:
                     messages.error(request, str(exc))
     else:
-        header_form = QuotationHeaderForm(instance=quotation, company_id=company_id, store_id=store_id)
+        header_form = QuotationHeaderForm(
+            instance=quotation, company_id=company_id,
+            store_id=store_id, user=request.user,
+        )
         initial = [
             {
-                "product": str(line.product_id),
-                "product_name": line.product.name,
+                "product": "" if line.is_manual else str(line.product_id),
+                "product_name": "" if line.is_manual else line.product.name,
                 "unit": str(line.unit_id or line.product.unit_id),
                 "product_unit": line.unit_code,
                 "product_unit_id": str(line.unit_id or line.product.unit_id),
                 "base_unit_id": str(line.product.unit_id),
                 "base_unit_code": line.product.unit.code,
-                "product_units": line.product.unit_conversions.filter(active=True).select_related("unit"),
+                "product_units": [] if line.is_manual else line.product.unit_conversions.filter(active=True).select_related("unit"),
                 "description": line.description,
+                "product_code": line.product_code,
+                "is_manual": line.is_manual,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
                 "price_with_igv": line.price_unit,
@@ -361,6 +381,7 @@ def quotation_update(request, pk):
         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
         "igv_rate": tax_rate_for_company(company_id),
+        "units": Unit.objects.all(),
     })
 
 
@@ -410,15 +431,17 @@ def quotation_copy(request, pk):
 
     initial_lines = [
         {
-            "product": str(line.product_id),
-            "product_name": line.product.name,
+            "product": "" if line.is_manual else str(line.product_id),
+            "product_name": "" if line.is_manual else line.product.name,
             "unit": str(line.unit_id or line.product.unit_id),
             "product_unit": line.unit_code,
             "product_unit_id": str(line.unit_id or line.product.unit_id),
             "base_unit_id": str(line.product.unit_id),
             "base_unit_code": line.product.unit.code,
-            "product_units": line.product.unit_conversions.filter(active=True).select_related("unit"),
+            "product_units": [] if line.is_manual else line.product.unit_conversions.filter(active=True).select_related("unit"),
             "description": line.description,
+            "product_code": line.product_code,
+            "is_manual": line.is_manual,
             "quantity": line.quantity,
             "unit_price": line.unit_price,
             "price_with_igv": line.price_unit,
@@ -431,7 +454,9 @@ def quotation_copy(request, pk):
     ]
 
     if request.method == "POST":
-        header_form = QuotationHeaderForm(request.POST, company_id=company_id, store_id=store_id)
+        header_form = QuotationHeaderForm(
+            request.POST, company_id=company_id, store_id=store_id, user=request.user
+        )
         line_formset = QuotationLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
@@ -450,6 +475,7 @@ def quotation_copy(request, pk):
                         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
                         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
                         "igv_rate": tax_rate_for_company(company_id),
+                        "units": Unit.objects.all(),
                     })
                 try:
                     q = create_quotation(
@@ -461,11 +487,13 @@ def quotation_copy(request, pk):
                         issue_date=cd["issue_date"],
                         valid_until=cd.get("valid_until"),
                         currency=cd.get("currency", "PEN"),
+                        exchange_rate=cd.get("exchange_rate") or 1,
                         price_list=cd.get("price_list"),
                         notes=cd.get("notes", ""),
                         internal_reference=cd.get("internal_reference", ""),
                         payment_method=cd.get("payment_method"),
                         means_of_payment=cd.get("means_of_payment"),
+                        seller_name=cd.get("seller_name", ""),
                     )
                     messages.success(request, format_html("Cotización copiada: {}.", _quotation_reference(q)))
                     return redirect("sales:quotation_detail", pk=q.pk)
@@ -482,8 +510,15 @@ def quotation_copy(request, pk):
             "currency": source.currency,
             "notes": source.notes,
             "internal_reference": source.internal_reference,
+            "seller_name": source.seller_name,
+            "exchange_rate": source.exchange_rate,
+            "payment_method": source.payment_method_id,
+            "means_of_payment": source.means_of_payment_id,
         }
-        header_form = QuotationHeaderForm(initial=initial_header, company_id=company_id, store_id=store_id)
+        header_form = QuotationHeaderForm(
+            initial=initial_header, company_id=company_id,
+            store_id=store_id, user=request.user,
+        )
         line_formset = QuotationLineFormSet(initial=initial_lines, prefix="lines")
 
     return render(request, "sales/quotation_form.html", {
@@ -493,6 +528,7 @@ def quotation_copy(request, pk):
         "price_lists": PriceList.objects.filter(company_id=company_id, active=True).order_by("name") if company_id else PriceList.objects.none(),
         "default_price_list_id": str(PriceList.objects.filter(company_id=company_id, is_default=True, active=True).values_list("pk", flat=True).first() or ""),
         "igv_rate": tax_rate_for_company(company_id),
+        "units": Unit.objects.all(),
     })
 
 

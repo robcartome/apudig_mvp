@@ -33,10 +33,11 @@
       <tr>
         <td class="text-muted">{{ forloop.counter }}</td>
         <td>
-          <div class="fw-semibold">{{ line.product.name }}</div>
+          <div class="fw-semibold">{% if line.is_manual %}{{ line.description }}{% else %}{{ line.product.name }}{% endif %}</div>
+          {% if line.is_manual %}<div class="text-muted small">{{ line.product_code|default:"Sin código" }} · Línea libre</div>{% endif %}
           {% if line.memo %}<div class="text-muted small">{{ line.memo }}</div>{% endif %}
         </td>
-        <td class="small">{% include "components/unit_equivalence.html" with item=line %}</td>
+        <td class="small">{% if line.is_manual %}{{ line.unit_code }}{% else %}{% include "components/unit_equivalence.html" with item=line %}{% endif %}</td>
         <td class="text-end">{{ line.quantity|smart_number }}</td>
         <td class="text-end">{{ item.unit_price_ex|floatformat:2 }}</td>
         <td class="text-end">{{ item.unit_price_inc|floatformat:2 }}</td>

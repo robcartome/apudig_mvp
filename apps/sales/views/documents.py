@@ -36,6 +36,11 @@ from apps.sales.models import (
     SalesQuotation,
     SALES_DOCUMENT_STATUS_CHOICES,
 )
+from apps.sales.printing import (
+    CommercialPrintDocument,
+    commercial_pdf_response,
+    render_commercial_print,
+)
 from apps.sales.selectors import get_document_detail, search_sales_documents, get_series_for_store
 from apps.sales.services import (
     cancel_sales_document,
@@ -748,5 +753,26 @@ def document_pdf(request, pk):
         sales_document = get_document_detail(pk, store_id=store_id)
     except SalesDocument.DoesNotExist:
         raise Http404
-    company = sales_document.store.company if sales_document.store else None
-    return render(request, "sales/pdf/document_pdf.html", {"sales_document": sales_document, "company": company})
+    pos_transaction = getattr(sales_document, "pos_transaction", None)
+    return commercial_pdf_response(
+        request,
+        CommercialPrintDocument(sales_document, "sales", pos_transaction),
+    )
+
+
+def document_print(request, pk):
+    redirect_resp = _require_document_permission(request, "read")
+    if redirect_resp:
+        return redirect_resp
+    _, store_id = _get_ids(request)
+    try:
+        sales_document = get_document_detail(pk, store_id=store_id)
+    except SalesDocument.DoesNotExist:
+        raise Http404
+    pos_transaction = getattr(sales_document, "pos_transaction", None)
+    return render_commercial_print(
+        request,
+        CommercialPrintDocument(sales_document, "sales", pos_transaction),
+        back_url=reverse("sales:document_detail", args=[sales_document.pk]),
+        pdf_url=reverse("sales:document_pdf", args=[sales_document.pk]),
+    )

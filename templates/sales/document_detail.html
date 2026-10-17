@@ -39,8 +39,8 @@
       <form method="post" action="{% url 'sales:document_cancel' sales_document.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-outline-danger btn-sm"
-                onclick="return confirm('¿Cancelar este borrador?')">
-          <i class="ti ti-x me-1"></i>Cancelar borrador
+                onclick="return confirm('¿Descartar este borrador de venta? La operación quedará cancelada.')">
+          <i class="ti ti-x me-1"></i>Descartar borrador
         </button>
       </form>
       {% endif %}
@@ -52,14 +52,25 @@
         <i class="ti ti-file-minus me-1"></i>Nota de crédito
       </a>
       <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#voidModal">
-        <i class="ti ti-ban me-1"></i>Anular
+        <i class="ti ti-ban me-1"></i>Anular venta
       </button>
       {% endif %}
 
       {% if sales_document.status in "DRAFT,ISSUED" %}
-      <a href="{% url 'sales:document_pdf' sales_document.pk %}" target="_blank" class="btn btn-ghost-secondary btn-sm">
-        <i class="ti ti-printer me-1"></i>PDF
-      </a>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="ti ti-printer me-1"></i>Imprimir</button>
+        <div class="dropdown-menu">
+          <a class="dropdown-item" href="{% url 'sales:document_print' sales_document.pk %}?format=A4" target="_blank">Formato A4</a>
+          <a class="dropdown-item" href="{% url 'sales:document_print' sales_document.pk %}?format=TICKET" target="_blank">Ticket 80 mm</a>
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="ti ti-download me-1"></i>PDF</button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <a class="dropdown-item" href="{% url 'sales:document_pdf' sales_document.pk %}?format=A4">Descargar A4</a>
+          <a class="dropdown-item" href="{% url 'sales:document_pdf' sales_document.pk %}?format=TICKET">Descargar ticket</a>
+        </div>
+      </div>
       {% endif %}
     </div>
   </div>

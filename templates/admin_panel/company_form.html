@@ -14,7 +14,7 @@
   </div>
 </div>
 
-<form method="post" novalidate>
+<form method="post" enctype="multipart/form-data" novalidate>
   {% csrf_token %}
 
   {% if company_form.errors or branding_form.errors %}
@@ -37,9 +37,29 @@
     </div>
     <div class="card-body">
 
-      {# Logo URL #}
+      {# Logo subido #}
       <div class="mb-3 row">
-        <label class="col-sm-3 col-form-label text-end fw-semibold">Logo (URL)</label>
+        <label class="col-sm-3 col-form-label text-end fw-semibold">Logo de la empresa</label>
+        <div class="col-sm-9">
+          {{ branding_form.logo_file }}
+          {% if branding_form.logo_file.errors %}<div class="text-danger small mt-1">{{ branding_form.logo_file.errors.0 }}</div>{% endif %}
+          <div class="form-text">
+            Recomendado: <strong>1200 × 400 px</strong>, proporción horizontal 3:1, PNG con fondo transparente.
+            Mínimo 240 × 80 px; máximo 2 MB. Se utilizará en A4, PDF y tickets.
+          </div>
+          {% if company.branding.logo_file %}
+          <div class="mt-2 d-flex align-items-center gap-3">
+            <img src="{% url 'company_branding_logo' company.pk %}" alt="Logo actual"
+                 style="width:240px;height:80px;object-fit:contain;border:1px solid #dee2e6;border-radius:4px;padding:6px;background:#fff;">
+            <span class="text-muted small">Vista previa en proporción imprimible</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# URL heredada / alternativa #}
+      <div class="mb-3 row">
+        <label class="col-sm-3 col-form-label text-end fw-semibold">Logo por URL</label>
         <div class="col-sm-9">
           {% with f=branding_form.app_logo_url %}
           <input type="url" name="{{ f.html_name }}" value="{{ f.value|default:'' }}"
@@ -47,7 +67,7 @@
                  placeholder="https://...  (URL pública del logo)">
           {% if f.errors %}<div class="invalid-feedback">{{ f.errors.as_text }}</div>{% endif %}
           {% endwith %}
-          {% if company.branding.app_logo_url %}
+          {% if not company.branding.logo_file and company.branding.app_logo_url %}
           <div class="mt-2">
             <img src="{{ company.branding.app_logo_url }}" alt="Logo actual" style="max-height:60px; border:1px solid #dee2e6; border-radius:4px; padding:4px;">
           </div>

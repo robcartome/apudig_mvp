@@ -108,6 +108,7 @@ class CompanyBranding(TimeStampedModel):
     )
     app_logo_url = models.CharField(max_length=1000, blank=True)
     pdf_logo_url = models.CharField(max_length=1000, blank=True)
+    logo_file = models.ImageField(upload_to="company_logos/%Y/%m/", blank=True)
     primary_color = models.CharField(max_length=20, blank=True, default="#066fd1")
     secondary_color = models.CharField(max_length=20, blank=True, default="#4a4a4a")
 
@@ -116,6 +117,15 @@ class CompanyBranding(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"Branding – {self.company}"
+
+    def printable_logo_source(self):
+        """Ruta local preferida para PDF; conserva URLs como compatibilidad."""
+        if self.logo_file:
+            try:
+                return self.logo_file.path
+            except (NotImplementedError, ValueError):
+                pass
+        return self.pdf_logo_url or self.app_logo_url or ""
 
 
 class Store(TimeStampedModel):

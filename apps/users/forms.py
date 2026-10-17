@@ -142,17 +142,37 @@ class CompanyAdminForm(forms.ModelForm):
 class CompanyBrandingAdminForm(forms.ModelForm):
     class Meta:
         model = CompanyBranding
-        fields = ("app_logo_url", "primary_color", "secondary_color")
+        fields = ("logo_file", "app_logo_url", "primary_color", "secondary_color")
         widgets = {
             "primary_color": forms.TextInput(attrs={"type": "color", "class": "form-control form-control-color"}),
             "secondary_color": forms.TextInput(attrs={"type": "color", "class": "form-control form-control-color"}),
             "app_logo_url": forms.URLInput(attrs={"placeholder": "https://...  (URL del logo)"}),
+            "logo_file": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/png,image/jpeg,image/webp"}),
         }
         labels = {
+            "logo_file": "Archivo del logo",
             "app_logo_url": "URL del logo",
             "primary_color": "Color primario",
             "secondary_color": "Color secundario",
         }
+
+    def clean_logo_file(self):
+        logo = self.cleaned_data.get("logo_file")
+        if not logo:
+            return logo
+        # Al editar, Django devuelve el FieldFile ya almacenado si no se
+        # seleccionó un archivo nuevo; ese valor ya fue validado al subirlo.
+        if not hasattr(logo, "content_type"):
+            return logo
+        if logo.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("El logo no debe superar 2 MB.")
+        if getattr(logo, "content_type", "") not in {"image/png", "image/jpeg", "image/webp"}:
+            raise forms.ValidationError("Use una imagen PNG, JPG o WebP.")
+        width = getattr(logo.image, "width", 0)
+        height = getattr(logo.image, "height", 0)
+        if width < 240 or height < 80:
+            raise forms.ValidationError("El logo debe medir al menos 240 × 80 px.")
+        return logo
 
 
 class StoreAdminForm(forms.ModelForm):

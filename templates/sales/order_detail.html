@@ -15,9 +15,20 @@
       </nav>
     </div>
     <div class="col-auto d-flex gap-2">
-      <a href="{% url 'sales:order_pdf' order.pk %}" class="btn btn-sm btn-outline-secondary" target="_blank">
-        <i class="ti ti-printer me-1"></i>PDF
-      </a>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="ti ti-printer me-1"></i>Imprimir</button>
+        <div class="dropdown-menu">
+          <a class="dropdown-item" href="{% url 'sales:order_print' order.pk %}?format=A4" target="_blank">Formato A4</a>
+          <a class="dropdown-item" href="{% url 'sales:order_print' order.pk %}?format=TICKET" target="_blank">Ticket 80 mm</a>
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="ti ti-download me-1"></i>PDF</button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <a class="dropdown-item" href="{% url 'sales:order_pdf' order.pk %}?format=A4">Descargar A4</a>
+          <a class="dropdown-item" href="{% url 'sales:order_pdf' order.pk %}?format=TICKET">Descargar ticket</a>
+        </div>
+      </div>
       {% if order.status == "DRAFT" %}
       <a href="{% url 'sales:order_update' order.pk %}" class="btn btn-sm btn-outline-primary">
         <i class="ti ti-edit me-1"></i>Editar

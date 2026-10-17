@@ -7,7 +7,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.companies.models import Company, Store
+from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Category, Product, Unit
 from apps.partners.models import Customer, DocumentType
 from apps.sales.models import (
@@ -26,6 +26,7 @@ from apps.sales.services import (
 )
 
 from django.contrib.auth import get_user_model
+from apps.users.models import UserStore
 User = get_user_model()
 
 
@@ -203,6 +204,10 @@ class SaleOrderViewsTest(TestCase):
         )
         self.product = _make_product("Prod Views OV")
         self.user = User.objects.create_user(email="ov@demo.com", password="pass1234")
+        UserCompanyAccess.objects.create(
+            user=self.user, company=self.company, store=self.store, is_default=True
+        )
+        UserStore.objects.create(user=self.user, store=self.store, role="SELLER")
         session = self.client.session
         session["active_company_id"] = str(self.company.pk)
         session["active_store_id"] = str(self.store.pk)
@@ -275,6 +280,16 @@ class SaleOrderViewsTest(TestCase):
         order = self._create_order()
         resp = self.client.get(reverse("sales:order_pdf", kwargs={"pk": order.pk}))
         self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertTrue(resp.content.startswith(b"%PDF-"))
+
+        printable = self.client.get(
+            reverse("sales:order_print", kwargs={"pk": order.pk}),
+            {"format": "TICKET"},
+        )
+        self.assertEqual(printable.status_code, 200)
+        self.assertContains(printable, "Descuentos")
+        self.assertContains(printable, "Ticket 80 mm")
 
     def test_confirm_view(self):
         self._login()

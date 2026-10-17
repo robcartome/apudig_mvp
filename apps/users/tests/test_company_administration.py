@@ -1,8 +1,20 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from django.urls import reverse
+from io import BytesIO
+import tempfile
 
-from apps.companies.models import Company, CompanyOperationalSettings, Store, UserCompanyAccess
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from PIL import Image
+
+from apps.companies.models import (
+    Company,
+    CompanyBranding,
+    CompanyOperationalSettings,
+    Store,
+    UserCompanyAccess,
+)
+from apps.users.forms import CompanyBrandingAdminForm
 from apps.users.models import Role, UserRole, UserStore
 
 
@@ -58,6 +70,64 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         session["active_company_id"] = str((company or self.company).pk)
         session["active_store_id"] = str((store or self.store_a).pk)
         session.save()
+
+    @staticmethod
+    def _logo_upload(width=1200, height=400):
+        stream = BytesIO()
+        image = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+        if width >= 600 and height >= 200:
+            from PIL import ImageDraw
+
+            ImageDraw.Draw(image).rectangle(
+                (width // 3, height // 3, width * 2 // 3, height * 2 // 3),
+                fill=(21, 105, 170, 255),
+            )
+        image.save(stream, "PNG")
+        return SimpleUploadedFile(
+            "logo-empresa.png", stream.getvalue(), content_type="image/png"
+        )
+
+    def test_branding_accepts_recommended_logo_and_serves_it_privately(self):
+        self.activate(self.company_admin)
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            branding, _ = CompanyBranding.objects.get_or_create(company=self.company)
+            form = CompanyBrandingAdminForm(
+                data={"primary_color": "#1769aa", "secondary_color": "#ffffff"},
+                files={"logo_file": self._logo_upload()},
+                instance=branding,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+            response = self.client.get(
+                reverse("company_branding_logo", args=[self.company.pk])
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["Content-Type"], "image/png")
+            payload = b"".join(response.streaming_content)
+            self.assertTrue(payload.startswith(b"\x89PNG"))
+            rendered_logo = Image.open(BytesIO(payload))
+            self.assertLess(rendered_logo.width, 600)
+            self.assertLess(rendered_logo.height, 200)
+
+            unchanged_form = CompanyBrandingAdminForm(
+                data={"primary_color": "#1769aa", "secondary_color": "#ffffff"},
+                instance=saved,
+            )
+            self.assertTrue(unchanged_form.is_valid(), unchanged_form.errors)
+            saved.logo_file.delete(save=False)
+
+    def test_branding_rejects_logo_below_print_minimum(self):
+        branding, _ = CompanyBranding.objects.get_or_create(company=self.company)
+        form = CompanyBrandingAdminForm(
+            data={"primary_color": "#1769aa", "secondary_color": "#ffffff"},
+            files={"logo_file": self._logo_upload(width=200, height=60)},
+            instance=branding,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("al menos 240", form.errors["logo_file"][0])
 
     def test_non_staff_company_admin_can_open_management(self):
         self.assertFalse(self.company_admin.is_staff)
