@@ -7,7 +7,12 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.companies.models import Company, CompanyOperationalSettings, Store
+from apps.companies.models import (
+    Company,
+    CompanyOperationalSettings,
+    Store,
+    UserCompanyAccess,
+)
 from apps.core.models import AuditLog
 from apps.inventory.models import (
     Category,
@@ -40,7 +45,7 @@ from apps.sales.services import (
     update_sales_document_draft,
     void_sales_document,
 )
-from apps.users.models import Permission, Role, RolePermission, UserRole
+from apps.users.models import Permission, Role, RolePermission, UserRole, UserStore
 
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -1102,6 +1107,8 @@ class SalesDocumentViewsTest(TestCase):
         )
         self.assertContains(resp, "Documento de venta")
         self.assertContains(resp, "BitÃ¡cora de auditorÃ­a")
+        self.assertContains(resp, "Descartar borrador")
+        self.assertContains(resp, "La operación quedará cancelada")
 
     def test_detail_is_isolated_by_active_store(self):
         self._login()
@@ -1163,12 +1170,29 @@ class SalesDocumentViewsTest(TestCase):
         )
         v.refresh_from_db()
         self.assertEqual(v.status, "ISSUED")
+        resp = self.client.get(reverse("sales:document_detail", kwargs={"pk": v.pk}))
+        self.assertContains(resp, "Anular venta")
 
     def test_pdf_ok(self):
+        UserCompanyAccess.objects.create(
+            user=self.user, company=self.company, store=self.store, is_default=True
+        )
+        UserStore.objects.create(user=self.user, store=self.store, role="SELLER")
         self._login()
+        self._grant_permission("read")
         v = self._create_draft()
         resp = self.client.get(reverse("sales:document_pdf", kwargs={"pk": v.pk}))
         self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertTrue(resp.content.startswith(b"%PDF-"))
+
+        printable = self.client.get(
+            reverse("sales:document_print", kwargs={"pk": v.pk}),
+            {"format": "A4"},
+        )
+        self.assertEqual(printable.status_code, 200)
+        self.assertContains(printable, "Total descuentos")
+        self.assertContains(printable, reverse("sales:document_pdf", args=[v.pk]))
 
     def test_cancel_view(self):
         self._login()

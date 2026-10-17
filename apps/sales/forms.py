@@ -1,6 +1,7 @@
 """
 sales/forms.py — Formularios del módulo de ventas.
 """
+from datetime import timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -13,7 +14,8 @@ from apps.core.currency import currency_choices
 from apps.companies.models import Store
 from apps.inventory.models import PriceList, Product, Warehouse
 from apps.partners.models import Customer, DocumentType
-from apps.users.models import Employee
+from apps.users.models import Employee, UserStore
+from apps.users.permissions import user_store_role
 
 from .models import (
     DocumentSeries,
@@ -210,15 +212,21 @@ class QuotationHeaderForm(forms.ModelForm):
         required=False,
         widget=forms.HiddenInput(),
     )
-    seller_name = forms.CharField(
+    seller_name = forms.ChoiceField(
         label="Vendedor",
-        max_length=200,
         required=False,
-        widget=forms.TextInput(attrs={**_text, "placeholder": "—"}),
+        choices=(),
+        widget=forms.Select(attrs=_select),
     )
 
-    def __init__(self, *args, company_id=None, store_id=None, **kwargs):
+    def __init__(self, *args, company_id=None, store_id=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        selected_store_id = store_id
+        if self.is_bound and self.data.get("store"):
+            selected_store_id = self.data.get("store")
+        elif self.instance.pk and self.instance.store_id:
+            selected_store_id = self.instance.store_id
+        self._configure_seller_field(user, company_id, selected_store_id)
         if company_id and not self.is_bound:
             from apps.inventory.pricing import tax_rate_for_company
             self.fields["igv_rate_default"].initial = tax_rate_for_company(company_id)
@@ -226,7 +234,11 @@ class QuotationHeaderForm(forms.ModelForm):
             Customer.objects.filter(active=True), company_id
         ).order_by("legal_name")
         self.fields["customer"].widget = forms.HiddenInput()
-        self.fields["customer"].required = False
+        self.fields["customer"].required = True
+        if company_id:
+            self.fields["store"].queryset = Store.objects.filter(
+                company_id=company_id, active=True
+            ).order_by("name")
         if company_id and store_id:
             self.fields["series"].queryset = DocumentSeries.objects.filter(
                 company_id=company_id,
@@ -259,27 +271,70 @@ class QuotationHeaderForm(forms.ModelForm):
         })
         if self.instance.pk and self.instance.number and not self.is_bound:
             self.initial["number"] = f"{self.instance.number:08d}"
-        # Fechas con datetime-local — se crea un nuevo widget para que input_type se aplique
-        # correctamente (DateInput.__init__ hace pop de "type" y lo asigna a input_type)
+        # La cotización trabaja con fechas comerciales, no con horas.
         for fname in ("issue_date", "valid_until"):
             self.fields[fname].widget = forms.DateInput(
-                format='%Y-%m-%dT%H:%M',
-                attrs={"class": "form-control", "type": "datetime-local"},
+                format='%Y-%m-%d',
+                attrs={"class": "form-control", "type": "date"},
             )
-            self.fields[fname].input_formats = [
-                '%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d',
-            ]
-        _set_default_issue_date(self, include_time=True)
+            self.fields[fname].input_formats = ['%Y-%m-%d']
+        _set_default_issue_date(self)
         if not self.is_bound and self.instance._state.adding and not self.initial.get("valid_until"):
-            self.initial["valid_until"] = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+            self.initial["valid_until"] = (
+                timezone.localdate() + timedelta(days=15)
+            ).isoformat()
+
+    def _configure_seller_field(self, user, company_id, store_id):
+        choices = [("", "— Seleccionar —")]
+        current_name = ""
+        if user and user.is_authenticated:
+            current_name = user.display_name
+            if user_store_role(user, company_id, store_id) == "ADMIN":
+                accesses = (
+                    UserStore.objects.filter(
+                        store_id=store_id,
+                        store__company_id=company_id,
+                        is_active=True,
+                        user__is_active=True,
+                    )
+                    .select_related("user")
+                    .order_by("user__name", "user__email")
+                )
+                role_labels = dict(UserStore.ROLE_CHOICES)
+                choices.extend(
+                    (
+                        access.user.display_name,
+                        f"{access.user.display_name} · {role_labels.get(access.role, access.role)}",
+                    )
+                    for access in accesses
+                )
+            else:
+                choices.append((current_name, current_name))
+
+        existing_name = self.initial.get("seller_name") or getattr(
+            self.instance, "seller_name", ""
+        )
+        known_values = {value for value, _label in choices}
+        if existing_name and existing_name not in known_values:
+            choices.append((existing_name, existing_name))
+        self.fields["seller_name"].choices = choices
+        if (
+            current_name
+            and not self.is_bound
+            and self.instance._state.adding
+            and not self.initial.get("seller_name")
+        ):
+            self.initial["seller_name"] = current_name
 
     def clean(self):
         cleaned_data = super().clean()
         series = cleaned_data.get("series")
         number = (cleaned_data.get("number") or "").strip()
-        if number and (not number.isdigit() or int(number) < 1):
+        if not number:
+            cleaned_data["number"] = None
+        elif not number.isdigit() or int(number) < 1:
             self.add_error("number", "Ingrese un correlativo numérico mayor que cero.")
-        elif series and number:
+        elif series:
             numeric_number = int(number)
             cleaned_data["number"] = numeric_number
             duplicate = SalesQuotation.objects.filter(series=series, number=numeric_number)
@@ -297,7 +352,7 @@ class QuotationHeaderForm(forms.ModelForm):
         fields = (
             "store", "customer", "series", "number", "issue_date", "valid_until",
             "currency", "exchange_rate", "price_list", "notes", "internal_reference",
-            "payment_method", "means_of_payment",
+            "payment_method", "means_of_payment", "seller_name",
         )
         widgets = {
             "internal_reference": forms.TextInput(attrs=_text),
@@ -323,8 +378,11 @@ class QuotationLineForm(forms.Form):
         required=False,
         widget=forms.HiddenInput(),
     )
+    product_code = forms.CharField(max_length=50, required=False, widget=forms.HiddenInput())
+    is_manual = forms.BooleanField(required=False, widget=forms.HiddenInput())
     unit = forms.UUIDField(required=False, widget=forms.HiddenInput())
     quantity = forms.DecimalField(
+        label="Cantidad",
         min_value=Decimal("0.01"),
         max_digits=14,
         decimal_places=2,
@@ -368,6 +426,19 @@ class QuotationLineForm(forms.Form):
 
     def clean_igv_rate(self):
         return self.cleaned_data.get("igv_rate") or Decimal("0")
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("DELETE"):
+            return cleaned
+        if cleaned.get("is_manual"):
+            if not (cleaned.get("description") or "").strip():
+                self.add_error("description", "Ingrese la descripción del producto o servicio.")
+            if not cleaned.get("unit"):
+                self.add_error("unit", "Seleccione una unidad de medida.")
+        elif not cleaned.get("product"):
+            self.add_error("product", "Seleccione un producto o use una línea libre.")
+        return cleaned
 
 
 QuotationLineFormSet = forms.formset_factory(

@@ -653,7 +653,7 @@ def company_create(request):
         return err
 
     company_form = CompanyAdminForm(request.POST or None)
-    branding_form = CompanyBrandingAdminForm(request.POST or None)
+    branding_form = CompanyBrandingAdminForm(request.POST or None, request.FILES or None)
 
     if request.method == "POST" and company_form.is_valid() and branding_form.is_valid():
         with transaction.atomic():
@@ -693,7 +693,9 @@ def company_edit(request, pk):
     stores = company.stores.order_by("name")
 
     company_form = CompanyAdminForm(request.POST or None, instance=company)
-    branding_form = CompanyBrandingAdminForm(request.POST or None, instance=branding)
+    branding_form = CompanyBrandingAdminForm(
+        request.POST or None, request.FILES or None, instance=branding
+    )
 
     if request.method == "POST" and company_form.is_valid() and branding_form.is_valid():
         with transaction.atomic():

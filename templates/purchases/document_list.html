@@ -87,10 +87,10 @@
               {% endif %}
               {% if doc.document_status == 'REGISTERED' and can_authorize_purchase_documents %}
               <form method="post" action="{% url 'purchases:document_cancel' doc.pk %}" class="d-inline"
-                onsubmit="return confirm('¿Cancelar este documento? Si generó inventario, se registrará la reversión correspondiente.')">
+                onsubmit="return confirm('¿Anular toda la compra? Se cancelará el documento y, si generó inventario, se registrará su reversión.')">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-warning" title="Cancelar documento"
-                  aria-label="Cancelar documento"><i class="ti ti-ban"></i></button>
+                <button type="submit" class="btn btn-sm btn-outline-warning" title="Anular compra"
+                  aria-label="Anular compra"><i class="ti ti-ban"></i></button>
               </form>
               {% endif %}
               {% if doc.document_status == 'DRAFT' and can_manage_purchase_documents %}

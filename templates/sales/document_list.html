@@ -68,7 +68,7 @@
                class="btn btn-sm btn-outline-secondary js-document-preview" title="Detalle del documento" aria-label="Detalle del documento">
               <i class="ti ti-eye"></i>
             </a>
-            <a href="{% url 'sales:document_pdf' v.pk %}" target="_blank"
+            <a href="{% url 'sales:document_print' v.pk %}?format=A4" target="_blank"
                class="btn btn-sm btn-outline-secondary" title="Ver PDF / imprimir">
               <i class="ti ti-file-type-pdf"></i>
             </a>

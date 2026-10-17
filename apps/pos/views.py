@@ -22,6 +22,11 @@ from apps.companies.views import select_company_context
 from apps.inventory.models import Product, Warehouse
 from apps.partners.models import Customer
 from apps.sales.models import DocumentSeries, MeansOfPayment
+from apps.sales.printing import (
+    CommercialPrintDocument,
+    commercial_pdf_response,
+    render_commercial_print,
+)
 from apps.pos.forms import PosRegisterForm
 from apps.pos.models import (
     CashMovement, CashSession, PosRegister, PosTransaction, SalesPayment,
@@ -573,7 +578,24 @@ def register_update(request, pk):
 
 @login_required
 def receipt_a4(request, transaction_id):
-    """Vista A4 imprimible del comprobante POS, limitada al contexto activo."""
+    """Vista imprimible del comprobante POS, limitada al contexto activo."""
+    print_document = _pos_print_document(request, transaction_id)
+    return render_commercial_print(
+        request,
+        print_document,
+        back_url=reverse("pos:sale"),
+        pdf_url=reverse("pos:receipt_pdf", args=[transaction_id]),
+        default_format_override="A4",
+    )
+
+
+@login_required
+def receipt_pdf(request, transaction_id):
+    """Descarga PDF A4 o ticket usando los permisos propios del POS."""
+    return commercial_pdf_response(request, _pos_print_document(request, transaction_id))
+
+
+def _pos_print_document(request, transaction_id):
     company_id = getattr(request, "active_company_id", None) or request.session.get("active_company_id")
     store_id = getattr(request, "active_store_id", None) or request.session.get("active_store_id")
     if not user_has_company_permission(
@@ -596,17 +618,4 @@ def receipt_a4(request, transaction_id):
         store_id=store_id,
     )
     sales_document = transaction.sales_document
-    company = sales_document.store.company if sales_document.store_id else None
-    branding = company.branding if company and hasattr(company, "branding") else None
-    logo_url = (branding.pdf_logo_url or branding.app_logo_url) if branding else ""
-    return render(
-        request,
-        "sales/pdf/document_pdf.html",
-        {
-            "sales_document": sales_document,
-            "company": company,
-            "company_logo_url": logo_url,
-            "pos_transaction": transaction,
-            "from_pos": True,
-        },
-    )
+    return CommercialPrintDocument(sales_document, "sales", transaction)

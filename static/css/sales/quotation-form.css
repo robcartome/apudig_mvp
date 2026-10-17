@@ -1,0 +1,23 @@
+.quotation-summary-card {
+  position: sticky;
+  top: 1rem;
+}
+
+#lines-table .manual-line-fields {
+  min-width: 260px;
+}
+
+#lines-table .manual-line-fields .form-control {
+  height: auto;
+  min-height: calc(1.5em + .5rem + 2px);
+}
+
+#lines-table .line-row.is-manual {
+  background: color-mix(in srgb, var(--tblr-azure) 4%, white);
+}
+
+@media (max-width: 767.98px) {
+  #lines-table .manual-line-fields {
+    min-width: 230px;
+  }
+}

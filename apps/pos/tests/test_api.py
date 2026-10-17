@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.companies.models import Company, CompanyBranding, Store
@@ -1017,6 +1018,14 @@ class PosApiTest(TestCase):
         self.assertEqual(a4.status_code, 200, a4.content)
         self.assertContains(a4, "https://cdn.example.test/logo-pos.png")
         self.assertContains(a4, "Datos de la operación POS")
+        self.assertContains(a4, "Total descuentos")
+        transaction = PosTransaction.objects.get(pk=data["id"])
+        pdf_url = reverse("pos:receipt_pdf", args=[transaction.pk])
+        self.assertContains(a4, pdf_url)
+        pdf = self.client.get(pdf_url, {"format": "A4"})
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
 
     def test_sunat_hash_enables_official_qr_payload(self):
         session_id = self._open_session()

@@ -236,6 +236,7 @@ class SalesQuotation(TimeStampedModel):
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
     internal_reference = models.CharField(max_length=100, blank=True)
+    seller_name = models.CharField(max_length=200, blank=True)
     payment_method = models.ForeignKey(
         "PaymentMethod", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="quotations", verbose_name="Forma de pago"
@@ -265,6 +266,7 @@ class SalesQuotation(TimeStampedModel):
 
 class SalesQuotationLine(SaleLineBase):
     quotation = models.ForeignKey(SalesQuotation, on_delete=models.CASCADE, related_name="lines")
+    is_manual = models.BooleanField(default=False)
     memo = models.CharField(max_length=1000, blank=True)
 
     class Meta:

@@ -51,6 +51,15 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertRedirects(response, reverse("purchases:document_list"), fetch_redirect_response=False)
         document.refresh_from_db()
         self.assertEqual(document.document_status, "REGISTERED")
+        response = self.client.get(
+            reverse("purchases:document_detail", args=[document.pk])
+        )
+        self.assertContains(response, "Anular compra")
+        self.assertContains(response, "¿Anular toda la compra?")
+        response = self.client.get(
+            reverse("purchases:document_list"), {"show_all_dates": "1"}
+        )
+        self.assertContains(response, 'title="Anular compra"', html=False)
 
     def test_edit_populates_dates_and_product_code(self):
         self.client.post(reverse("purchases:document_create"), self.payload())
@@ -59,6 +68,15 @@ class PurchaseDocumentViewTest(TestCase):
         response = self.client.get(reverse("purchases:document_edit", args=[document.pk]))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            (
+                f'<a href="{reverse("purchases:document_list")}" '
+                'class="btn btn-outline-secondary">'
+                '<i class="ti ti-x me-1"></i>Cancelar</a>'
+            ),
+            html=True,
+        )
         self.assertContains(response, 'value="2026-09-01"', html=False)
         self.assertContains(response, f"{self.product.sku} | {self.product.name}")
 
@@ -101,6 +119,17 @@ class PurchaseDocumentViewTest(TestCase):
         session["active_store_id"] = str(self.other_store.pk)
         session.save()
         self.assertEqual(self.client.get(reverse("purchases:document_detail", args=[document.pk])).status_code, 404)
+
+    def test_detail_labels_draft_cancellation_as_discarding_the_draft(self):
+        self.client.post(reverse("purchases:document_create"), self.payload())
+        document = PurchaseDocument.objects.get()
+
+        response = self.client.get(
+            reverse("purchases:document_detail", args=[document.pk])
+        )
+
+        self.assertContains(response, "Descartar borrador")
+        self.assertContains(response, "La operación quedará cancelada")
 
     def test_list_and_preview_include_purchase_document_details(self):
         self.client.post(reverse("purchases:document_create"), self.payload())
