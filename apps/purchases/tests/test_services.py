@@ -60,6 +60,21 @@ class PurchaseDocumentServiceTest(TestCase):
         self.assertFalse(document.register_inventory_movement)
         self.assertTrue(AuditLog.objects.filter(entity="PurchaseDocument", action="CREATE").exists())
 
+    def test_line_and_document_use_the_same_cent_rounding(self):
+        document = self.create(lines=[
+            self.line(quantity=Decimal("1"), unit_price=Decimal("0.025")),
+            self.line(quantity=Decimal("1"), unit_price=Decimal("0.025")),
+        ])
+
+        lines = list(document.lines.all())
+        self.assertEqual([line.subtotal for line in lines], [Decimal("0.03"), Decimal("0.03")])
+        self.assertEqual([line.igv_amount for line in lines], [Decimal("0.00"), Decimal("0.00")])
+        self.assertEqual([line.total for line in lines], [Decimal("0.03"), Decimal("0.03")])
+        self.assertEqual(document.subtotal, Decimal("0.06"))
+        self.assertEqual(document.igv_total, Decimal("0.00"))
+        self.assertEqual(document.total, Decimal("0.06"))
+        self.assertEqual(sum((line.total for line in lines), Decimal("0")), document.total)
+
     def test_global_discount_can_be_applied_after_tax(self):
         document = self.create(global_discount_amount=Decimal("10"))
 
@@ -67,6 +82,10 @@ class PurchaseDocumentServiceTest(TestCase):
         self.assertEqual(document.igv_total, Decimal("36.00"))
         self.assertEqual(document.total_discount, Decimal("10.00"))
         self.assertEqual(document.total, Decimal("226.00"))
+        self.assertEqual(
+            sum((line.total for line in document.lines.all()), Decimal("0")),
+            document.total,
+        )
 
     def test_global_discount_can_be_applied_before_tax(self):
         document = self.create(
@@ -77,6 +96,10 @@ class PurchaseDocumentServiceTest(TestCase):
         self.assertEqual(document.taxable_amount, Decimal("190.00"))
         self.assertEqual(document.igv_total, Decimal("34.20"))
         self.assertEqual(document.total, Decimal("224.20"))
+        self.assertEqual(
+            sum((line.total for line in document.lines.all()), Decimal("0")),
+            document.total,
+        )
 
     def test_global_discount_cannot_exceed_document_total(self):
         with self.assertRaisesRegex(ValueError, "descuento general"):

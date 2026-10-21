@@ -282,8 +282,15 @@
                                     </tr>
                                     <tr class="table-active">
                                         <td class="fw-bold">Total</td>
-                                        <td class="text-end fw-bold fs-5" id="summary-total">0.00</td>
+                                        <td class="text-end fw-bold fs-5">{% if operational_settings.purchases_total_editable %}<input
+                                                type="text" id="summary-total"
+                                                class="form-control form-control-sm text-end fw-bold"
+                                                inputmode="decimal" autocomplete="off" value="0.00"
+                                                title="Editar el total exacto del comprobante">{% else %}<span
+                                                id="summary-total">0.00</span>{% endif %}</td>
                                     </tr>
+                                    {% if operational_settings.purchases_total_editable %}<tr><td colspan="2"
+                                        class="form-hint text-end">Puedes ingresar el total exacto del comprobante; la diferencia se ajusta en la Ãºltima lÃ­nea.</td></tr>{% endif %}
                                 </tbody>
                             </table>
                         </td>
@@ -414,4 +421,4 @@
 <script src="{% static 'js/components/partner-picker.js' %}"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}"></script>
-<script src="{% static 'js/purchases/document-form.js' %}?v=20260905-2"></script>{% endblock %}
+<script src="{% static 'js/purchases/document-form.js' %}?v=20261021-1"></script>{% endblock %}

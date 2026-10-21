@@ -121,6 +121,11 @@
     return Number(String(value || '0').replace(',', '.')) || 0;
   }
 
+  function roundMoney(value) {
+    const amount = Number(value || 0);
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
+  }
+
   function prepareRowInputs(row) {
     const quantity = row.querySelector('input[name*="-quantity"]');
     if (quantity) {
@@ -160,47 +165,65 @@
     body.querySelectorAll('.line-row:not([hidden])').forEach(row => {
       const quantity = parseAmount(row.querySelector('input[name*="-quantity"]')?.value);
       const valueUnit = parseAmount(row.querySelector('input[name*="-unit_price"]')?.value);
-      const discount = parseAmount(row.querySelector('input[name*="-discount_amount"]')?.value);
+      const discount = roundMoney(parseAmount(row.querySelector('input[name*="-discount_amount"]')?.value));
       const taxType = row.querySelector('select[name*="-tax_type"]')?.value;
       const rate = parseAmount(row.querySelector('input[name*="-igv_rate"]')?.value);
-      const subtotal = Math.max(0, quantity * valueUnit - discount);
-      const igv = taxType === '10' ? subtotal * rate / 100 : 0;
-      calculatedRows.push({subtotal, taxType, rate});
-      totals.discount += discount;
+      const rawSubtotal = Math.max(0, quantity * valueUnit - discount);
+      const subtotal = roundMoney(rawSubtotal);
+      const igv = taxType === '10' ? roundMoney(rawSubtotal * rate / 100) : 0;
+      calculatedRows.push({subtotal, igv, taxType, rate});
+      totals.discount = roundMoney(totals.discount + discount);
       if (taxType === '10') totals.taxable += subtotal;
       else if (taxType === '20') totals.exempt += subtotal;
       else totals.unaffected += subtotal;
       totals.igv += igv;
-      totals.total += subtotal + igv;
     });
-    const globalDiscount = Math.max(
+    const globalDiscount = roundMoney(Math.max(
       parseAmount(document.getElementById('id_global_discount_amount')?.value),
       0,
-    );
+    ));
     if (document.getElementById('id_global_discount_before_tax')?.checked && globalDiscount > 0) {
       const eligibleBase = calculatedRows.reduce((sum, line) => sum + line.subtotal, 0);
       if (eligibleBase > 0) {
         const appliedDiscount = Math.min(globalDiscount, eligibleBase);
-        calculatedRows.forEach(line => {
-          const discountPart = appliedDiscount * line.subtotal / eligibleBase;
+        let remainingDiscount = appliedDiscount;
+        let remainingBase = eligibleBase;
+        calculatedRows.filter(line => line.subtotal > 0).forEach((line, index, eligibleRows) => {
+          const discountPart = index === eligibleRows.length - 1
+            ? remainingDiscount
+            : Math.min(roundMoney(remainingDiscount * line.subtotal / remainingBase), remainingDiscount);
           if (line.taxType === '10') {
             totals.taxable -= discountPart;
-            totals.igv -= discountPart * line.rate / 100;
+            const adjustedIgv = roundMoney((line.subtotal - discountPart) * line.rate / 100);
+            totals.igv += adjustedIgv - line.igv;
           } else if (line.taxType === '20') totals.exempt -= discountPart;
           else totals.unaffected -= discountPart;
+          remainingDiscount = roundMoney(remainingDiscount - discountPart);
+          remainingBase -= line.subtotal;
         });
-        totals.total = totals.taxable + totals.exempt + totals.unaffected + totals.igv;
       }
-    } else {
-      totals.total = Math.max(totals.total - globalDiscount, 0);
+    }
+    totals.taxable = roundMoney(totals.taxable);
+    totals.exempt = roundMoney(totals.exempt);
+    totals.unaffected = roundMoney(totals.unaffected);
+    totals.igv = roundMoney(totals.igv);
+    totals.total = roundMoney(totals.taxable + totals.exempt + totals.unaffected + totals.igv);
+    if (!document.getElementById('id_global_discount_before_tax')?.checked) {
+      totals.total = roundMoney(Math.max(totals.total - globalDiscount, 0));
     }
     const lineDiscountElement = document.getElementById('summary-line-discount');
     if (lineDiscountElement) lineDiscountElement.textContent = formatAmount(totals.discount);
-    totals.discount += globalDiscount;
+    totals.discount = roundMoney(totals.discount + globalDiscount);
     Object.entries(totals).forEach(([key, value]) => {
       const element = document.getElementById(`summary-${key}`);
-      if (element) element.textContent = formatAmount(value);
+      if (!element) return;
+      if (element.matches('input')) {
+        if (document.activeElement !== element) element.value = value.toFixed(2);
+      } else {
+        element.textContent = formatAmount(value);
+      }
     });
+    return totals.total;
   }
 
   function updateLineTotals(row, source) {
@@ -209,7 +232,7 @@
     const valueDisplay = row.querySelector('.value-unit-display');
     const priceInput = row.querySelector('.price-unit-input');
     const totalInput = row.querySelector('.line-total-input');
-    const discount = parseAmount(row.querySelector('input[name*="-discount_amount"]')?.value);
+    const discount = roundMoney(parseAmount(row.querySelector('input[name*="-discount_amount"]')?.value));
     const taxType = row.querySelector('select[name*="-tax_type"]')?.value;
     const rate = parseAmount(row.querySelector('input[name*="-igv_rate"]')?.value);
     const taxFactor = taxType === '10' ? 1 + rate / 100 : 1;
@@ -226,17 +249,18 @@
       valueUnit = Math.max(0, (parseAmount(totalInput.value) / taxFactor + discount) / quantity);
       valueInput.value = valueUnit.toFixed(6);
     }
-    const subtotal = Math.max(0, quantity * valueUnit - discount);
-    const igv = taxType === '10' ? subtotal * rate / 100 : 0;
+    const rawSubtotal = Math.max(0, quantity * valueUnit - discount);
+    const subtotal = roundMoney(rawSubtotal);
+    const igv = taxType === '10' ? roundMoney(rawSubtotal * rate / 100) : 0;
     const priceUnit = valueUnit * taxFactor;
     if (valueDisplay && source !== 'value') valueDisplay.value = valueUnit.toFixed(priceDecimals);
     const values = {
       '.line-subtotal': subtotal,
       '.line-igv': igv,
-      '.line-total': subtotal + igv,
+      '.line-total': roundMoney(subtotal + igv),
     };
     if (priceInput && source !== 'price') priceInput.value = priceUnit.toFixed(priceDecimals);
-    if (totalInput && source !== 'total') totalInput.value = (subtotal + igv).toFixed(priceDecimals);
+    if (totalInput && source !== 'total') totalInput.value = roundMoney(subtotal + igv).toFixed(priceDecimals);
     Object.entries(values).forEach(([selector, value]) => {
       const element = row.querySelector(selector);
       if (element) element.textContent = formatAmount(value);
@@ -318,6 +342,28 @@
   });
   document.getElementById('id_global_discount_amount')?.addEventListener('input', updateSummary);
   document.getElementById('id_global_discount_before_tax')?.addEventListener('change', updateSummary);
+  document.getElementById('summary-total')?.addEventListener('change', event => {
+    const desiredTotal = roundMoney(Math.max(parseAmount(event.target.value), 0));
+    const rows = Array.from(body.querySelectorAll('.line-row:not([hidden])'));
+    const lastRow = rows.at(-1);
+    const lineTotalInput = lastRow?.querySelector('.line-total-input');
+    if (!lineTotalInput) return;
+
+    // Reuse the existing editable-line workflow: the correction is reflected
+    // in the last line's six-decimal unit value, instead of persisting an
+    // unexplained document-level difference. A few passes also cover a
+    // discount applied before IGV, whose proportional allocation can move a
+    // cent after the first correction.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const currentTotal = updateSummary();
+      const difference = roundMoney(desiredTotal - currentTotal);
+      if (Math.abs(difference) < 0.005) break;
+      const correctedLineTotal = Math.max(0, parseAmount(lineTotalInput.value) + difference);
+      lineTotalInput.value = correctedLineTotal.toFixed(2);
+      updateLineTotals(lastRow, 'total');
+    }
+    event.target.value = updateSummary().toFixed(2);
+  });
   body.addEventListener('click', event => {
     const memoButton = event.target.closest('.memo-btn');
     if (memoButton) {
