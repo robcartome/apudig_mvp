@@ -108,6 +108,8 @@
     </div>
 </div>
 
+{% include "purchases/partials/payment_summary.html" %}
+
 {% if linked_receipt_movements %}
 <div class="card mt-3">
     <div class="card-header">
@@ -115,14 +117,15 @@
     </div>
     <div class="list-group list-group-flush">
         {% for movement in linked_receipt_movements %}
-        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-start gap-3"
            href="{% url 'inventory:movement_detail' movement.pk %}">
-            <span>
+            <span class="d-flex align-items-start">
                 <i class="ti ti-package-import me-2"></i>
-                <strong>{{ movement.number|default:"Sin número" }}</strong>
-                <span class="text-muted ms-1">{{ movement.warehouse|default:"—" }}</span>
+                <span><strong>{{ movement.source_document_label }}</strong>
+                    <span class="d-block text-muted small">{{ movement.supplier|default:"Sin proveedor" }} · Ingreso {{ movement.operation_code }} · {{ movement.warehouse|default:"Sin almacen" }}</span>
+                </span>
             </span>
-            <span class="text-muted small">{{ movement.date|date:"d/m/Y H:i" }}</span>
+            <span class="text-end text-nowrap"><span class="d-block text-muted small">{{ movement.date|date:"d/m/Y H:i" }}</span><span class="small">{{ movement.reconciled_quantity|smart_number }} conciliado</span></span>
         </a>
         {% endfor %}
     </div>

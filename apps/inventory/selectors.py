@@ -214,7 +214,8 @@ def get_movements_for_store(store_id: str, movement_type: str | None = None):
 def search_movements(
     store_id: str, query: str, movement_type: str | None = None, *,
     status=None, date_from=None, date_to=None, created_from=None, created_to=None,
-    series=None, number=None, party=None, warehouse=None,
+    series=None, number=None, party=None, supplier_id=None, customer_id=None,
+    warehouse=None,
 ):
     qs = get_movements_for_store(store_id, movement_type=movement_type)
     if query:
@@ -257,6 +258,10 @@ def search_movements(
             | Q(customer__legal_name__icontains=party)
             | Q(customer__document_number__icontains=party)
         )
+    if supplier_id:
+        qs = qs.filter(supplier_id=supplier_id)
+    if customer_id:
+        qs = qs.filter(customer_id=customer_id)
     if warehouse:
         qs = qs.filter(
             Q(warehouse_id=warehouse)

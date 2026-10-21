@@ -45,6 +45,7 @@ from apps.sales.services import (
     update_sales_document_draft,
     void_sales_document,
 )
+from apps.sales.selectors import search_sales_documents
 from apps.users.models import Permission, Role, RolePermission, UserRole, UserStore
 
 from django.contrib.auth import get_user_model
@@ -681,6 +682,32 @@ class SalesDocumentViewsTest(TestCase):
         )
         self.assertContains(response, "js-table-scroll-top")
         self.assertContains(response, 'id="salesAdvancedFilters"', html=False)
+
+    def test_search_sales_documents_filters_by_selected_customer_id(self):
+        expected = self._create_draft()
+        other_customer = Customer.objects.create(
+            company=self.company,
+            document_type="6",
+            document_number="20777777777",
+            legal_name="Cliente alterno SAC",
+        )
+        create_sales_document_draft(
+            store_id=str(self.store.id),
+            customer=other_customer,
+            document_type=self.fac_series.document_type,
+            series=self.fac_series,
+            lines=[_make_line(self.product)],
+            created_by=self.user,
+            issue_date=timezone.now().date(),
+            currency="PEN",
+            register_inventory_movement=False,
+        )
+
+        results = search_sales_documents(
+            self.store.pk, customer_id=self.customer.pk
+        )
+
+        self.assertEqual(list(results), [expected])
 
     def test_list_shows_document_operations(self):
         self._login()

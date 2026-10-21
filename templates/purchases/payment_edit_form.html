@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load formatters %}
+{% block title %}Modificar pago - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Modificar datos del pago</h2>{% endblock %}
+{% block content %}
+{% if form.errors %}{% include "components/form_errors_alert.html" with form=form %}{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 align-items-center">
+      <div class="col-sm-6 col-lg-3"><div class="text-muted small">Pago</div><div class="fw-semibold">{{ payment.payment_number }}</div></div>
+      <div class="col-sm-6 col-lg-3"><div class="text-muted small">Proveedor</div><div class="fw-semibold">{{ payment.supplier.name }}</div></div>
+      <div class="col-sm-6 col-lg-3"><div class="text-muted small">Documento</div><div class="fw-semibold">{{ purchase_document.series }}-{{ purchase_document.number }}</div></div>
+      <div class="col-sm-6 col-lg-3"><div class="text-muted small">Importe registrado</div><div class="fs-3 fw-bold text-success text-nowrap">{{ payment.currency|currency_symbol }} {{ payment.amount|floatformat:2 }}</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <i class="ti ti-info-circle me-1"></i>
+  Puedes corregir la fecha, el medio y la referencia de la operación. Para cambiar el importe, anula este pago y registra uno nuevo; así se conserva la trazabilidad de las cuotas y saldos.
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="card mb-3">
+    <div class="card-header"><h3 class="card-title">Datos operativos</h3></div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label required">Fecha y hora</label>{{ form.payment_date }}</div>
+        <div class="col-md-4"><label class="form-label required">Medio de pago</label>{{ form.means_of_payment }}</div>
+        <div class="col-md-4"><label class="form-label">Referencia / número de operación</label>{{ form.reference }}</div>
+        <div class="col-12"><label class="form-label">Notas</label>{{ form.notes }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary"><i class="ti ti-device-floppy me-1"></i>Guardar cambios</button>
+    <a href="{% url 'purchases:document_detail' purchase_document.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

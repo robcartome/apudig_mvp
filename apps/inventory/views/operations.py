@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.utils import timezone
 from apps.core.list_filters import read_list_filters, sort_queryset
+from apps.partners.models import Customer, Supplier
 
 from ..forms import MovementDetailEditFormSet, MovementDetailFormSet, MovementHeaderForm, MovementTransferForm
 from ..models import Brand, Category, Movement, MovementType, Unit
@@ -168,7 +169,10 @@ def movement_list(request):
         date_from=filters["date_from_value"], date_to=filters["date_to_value"],
         created_from=filters["created_from_value"], created_to=filters["created_to_value"],
         series=filters["series"] or None, number=filters["number"] or None,
-        party=filters["party"] or None, warehouse=warehouse or None,
+        party=filters["party"] or None,
+        supplier_id=filters["supplier_id_value"],
+        customer_id=filters["customer_id_value"],
+        warehouse=warehouse or None,
     ) if store_id else Movement.objects.none()
     qs = qs.annotate(
         _sort_warehouse=Coalesce(
@@ -188,6 +192,12 @@ def movement_list(request):
         request, qs, MOVEMENT_SORTS, default=("date", "desc")
     )
     page_obj = Paginator(qs, 80).get_page(request.GET.get("page"))
+    selected_supplier = Supplier.objects.filter(
+        pk=filters["supplier_id_value"], company_id=_get_company_id(request)
+    ).first() if filters["supplier_id_value"] else None
+    selected_customer = Customer.objects.filter(
+        pk=filters["customer_id_value"], company_id=_get_company_id(request)
+    ).first() if filters["customer_id_value"] else None
 
     return render(request, "inventory/movement_list.html", {
         "page_obj": page_obj,
@@ -198,6 +208,8 @@ def movement_list(request):
         "status_choices": Movement.STATUS_CHOICES,
         "warehouse": warehouse,
         "warehouses": get_warehouses_for_store(store_id, active_only=True) if store_id else [],
+        "selected_supplier": selected_supplier,
+        "selected_customer": selected_customer,
         "list_filters": filters,
         "filter_search_placeholder": "Documento, operación, cliente o proveedor",
         "filter_date_label": "Fechas de movimiento",

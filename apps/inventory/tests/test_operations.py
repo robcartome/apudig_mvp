@@ -9,6 +9,8 @@ from django.utils import timezone
 
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Movement, Product, StockByWarehouse, Unit, Warehouse
+from apps.inventory.selectors import search_movements
+from apps.partners.models import Supplier
 from apps.users.models import User
 
 
@@ -81,6 +83,36 @@ class MovementViewsTest(TestCase):
         self.assertEqual(all_dates_response.context["page_obj"].paginator.count, 1)
         self.assertEqual(all_dates_response.context["list_filters"]["date_from"], "")
         self.assertEqual(all_dates_response.context["list_filters"]["date_to"], "")
+
+    def test_search_movements_filters_by_selected_supplier(self):
+        target_supplier = Supplier.objects.create(
+            company=self.company, name="Proveedor objetivo", document_number="20222222222"
+        )
+        other_supplier = Supplier.objects.create(
+            company=self.company, name="Proveedor alterno", document_number="20111111111"
+        )
+        Movement.objects.create(
+            type="ENTRY",
+            store=self.store,
+            warehouse=self.warehouse,
+            date=timezone.now(),
+            reason="Ingreso objetivo",
+            supplier=target_supplier,
+        )
+        Movement.objects.create(
+            type="ENTRY",
+            store=self.store,
+            warehouse=self.warehouse,
+            date=timezone.now(),
+            reason="Ingreso alterno",
+            supplier=other_supplier,
+        )
+
+        results = search_movements(
+            str(self.store.pk), "", supplier_id=target_supplier.pk
+        )
+
+        self.assertEqual(list(results), [Movement.objects.get(supplier=target_supplier)])
 
     def test_stock_by_warehouse_api_includes_all_company_warehouses(self):
         other_store = Store.objects.create(company=self.company, name="Secundaria")

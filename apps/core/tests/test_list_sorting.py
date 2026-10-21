@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from django.template import Context, Template
 from django.test import RequestFactory, SimpleTestCase
 
@@ -86,3 +88,32 @@ class ListFiltersTest(SimpleTestCase):
         self.assertIsNone(filters["date_from_value"])
         self.assertIsNone(filters["date_to_value"])
         self.assertEqual(filters["q"], "tornillo")
+
+    def test_partner_ids_are_parsed_and_preserved_for_pagination(self):
+        supplier_id = uuid4()
+        customer_id = uuid4()
+        request = self.factory.get("/", {
+            "supplier_id": str(supplier_id),
+            "customer_id": str(customer_id),
+            "page": "3",
+        })
+
+        filters = read_list_filters(request)
+
+        self.assertEqual(filters["supplier_id_value"], supplier_id)
+        self.assertEqual(filters["customer_id_value"], customer_id)
+        self.assertTrue(filters["advanced_filters_active"])
+        self.assertIn(f"supplier_id={supplier_id}", filters["pagination_query"])
+        self.assertIn(f"customer_id={customer_id}", filters["pagination_query"])
+        self.assertNotIn("page=3", filters["pagination_query"])
+
+    def test_invalid_partner_ids_are_ignored_safely(self):
+        request = self.factory.get("/", {
+            "supplier_id": "not-a-uuid",
+            "customer_id": "also-invalid",
+        })
+
+        filters = read_list_filters(request)
+
+        self.assertIsNone(filters["supplier_id_value"])
+        self.assertIsNone(filters["customer_id_value"])

@@ -1,0 +1,95 @@
+{% load formatters %}
+<div class="card mb-3 purchase-payment-summary">
+  <div class="card-header d-flex align-items-center">
+    <div>
+      <h3 class="card-title mb-0">Cuenta por pagar</h3>
+      <div class="text-muted small">Cuotas, pagos aplicados y saldo actualizado</div>
+    </div>
+    <span class="ms-auto">{% include "components/status_badge.html" with status=purchase_document.payment_status label=purchase_document.get_payment_status_display %}</span>
+  </div>
+  <div class="card-body py-3">
+    <div class="row g-3">
+      <div class="col-6 col-lg-3">
+        <div class="text-muted small">Total del documento</div>
+        <div class="fs-3 fw-semibold text-nowrap">{{ purchase_document.currency|currency_symbol }}&nbsp;{{ payment_summary.total|floatformat:2 }}</div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="text-muted small">Total pagado</div>
+        <div class="fs-3 fw-semibold text-success text-nowrap">{{ purchase_document.currency|currency_symbol }}&nbsp;{{ payment_summary.paid|floatformat:2 }}</div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="text-muted small">Saldo pendiente</div>
+        <div class="fs-3 fw-semibold text-nowrap {% if payment_summary.balance > 0 %}text-warning{% else %}text-success{% endif %}">{{ purchase_document.currency|currency_symbol }}&nbsp;{{ payment_summary.balance|floatformat:2 }}</div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="text-muted small">Vencimiento</div>
+        <div class="fs-3 fw-semibold">{{ purchase_document.due_date|date:"d/m/Y"|default:"—" }}</div>
+      </div>
+    </div>
+    <div class="mt-2 pt-2 border-top text-muted small">
+      <span class="fw-semibold text-body">Importe en letras:</span> {{ payment_total_in_words }}
+    </div>
+  </div>
+
+  {% if installment_rows %}
+  <div class="border-top px-3 py-2">
+    <div class="text-muted small fw-semibold mb-2">Cuotas programadas</div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for row in installment_rows %}
+      <div class="border rounded px-2 py-1 small bg-light-subtle">
+        <span class="fw-semibold">Cuota #{{ row.installment.sequence }}</span>
+        <span class="text-muted">· vence {{ row.installment.due_date|date:"d/m/Y" }}</span>
+        <span class="ms-1 text-nowrap">{{ purchase_document.currency|currency_symbol }}&nbsp;{{ row.installment.amount|floatformat:2 }}</span>
+        <span class="ms-1 {% if row.balance > 0 %}text-warning{% else %}text-success{% endif %}">Saldo {{ row.balance|floatformat:2 }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="table-responsive border-top">
+    <table class="table table-sm table-vcenter card-table mb-0">
+      <thead>
+        <tr>
+          <th>Pago</th>
+          <th>Fecha</th>
+          <th>Medio</th>
+          <th>Referencia / operación</th>
+          <th>Aplicación</th>
+          <th>Estado</th>
+          <th class="text-end">Importe</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in supplier_payments %}
+        <tr class="{% if payment.status == 'CANCELLED' %}text-muted{% endif %}">
+          <td class="fw-semibold">{{ payment.payment_number }}</td>
+          <td class="text-nowrap">{{ payment.payment_date|date:"d/m/Y H:i" }}</td>
+          <td>{{ payment.means_of_payment }}</td>
+          <td>{% if payment.reference %}<div>{{ payment.reference }}</div>{% else %}<span class="text-muted">Sin referencia</span>{% endif %}{% if payment.notes %}<div class="small text-muted">{{ payment.notes }}</div>{% endif %}</td>
+          <td>
+            {% for allocation in payment.allocations.all %}
+            <div class="small text-nowrap">Cuota #{{ allocation.installment.sequence }} · {{ purchase_document.currency|currency_symbol }}&nbsp;{{ allocation.amount|floatformat:2 }}</div>
+            {% endfor %}
+          </td>
+          <td>{% include "components/status_badge.html" with status=payment.status label=payment.get_status_display %}</td>
+          <td class="text-end fw-semibold text-nowrap">{{ payment.currency|currency_symbol }}&nbsp;{{ payment.amount|floatformat:2 }}</td>
+          <td class="text-end text-nowrap">
+            {% if payment.status == 'REGISTERED' and can_manage_purchase_documents %}
+            <a href="{% url 'purchases:payment_edit' payment.pk %}" class="btn btn-sm btn-outline-primary" title="Corregir fecha, medio o referencia" aria-label="Editar pago"><i class="ti ti-edit"></i></a>
+            {% endif %}
+            {% if payment.status == 'REGISTERED' and can_authorize_purchase_documents %}
+            <form method="post" action="{% url 'purchases:payment_cancel' payment.pk %}" class="d-inline" onsubmit="return confirm('¿Anular este pago? El saldo pendiente del documento será recalculado.')">
+              {% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Anular pago" aria-label="Anular pago"><i class="ti ti-ban"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-3">No hay pagos registrados para este documento.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

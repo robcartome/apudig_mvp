@@ -38,4 +38,5 @@ urlpatterns = [
     path("documents/<uuid:document_pk>/landed-costs/new/", views.purchase_landed_cost_create, name="landed_cost_create"),
     path("landed-costs/<uuid:pk>/cancel/", views.purchase_landed_cost_cancel, name="landed_cost_cancel"),
     path("payments/<uuid:pk>/cancel/", views.supplier_payment_cancel, name="payment_cancel"),
+    path("payments/<uuid:pk>/edit/", views.supplier_payment_edit, name="payment_edit"),
 ]

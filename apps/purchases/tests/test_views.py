@@ -10,6 +10,7 @@ from apps.companies.models import Company, CompanyOperationalSettings, Store
 from apps.inventory.models import Product, ProductUnit, Unit, Warehouse
 from apps.partners.models import DocumentType, Supplier
 from apps.purchases.models import PurchaseCategory, PurchaseDocument
+from apps.purchases.selectors import search_purchase_documents
 from apps.sales.models import PaymentMethod
 
 
@@ -199,6 +200,33 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertContains(response, "Total filtrado (no incluye cancelados)")
         self.assertContains(response, "js-table-scroll-top")
         self.assertContains(response, 'id="purchaseAdvancedFilters"', html=False)
+
+    def test_search_purchase_documents_filters_by_selected_supplier_id(self):
+        other_supplier = Supplier.objects.create(
+            company=self.company,
+            name="Proveedor vista alterno",
+            document_number="20633333333",
+        )
+        expected = PurchaseDocument.objects.create(
+            company=self.company, store=self.store, supplier=self.supplier,
+            document_type=self.document_type,
+            supplier_document_number=self.supplier.document_number,
+            supplier_name=self.supplier.name, series="F001", number="99",
+            issue_date=date(2026, 9, 1),
+        )
+        PurchaseDocument.objects.create(
+            company=self.company, store=self.store, supplier=other_supplier,
+            document_type=self.document_type,
+            supplier_document_number=other_supplier.document_number,
+            supplier_name=other_supplier.name, series="F001", number="100",
+            issue_date=date(2026, 9, 1),
+        )
+
+        results = search_purchase_documents(
+            self.company.pk, self.store.pk, supplier_id=self.supplier.pk
+        )
+
+        self.assertEqual(list(results), [expected])
 
     def test_anonymous_list_redirects_to_login(self):
         self.client.logout()

@@ -561,6 +561,23 @@ class Movement(TimeStampedModel):
         return f"MOV{self.operation_year:04d}{self.operation_number:05d}"
 
     @property
+    def source_document_number(self) -> str:
+        """External document identifier attached to the stock movement."""
+        return "-".join(part for part in (self.series, self.number) if part)
+
+    @property
+    def source_document_label(self) -> str:
+        """Supplier document label, kept separate from the internal MOV code."""
+        document_name = ""
+        if self.document_type_id:
+            document_name = self.document_type.name or self.document_type.code
+        elif self.source_document_number:
+            document_name = "Documento de entrada"
+        if document_name and self.source_document_number:
+            return f"{document_name} {self.source_document_number}"
+        return document_name or self.source_document_number or "Sin documento externo"
+
+    @property
     def related_purchase_documents(self):
         """Facturas vinculadas directamente o conciliadas con esta recepción."""
         documents = {}

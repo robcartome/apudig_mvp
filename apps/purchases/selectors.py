@@ -17,7 +17,8 @@ from .models import (
 def search_purchase_documents(
     company_id, store_id=None, query=None, status=None, *, date_from=None,
     date_to=None, created_from=None, created_to=None, number=None, series=None,
-    supplier=None, payment_status=None, total_min=None, total_max=None,
+    supplier=None, supplier_id=None, payment_status=None, total_min=None,
+    total_max=None,
 ):
     qs = PurchaseDocument.objects.for_company(company_id).select_related(
         "store", "supplier", "document_type", "payment_method"
@@ -68,6 +69,8 @@ def search_purchase_documents(
             Q(supplier_name__icontains=supplier)
             | Q(supplier_document_number__icontains=supplier)
         )
+    if supplier_id:
+        qs = qs.filter(supplier_id=supplier_id)
     if payment_status:
         qs = qs.filter(payment_status=payment_status)
     if total_min is not None:

@@ -22,10 +22,12 @@ from apps.inventory.selectors import get_movement_traceability_report
 from apps.inventory.services import confirm_movement, register_entry
 from apps.partners.models import DocumentType, Supplier
 from apps.purchases.models import PurchaseCategory, PurchaseDeliveryStatus, PurchaseDocumentStatus
+from apps.purchases.forms import PurchaseDocumentReceiptLinkForm
 from apps.purchases.selectors import get_purchase_price_comparison, get_purchase_price_history
 from apps.purchases.services import (
     cancel_purchase_document,
     create_purchase_document_draft,
+    reconcile_purchase_document_receipts,
     register_purchase_document,
     update_purchase_document_draft,
 )
@@ -180,6 +182,68 @@ class PurchaseDocumentServiceTest(TestCase):
         self.assertEqual(document.delivery_status, PurchaseDeliveryStatus.RECEIVED)
         self.assertEqual(document.lines.get().receipt_matches.count(), 1)
         self.assertEqual(Movement.objects.count(), 1)
+
+    def test_reconciliation_can_be_replaced_and_removed_without_changing_stock(self):
+        entries = []
+        guide_type = DocumentType.objects.create(
+            code="09", name="Guia de remision", category="LOGISTICS"
+        )
+        for number in ("000123", "000124"):
+            entry = register_entry(
+                store_id=str(self.store.pk), warehouse_id=str(self.warehouse.pk),
+                date=timezone.now(),
+                lines=[{
+                    "product_id": self.product.pk, "quantity": Decimal("2"),
+                    "unit_id": self.unit.pk, "unit_price": Decimal("100"),
+                }],
+                supplier=self.supplier, origin=MovementOrigin.MANUAL,
+                document_type=guide_type, series="T001", number=number,
+                created_by=None,
+            )
+            confirm_movement(entry)
+            entries.append(entry)
+
+        document = self.create(register_inventory_movement=False)
+        register_purchase_document(document.pk, company_id=self.company.pk)
+        reconcile_purchase_document_receipts(
+            document.pk, company_id=self.company.pk, receipt_movements=[entries[0]]
+        )
+        self.assertEqual(
+            document.lines.get().receipt_matches.get().movement_detail.movement,
+            entries[0],
+        )
+
+        reconcile_purchase_document_receipts(
+            document.pk, company_id=self.company.pk, receipt_movements=[entries[1]]
+        )
+        self.assertEqual(
+            document.lines.get().receipt_matches.get().movement_detail.movement,
+            entries[1],
+        )
+
+        form = PurchaseDocumentReceiptLinkForm(document=document)
+        self.assertEqual(len(form.movement_options), 2)
+        self.assertIn(str(entries[1].pk), form.linked_movement_ids)
+        label = form.fields["receipt_movements"].label_from_instance(entries[1])
+        self.assertIn("Guia de remision T001-000124", label)
+        self.assertIn(self.supplier.name, label)
+        self.assertIn(entries[1].operation_code, label)
+
+        stock_before = StockByWarehouse.objects.get(
+            product=self.product, warehouse=self.warehouse
+        ).quantity
+        reconcile_purchase_document_receipts(
+            document.pk, company_id=self.company.pk, receipt_movements=[]
+        )
+        document.refresh_from_db()
+        self.assertEqual(document.lines.get().receipt_matches.count(), 0)
+        self.assertEqual(document.delivery_status, PurchaseDeliveryStatus.PENDING)
+        self.assertEqual(
+            StockByWarehouse.objects.get(
+                product=self.product, warehouse=self.warehouse
+            ).quantity,
+            stock_before,
+        )
 
     def test_non_inventory_purchase_registers_without_movement(self):
         self.product.tracks_inventory = False

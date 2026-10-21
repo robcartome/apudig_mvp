@@ -1,41 +1,60 @@
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-md-4">
-        <label class="form-label small mb-1">Búsqueda rápida</label>
-        <div class="input-group input-group-sm">
-          <input name="q" value="{{ list_filters.q }}" class="form-control" placeholder="{{ filter_search_placeholder|default:'Buscar…' }}">
-          <button class="btn btn-outline-secondary" type="submit" title="Buscar"><i class="ti ti-search"></i></button>
+<div class="card list-filter-card mb-3 d-print-none">
+  <div class="card-body p-0">
+    <form method="get">
+      <div class="list-filter-primary">
+        <div class="list-filter-field list-filter-query">
+          <label class="form-label" for="list-filter-query">Búsqueda rápida</label>
+          <div class="list-filter-search">
+            <span class="list-filter-search__icon" aria-hidden="true"><i class="ti ti-search"></i></span>
+            <input id="list-filter-query" type="search" name="q" value="{{ list_filters.q }}"
+                   autocomplete="off" placeholder="{{ filter_search_placeholder|default:'Buscar…' }}">
+            <button type="submit" class="list-filter-search__button">Buscar</button>
+          </div>
         </div>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small mb-1">{{ filter_date_label|default:"Fechas de emisión" }}</label>
-        <div class="input-group input-group-sm">
-          <input type="date" name="date_from" value="{{ list_filters.date_from }}" class="form-control" title="Desde">
-          <span class="input-group-text">a</span>
-          <input type="date" name="date_to" value="{{ list_filters.date_to }}" class="form-control" title="Hasta">
-          <button class="btn btn-outline-secondary" type="submit" name="show_all_dates" value="1"
-                  title="Quitar el filtro de fechas y mostrar todos los registros">
-            Todas
+
+        <div class="list-filter-field list-filter-period">
+          <label class="form-label">{{ filter_date_label|default:"Fechas de emisión" }}</label>
+          <div class="input-group list-filter-date-range">
+            <span class="input-group-text" aria-hidden="true"><i class="ti ti-calendar"></i></span>
+            <input type="date" name="date_from" value="{{ list_filters.date_from }}" class="form-control" title="Desde" aria-label="Fecha desde">
+            <span class="input-group-text list-filter-date-separator">a</span>
+            <input type="date" name="date_to" value="{{ list_filters.date_to }}" class="form-control" title="Hasta" aria-label="Fecha hasta">
+            <button class="btn btn-outline-secondary" type="submit" name="show_all_dates" value="1"
+                    title="Quitar el filtro de fechas y mostrar todos los registros">Todas</button>
+          </div>
+        </div>
+
+        <div class="list-filter-toolbar">
+          <button class="btn list-filter-toggle{% if list_filters.advanced_filters_active %} is-active{% endif %}" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#{{ filter_collapse_id }}"
+                  aria-controls="{{ filter_collapse_id }}"
+                  aria-expanded="{% if list_filters.advanced_filters_active %}true{% else %}false{% endif %}">
+            <i class="ti ti-adjustments-horizontal"></i>
+            <span class="js-filter-toggle-label">{% if list_filters.advanced_filters_active %}Ocultar filtros{% else %}Más filtros{% endif %}</span>
+            {% if list_filters.advanced_filters_active %}<span class="list-filter-active-dot" title="Hay filtros avanzados activos"></span>{% endif %}
+            <i class="ti {% if list_filters.advanced_filters_active %}ti-chevron-up{% else %}ti-chevron-down{% endif %} js-filter-toggle-chevron"></i>
           </button>
+          <a href="{{ filter_reset_url }}" class="btn btn-ghost-secondary list-filter-clear" title="Restablecer todos los filtros">
+            <i class="ti ti-refresh"></i><span>Limpiar</span>
+          </a>
         </div>
       </div>
-      <div class="col-md-auto">
-        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse"
-                data-bs-target="#{{ filter_collapse_id }}" aria-expanded="{% if list_filters.advanced_filters_active %}true{% else %}false{% endif %}">
-          <i class="ti ti-filter me-1"></i>
-          <span class="js-filter-toggle-label">{% if list_filters.advanced_filters_active %}Ocultar filtros{% else %}Mostrar filtros{% endif %}</span>
-          <i class="ti {% if list_filters.advanced_filters_active %}ti-chevron-up{% else %}ti-chevron-down{% endif %} ms-1 js-filter-toggle-chevron"></i>
-        </button>
-      </div>
-      <div class="col-12 collapse js-advanced-filters{% if list_filters.advanced_filters_active %} show{% endif %}" id="{{ filter_collapse_id }}">
-        <div class="rounded border bg-light-subtle p-3 mt-1">
+
+      <div class="collapse js-advanced-filters{% if list_filters.advanced_filters_active %} show{% endif %}" id="{{ filter_collapse_id }}">
+        <div class="list-filter-advanced">
+          <div class="list-filter-advanced__header">
+            <div>
+              <div class="list-filter-advanced__title"><i class="ti ti-filter"></i>Filtros avanzados</div>
+              <div class="list-filter-advanced__hint">Combina criterios para obtener resultados más precisos.</div>
+            </div>
+            <div class="list-filter-actions">
+              {% if list_filters.advanced_filters_active %}<span class="badge list-filter-active-badge">Activos</span>{% endif %}
+              <a href="{{ filter_reset_url }}" class="btn btn-sm btn-outline-secondary"><i class="ti ti-refresh me-1"></i>Restablecer</a>
+              <button class="btn btn-sm btn-primary" type="submit"><i class="ti ti-check me-1"></i>Aplicar</button>
+            </div>
+          </div>
           <div class="row g-2 align-items-end">
             {% include filter_advanced_template %}
-            <div class="col-auto">
-              <button class="btn btn-primary btn-sm" type="submit"><i class="ti ti-search me-1"></i>Aplicar filtros</button>
-              <a href="{{ filter_reset_url }}" class="btn btn-ghost-secondary btn-sm">Limpiar</a>
-            </div>
           </div>
         </div>
       </div>

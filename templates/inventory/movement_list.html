@@ -1,8 +1,12 @@
 {% extends "base.html" %}
-{% load formatters list_sorting %}
+{% load static formatters list_sorting %}
 
 {% block title %}Movimientos — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Movimientos</h2>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -441,4 +445,11 @@
   });
 })();
 </script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script src="{% static 'js/components/partner-filter.js' %}?v=20261021-1"></script>
 {% endblock %}
