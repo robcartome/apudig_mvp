@@ -1,24 +1,20 @@
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from apps.core.models import AuditLog
-from apps.inventory.models import (
-    Movement, MovementDetail, MovementOrigin, MovementStatus, MovementType,
-    Product, ProductSupplier, ProductUnit, StockByWarehouse,
-)
-from apps.inventory.services import confirm_movement, register_entry, register_exit
+from apps.inventory.models import (Movement, MovementDetail, MovementOrigin,
+                                   MovementStatus, MovementType, Product,
+                                   ProductSupplier, ProductUnit,
+                                   StockByWarehouse)
 from apps.inventory.pricing import unit_value
+from apps.inventory.services import (confirm_movement, register_entry,
+                                     register_exit)
 
-from .models import (
-    PurchaseDocument,
-    PurchaseDocumentLine,
-    PurchaseDocumentReceiptMatch,
-    PurchaseDocumentStatus,
-)
-
+from .models import (PurchaseDocument, PurchaseDocumentLine,
+                     PurchaseDocumentReceiptMatch, PurchaseDocumentStatus)
 
 MONEY = Decimal("0.01")
 
@@ -75,15 +71,17 @@ def _calculate_line(line):
     quantity = Decimal(str(line["quantity"]))
     unit_price = Decimal(str(line["unit_price"]))
     discount = Decimal(str(line.get("discount_amount") or 0))
-    subtotal = quantity * unit_price - discount
-    if subtotal < 0:
+    raw_subtotal = quantity * unit_price - discount
+    if raw_subtotal < 0:
         raise ValueError("El descuento no puede superar el importe de la linea.")
     tax_type = line.get("tax_type", "10")
     igv_rate = Decimal(str(line.get("igv_rate") or 0))
-    igv = subtotal * igv_rate / Decimal("100") if tax_type == "10" else Decimal("0")
+
+    subtotal = _money(raw_subtotal)
+    igv = _money(raw_subtotal * igv_rate / Decimal("100")) if tax_type == "10" else Decimal("0.00")
     return {
-        "subtotal": _money(subtotal),
-        "igv_amount": _money(igv),
+        "subtotal": subtotal,
+        "igv_amount": igv,
         "total": _money(subtotal + igv),
         "global_discount_amount": Decimal("0.00"),
     }
