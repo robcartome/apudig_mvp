@@ -226,7 +226,11 @@ def _replace_receipt_matches(document, receipt_movements):
     distribuirse entre varias facturas, pero nunca por encima de lo recibido.
     """
     movement_ids = {getattr(movement, "pk", movement) for movement in receipt_movements or []}
+    existing_matches = PurchaseDocumentReceiptMatch.objects.filter(
+        purchase_document_line__purchase_document=document
+    )
     if not movement_ids:
+        existing_matches.delete()
         return
     movements = list(
         # ``supplier`` es nullable y ``select_related`` genera un LEFT OUTER JOIN.
@@ -248,9 +252,7 @@ def _replace_receipt_matches(document, receipt_movements):
         if movement.purchase_document_id and movement.purchase_document_id != document.pk:
             raise ValueError("Uno de los ingresos ya está vinculado a otra factura.")
 
-    PurchaseDocumentReceiptMatch.objects.filter(
-        purchase_document_line__purchase_document=document
-    ).delete()
+    existing_matches.delete()
     lines = list(
         document.lines.select_related("product").filter(product__tracks_inventory=True)
     )
@@ -289,7 +291,9 @@ def _replace_receipt_matches(document, receipt_movements):
 
 
 @transaction.atomic
-def reconcile_purchase_document_receipts(document_id, *, company_id, receipt_movements):
+def reconcile_purchase_document_receipts(
+    document_id, *, company_id, receipt_movements, reconciled_by=None
+):
     """Relaciona ingresos posteriores a una factura ya registrada."""
     document = PurchaseDocument.objects.select_for_update().get(
         pk=document_id, company_id=company_id
@@ -297,7 +301,7 @@ def reconcile_purchase_document_receipts(document_id, *, company_id, receipt_mov
     if document.document_status != PurchaseDocumentStatus.REGISTERED:
         raise ValueError("Solo se pueden conciliar recepciones de facturas registradas.")
     _replace_receipt_matches(document, receipt_movements)
-    _audit(document, "RECONCILE_RECEIPT")
+    _audit(document, "RECONCILE_RECEIPT", reconciled_by)
     return document
 
 

@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+from uuid import UUID
 
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -71,6 +72,8 @@ def read_list_filters(request, *, default_current_month=True):
             or request.GET.get("supplier")
             or ""
         ).strip(),
+        "supplier_id": request.GET.get("supplier_id", "").strip(),
+        "customer_id": request.GET.get("customer_id", "").strip(),
         "total_min": request.GET.get("total_min", "").strip(),
         "total_max": request.GET.get("total_max", "").strip(),
         "status": request.GET.get("status", ""),
@@ -81,10 +84,13 @@ def read_list_filters(request, *, default_current_month=True):
     values["created_to_value"] = _date_or_none(values["created_to"])
     values["total_min_value"] = _decimal_or_none(values["total_min"])
     values["total_max_value"] = _decimal_or_none(values["total_max"])
+    values["supplier_id_value"] = _uuid_or_none(values["supplier_id"])
+    values["customer_id_value"] = _uuid_or_none(values["customer_id"])
     values["advanced_filters_active"] = any(
         values[key]
         for key in (
             "created_from", "created_to", "series", "number", "party",
+            "supplier_id", "customer_id",
             "total_min", "total_max", "status",
         )
     )
@@ -106,4 +112,11 @@ def _decimal_or_none(value):
         parsed = Decimal(value) if value else None
         return parsed if parsed is None or parsed.is_finite() else None
     except (InvalidOperation, ValueError):
+        return None
+
+
+def _uuid_or_none(value):
+    try:
+        return UUID(value) if value else None
+    except (TypeError, ValueError, AttributeError):
         return None

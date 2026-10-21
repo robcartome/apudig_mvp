@@ -7,7 +7,7 @@
     const label = button.querySelector('.js-filter-toggle-label');
     const chevron = button.querySelector('.js-filter-toggle-chevron');
     const update = function (expanded) {
-      if (label) label.textContent = expanded ? 'Ocultar filtros' : 'Mostrar filtros';
+      if (label) label.textContent = expanded ? 'Ocultar filtros' : 'Más filtros';
       if (chevron) {
         chevron.classList.toggle('ti-chevron-up', expanded);
         chevron.classList.toggle('ti-chevron-down', !expanded);

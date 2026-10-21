@@ -1,0 +1,14 @@
+<select id="{{ filter_id }}"
+        name="{{ filter_name }}"
+        class="form-select form-select-sm js-partner-filter"
+        data-search-url="{{ search_url }}"
+        data-partner-type="{{ partner_type }}"
+        data-placeholder="{{ placeholder|default:'Buscar y seleccionar…' }}"
+        {% if exclusive_group %}data-exclusive-group="{{ exclusive_group }}"{% endif %}>
+  <option value=""></option>
+  {% if selected_partner %}
+    <option value="{{ selected_partner.pk }}" selected>
+      {{ selected_partner.document_number }} — {% if partner_type == "supplier" %}{{ selected_partner.name }}{% else %}{{ selected_partner.legal_name }}{% endif %}
+    </option>
+  {% endif %}
+</select>

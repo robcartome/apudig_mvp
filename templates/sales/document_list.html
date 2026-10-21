@@ -1,7 +1,11 @@
 {% extends "base.html" %}{% load static list_sorting %}
 {% block title %}Documentos de venta — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Documentos de venta</h2>{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/components/table-scroll-sync.css' %}">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{% static 'css/components/table-scroll-sync.css' %}">
+{% endblock %}
 
 {% block content %}
 <div class="page-header d-print-none mb-3">
@@ -148,6 +152,10 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/plugins/select2.js' %}"></script>
+<script src="{% static 'js/components/partner-filter.js' %}?v=20261021-1"></script>
 <script src="{% static 'js/components/table-scroll-sync.js' %}"></script>
 <script>
   (function () {

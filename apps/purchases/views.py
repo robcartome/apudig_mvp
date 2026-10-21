@@ -5,7 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Q, Sum
-from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse, QueryDict
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.companies.models import CompanyOperationalSettings, Store
+from apps.core.amount_words import amount_to_spanish_words
 from apps.core.models import AuditLog
 from apps.core.currency import currency_symbol
 from apps.core.list_filters import read_list_filters, sort_queryset
@@ -25,7 +26,7 @@ from apps.users.permissions import user_has_company_permission
 from .forms import (
     PurchaseCategoryForm, PurchaseDocumentForm, PurchaseDocumentReceiptLinkForm, PurchaseDocumentLineFormSet, PurchaseExpenseLineFormSet,
     PurchaseOrderForm, PurchaseOrderLineFormSet, PurchaseReceiptForm, PurchaseReceiptLineFormSet,
-    SupplierPaymentForm,
+    SupplierPaymentEditForm, SupplierPaymentForm,
     PurchaseInstallmentFormSet,
     PurchaseLandedCostAllocationFormSet, PurchaseLandedCostForm,
 )
@@ -41,6 +42,7 @@ from .receipt_services import cancel_purchase_receipt, received_quantities, regi
 from .payment_services import (
     cancel_supplier_payment, document_payment_summary, installment_paid_amount,
     register_supplier_payment, replace_installment_schedule,
+    update_supplier_payment_details,
 )
 from .landed_cost_services import (
     allocate_landed_cost, cancel_landed_cost, document_landed_cost_summary,
@@ -140,6 +142,24 @@ def _document_or_404(request, pk):
         return get_purchase_document(company_id, store.pk, pk)
     except (ObjectDoesNotExist, ValueError):
         raise Http404
+
+
+def _linked_receipt_movements(document):
+    return (
+        Movement.objects.filter(
+            details__purchase_receipt_matches__purchase_document_line__purchase_document=document
+        )
+        .select_related("warehouse", "supplier", "document_type")
+        .annotate(
+            reconciled_quantity=Sum(
+                "details__purchase_receipt_matches__stock_quantity",
+                filter=Q(
+                    details__purchase_receipt_matches__purchase_document_line__purchase_document=document
+                ),
+            )
+        )
+        .order_by("-date")
+    )
 
 
 def _lines(formset, *, update_purchase_prices=None):
@@ -266,6 +286,7 @@ def purchase_document_list(request):
         number=number or None,
         series=series or None,
         supplier=supplier or None,
+        supplier_id=common_filters["supplier_id_value"],
         payment_status=payment_status or None,
         total_min=common_filters["total_min_value"],
         total_max=common_filters["total_max_value"],
@@ -281,6 +302,9 @@ def purchase_document_list(request):
         .order_by("currency")
     )
     page = Paginator(qs, 80).get_page(request.GET.get("page"))
+    selected_filter_supplier = Supplier.objects.filter(
+        pk=common_filters["supplier_id_value"], company_id=company_id
+    ).first() if common_filters["supplier_id_value"] else None
     query_params = request.GET.copy()
     query_params.pop("page", None)
     return render(request, "purchases/document_list.html", {
@@ -295,6 +319,7 @@ def purchase_document_list(request):
         "number": number,
         "series": series,
         "supplier": supplier,
+        "selected_filter_supplier": selected_filter_supplier,
         "payment_status": payment_status,
         "total_min": total_min_text,
         "total_max": total_max_text,
@@ -304,6 +329,7 @@ def purchase_document_list(request):
         "payment_status_choices": PurchasePaymentStatus.choices,
         "advanced_filters_active": any((
             created_from_text, created_to_text, number, series, supplier,
+            common_filters["supplier_id"],
             payment_status, total_min_text, total_max_text, status,
         )),
         "list_filters": {
@@ -311,6 +337,7 @@ def purchase_document_list(request):
             "party": supplier,
             "advanced_filters_active": any((
                 created_from_text, created_to_text, number, series, supplier,
+                common_filters["supplier_id"],
                 payment_status, total_min_text, total_max_text, status,
             )),
         },
@@ -714,16 +741,44 @@ def purchase_document_edit(request, pk):
     ))
 
 
+def _document_payment_context(document):
+    payments = list(
+        SupplierPayment.objects.filter(
+            allocations__installment__purchase_document=document
+        )
+        .select_related("means_of_payment")
+        .prefetch_related("allocations__installment")
+        .distinct()
+    )
+    installment_rows = []
+    for installment in document.installments.order_by("due_date", "sequence"):
+        paid = installment_paid_amount(installment)
+        installment_rows.append({
+            "installment": installment,
+            "paid": paid,
+            "balance": max(installment.amount - paid, Decimal("0")),
+        })
+    return {
+        "payment_summary": document_payment_summary(document),
+        "payment_total_in_words": amount_to_spanish_words(
+            document.total, document.currency
+        ),
+        "supplier_payments": payments,
+        "installment_rows": installment_rows,
+    }
+
+
 def purchase_document_detail(request, pk):
     denied = _require_permission(request, "read")
     if denied:
         return denied
     document = _document_or_404(request, pk)
-    audit_logs = AuditLog.objects.filter(entity="PurchaseDocument", entity_id=str(document.pk)).select_related("user")
-    payment_summary = document_payment_summary(document)
-    payments = SupplierPayment.objects.filter(
-        allocations__installment__purchase_document=document
-    ).select_related("means_of_payment").distinct()
+    payment_context = _document_payment_context(document)
+    payment_ids = [str(payment.pk) for payment in payment_context["supplier_payments"]]
+    audit_logs = AuditLog.objects.filter(
+        Q(entity="PurchaseDocument", entity_id=str(document.pk))
+        | Q(entity="SupplierPayment", entity_id__in=payment_ids)
+    ).select_related("user")
     landed_summary = document_landed_cost_summary(document)
     landed_rows = []
     for line in document.lines.all():
@@ -732,22 +787,14 @@ def purchase_document_detail(request, pk):
             "line": line, "allocated": allocated,
             "acquired_unit_cost": line.unit_price + (allocated / line.quantity if line.quantity else 0),
         })
-    linked_receipt_movements = (
-        Movement.objects.filter(
-            details__purchase_receipt_matches__purchase_document_line__purchase_document=document
-        )
-        .select_related("warehouse", "supplier")
-        .distinct()
-        .order_by("-date")
-    )
+    linked_receipt_movements = _linked_receipt_movements(document)
     return render(request, "purchases/document_detail.html", {
         "purchase_document": document,
         "audit_logs": audit_logs,
-        "payment_summary": payment_summary,
-        "supplier_payments": payments,
         "landed_cost_summary": landed_summary, "landed_rows": landed_rows,
         "linked_receipt_movements": linked_receipt_movements,
         "receipt_link_form": PurchaseDocumentReceiptLinkForm(document=document),
+        **payment_context,
         **_permission_context(request),
     })
 
@@ -761,18 +808,26 @@ def purchase_document_reconcile_receipts(request, pk):
     document = _document_or_404(request, pk)
     form = PurchaseDocumentReceiptLinkForm(request.POST, document=document)
     if form.is_valid():
+        selected_receipts = (
+            [] if request.POST.get("clear_receipts")
+            else form.cleaned_data["receipt_movements"]
+        )
         try:
             reconcile_purchase_document_receipts(
                 document.pk,
                 company_id=company_id,
-                receipt_movements=form.cleaned_data["receipt_movements"],
+                receipt_movements=selected_receipts,
+                reconciled_by=request.user,
             )
         except ValueError as exc:
             messages.error(request, str(exc))
         else:
-            messages.success(request, "Recepción conciliada con la factura.")
+            if selected_receipts:
+                messages.success(request, "Recepción conciliada con la factura.")
+            else:
+                messages.success(request, "Se retiraron las recepciones vinculadas a la factura.")
     else:
-        messages.error(request, "Selecciona al menos un ingreso confirmado del mismo proveedor.")
+        messages.error(request, "No se pudo actualizar la conciliación de recepciones.")
     return redirect("purchases:document_detail", pk=document.pk)
 
 
@@ -783,12 +838,12 @@ def purchase_document_preview(request, pk):
     if denied:
         return denied
     document = _document_or_404(request, pk)
-    linked_receipt_movements = Movement.objects.filter(
-        details__purchase_receipt_matches__purchase_document_line__purchase_document=document
-    ).select_related("warehouse").distinct().order_by("-date")
+    linked_receipt_movements = _linked_receipt_movements(document)
     return render(request, "purchases/partials/document_preview_content.html", {
         "purchase_document": document,
         "linked_receipt_movements": linked_receipt_movements,
+        **_document_payment_context(document),
+        **_permission_context(request),
     })
 
 
@@ -1318,10 +1373,70 @@ def supplier_payment_create(request, document_pk):
             else:
                 messages.success(request, f"Pago {payment.payment_number} registrado correctamente.")
                 if request.POST.get("next") == "list":
-                    return redirect("purchases:document_list")
+                    return_query = QueryDict(
+                        request.POST.get("return_query", ""), mutable=True
+                    )
+                    return_query["preview"] = str(document.pk)
+                    return redirect(
+                        f"{reverse('purchases:document_list')}?{return_query.urlencode()}"
+                    )
                 return redirect("purchases:document_detail", pk=document.pk)
     return render(request, "purchases/payment_form.html", {
         "form": form, "purchase_document": document, "payment_summary": summary,
+    })
+
+
+def supplier_payment_edit(request, pk):
+    denied = _require_permission(request, "manage")
+    if denied:
+        return denied
+    company_id, store = _active_scope(request)
+    try:
+        payment = (
+            SupplierPayment.objects.select_related("means_of_payment", "supplier")
+            .prefetch_related("allocations__installment__purchase_document")
+            .get(pk=pk, company_id=company_id, store_id=store.pk)
+        )
+    except SupplierPayment.DoesNotExist:
+        raise Http404
+    first_allocation = payment.allocations.first()
+    if not first_allocation:
+        raise Http404
+    document = first_allocation.installment.purchase_document
+    if payment.status != "REGISTERED":
+        messages.error(request, "Solo se pueden modificar pagos registrados.")
+        return redirect("purchases:document_detail", pk=document.pk)
+
+    initial = {
+        "payment_date": timezone.localtime(payment.payment_date).strftime("%Y-%m-%dT%H:%M"),
+        "means_of_payment": payment.means_of_payment_id,
+        "reference": payment.reference,
+        "notes": payment.notes,
+    }
+    form = SupplierPaymentEditForm(
+        request.POST or None, company_id=company_id, initial=initial
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            update_supplier_payment_details(
+                payment.pk,
+                company_id=company_id,
+                store=store,
+                payment_date=form.cleaned_data["payment_date"],
+                means_of_payment=form.cleaned_data["means_of_payment"],
+                reference=form.cleaned_data.get("reference", ""),
+                notes=form.cleaned_data.get("notes", ""),
+                updated_by=request.user,
+            )
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+        else:
+            messages.success(request, f"Datos del pago {payment.payment_number} actualizados.")
+            return redirect("purchases:document_detail", pk=document.pk)
+    return render(request, "purchases/payment_edit_form.html", {
+        "form": form,
+        "payment": payment,
+        "purchase_document": document,
     })
 
 

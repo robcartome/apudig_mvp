@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -12,12 +12,13 @@ from apps.partners.models import DocumentType, Supplier
 from apps.purchases.models import PurchasePaymentStatus, SupplierPayment
 from apps.purchases.payment_services import (
     cancel_supplier_payment, document_payment_summary, register_supplier_payment,
-    replace_installment_schedule,
+    replace_installment_schedule, update_supplier_payment_details,
 )
 from apps.purchases.services import (
     cancel_purchase_document, create_purchase_document_draft, register_purchase_document,
 )
 from apps.sales.models import MeansOfPayment
+from apps.users.models import Role, UserRole
 
 
 class SupplierPaymentTest(TestCase):
@@ -75,6 +76,31 @@ class SupplierPaymentTest(TestCase):
         self.assertEqual(self.document.payment_status, PurchasePaymentStatus.UNPAID)
         self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("118.00"))
 
+    def test_payment_operational_details_can_be_corrected_without_changing_amount(self):
+        payment = self.pay("PAG-EDIT-1", Decimal("40"))
+        other_means = MeansOfPayment.objects.create(
+            company=self.company, name="Transferencia bancaria"
+        )
+        new_date = timezone.now() - timedelta(days=1)
+
+        update_supplier_payment_details(
+            payment.pk,
+            company_id=self.company.pk,
+            store=self.store,
+            payment_date=new_date,
+            means_of_payment=other_means,
+            reference="OP-CORREGIDA",
+            notes="Referencia validada",
+        )
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.amount, Decimal("40.00"))
+        self.assertEqual(payment.allocations.get().amount, Decimal("40.00"))
+        self.assertEqual(payment.means_of_payment, other_means)
+        self.assertEqual(payment.reference, "OP-CORREGIDA")
+        self.assertEqual(payment.notes, "Referencia validada")
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("78.00"))
+
     def test_document_with_payment_cannot_be_cancelled(self):
         self.pay("PAG-005", Decimal("10"))
         with self.assertRaisesRegex(ValueError, "pagos registrados"):
@@ -114,6 +140,8 @@ class SupplierPaymentViewTest(TestCase):
         )
         register_purchase_document(self.document.pk, company_id=self.company.pk)
         self.user = get_user_model().objects.create_user(email="pagos@example.com", password="testpass")
+        admin_role, _ = Role.objects.get_or_create(name="ADMIN")
+        UserRole.objects.create(user=self.user, role=admin_role, company=self.company)
         self.client.login(username="pagos@example.com", password="testpass")
         session = self.client.session
         session["active_company_id"] = str(self.company.pk)
@@ -133,7 +161,9 @@ class SupplierPaymentViewTest(TestCase):
         self.assertEqual(SupplierPayment.objects.get().amount, Decimal("20.00"))
 
     def test_list_exposes_quick_payment_modal_balance_and_last_payment_date(self):
-        response = self.client.get(reverse("purchases:document_list"))
+        response = self.client.get(
+            reverse("purchases:document_list"), {"show_all_dates": "1"}
+        )
         self.assertContains(response, "Fecha de pago")
         self.assertContains(response, "Saldo por pagar")
         self.assertContains(response, 'id="quickPaymentModal"', html=False)
@@ -144,10 +174,82 @@ class SupplierPaymentViewTest(TestCase):
             "amount": "15", "means_of_payment": str(self.means.pk),
             "reference": "ADELANTO", "next": "list",
         })
-        self.assertRedirects(response, reverse("purchases:document_list"), fetch_redirect_response=False)
+        self.assertRedirects(
+            response,
+            f"{reverse('purchases:document_list')}?preview={self.document.pk}",
+            fetch_redirect_response=False,
+        )
         self.document.refresh_from_db()
         self.assertEqual(self.document.payment_status, PurchasePaymentStatus.PARTIALLY_PAID)
 
-        response = self.client.get(reverse("purchases:document_list"))
-        self.assertContains(response, "S/. 35.00")
+        response = self.client.get(
+            reverse("purchases:document_list"), {"show_all_dates": "1"}
+        )
+        self.assertContains(response, "S/. 35,00")
         self.assertContains(response, "03/09/2026 11:00")
+
+    def test_preview_displays_payment_summary_and_registered_payments(self):
+        payment = register_supplier_payment(
+            company_id=self.company.pk,
+            store=self.store,
+            supplier=self.supplier,
+            payment_number="PAG-PREVIEW-1",
+            payment_date=timezone.now(),
+            currency="PEN",
+            exchange_rate=1,
+            means_of_payment=self.means,
+            allocations=[{
+                "installment": self.document.installments.get(),
+                "amount": Decimal("20.00"),
+            }],
+            reference="OP-PREVIEW",
+            created_by=self.user,
+        )
+
+        response = self.client.get(
+            reverse("purchases:document_preview", args=[self.document.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cuenta por pagar")
+        self.assertContains(response, payment.payment_number)
+        self.assertContains(response, "OP-PREVIEW")
+        self.assertContains(response, "SON: CINCUENTA CON 00/100 SOLES")
+        self.assertContains(response, reverse("purchases:payment_edit", args=[payment.pk]))
+
+    def test_payment_edit_updates_reference_without_changing_amount(self):
+        payment = register_supplier_payment(
+            company_id=self.company.pk,
+            store=self.store,
+            supplier=self.supplier,
+            payment_number="PAG-WEB-EDIT",
+            payment_date=timezone.now(),
+            currency="PEN",
+            exchange_rate=1,
+            means_of_payment=self.means,
+            allocations=[{
+                "installment": self.document.installments.get(),
+                "amount": Decimal("20.00"),
+            }],
+            reference="OP-ANTERIOR",
+            created_by=self.user,
+        )
+
+        response = self.client.post(
+            reverse("purchases:payment_edit", args=[payment.pk]),
+            {
+                "payment_date": "2026-09-04T09:30",
+                "means_of_payment": str(self.means.pk),
+                "reference": "OP-CORREGIDA",
+                "notes": "Dato corregido",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("purchases:document_detail", args=[self.document.pk]),
+            fetch_redirect_response=False,
+        )
+        payment.refresh_from_db()
+        self.assertEqual(payment.reference, "OP-CORREGIDA")
+        self.assertEqual(payment.amount, Decimal("20.00"))

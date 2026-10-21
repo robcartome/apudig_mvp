@@ -148,6 +148,53 @@ def register_supplier_payment(*, company_id, store, supplier, payment_number, pa
 
 
 @transaction.atomic
+def update_supplier_payment_details(
+    payment_id, *, company_id, store, payment_date, means_of_payment,
+    reference="", notes="", updated_by=None,
+):
+    """Update operational payment data without rewriting financial allocations."""
+    payment = SupplierPayment.objects.select_for_update().get(
+        pk=payment_id, company_id=company_id, store_id=store.pk
+    )
+    if payment.status != SupplierPaymentStatus.REGISTERED:
+        raise ValueError("Solo se pueden modificar pagos registrados.")
+    if str(store.company_id) != str(company_id):
+        raise ValueError("La sucursal no pertenece a la empresa activa.")
+    if str(means_of_payment.company_id) != str(company_id):
+        raise ValueError("El medio de pago no pertenece a la empresa activa.")
+
+    previous = {
+        "payment_date": payment.payment_date.isoformat(),
+        "means_of_payment_id": str(payment.means_of_payment_id),
+        "reference": payment.reference,
+        "notes": payment.notes,
+    }
+    payment.payment_date = payment_date
+    payment.means_of_payment = means_of_payment
+    payment.reference = (reference or "").strip()
+    payment.notes = (notes or "").strip()
+    payment.save(update_fields=(
+        "payment_date", "means_of_payment", "reference", "notes", "updated_at"
+    ))
+    AuditLog.objects.create(
+        user=updated_by,
+        action="UPDATE",
+        entity="SupplierPayment",
+        entity_id=str(payment.pk),
+        meta_data={
+            "previous": previous,
+            "current": {
+                "payment_date": payment.payment_date.isoformat(),
+                "means_of_payment_id": str(payment.means_of_payment_id),
+                "reference": payment.reference,
+                "notes": payment.notes,
+            },
+        },
+    )
+    return payment
+
+
+@transaction.atomic
 def cancel_supplier_payment(payment_id, *, company_id, cancelled_by=None):
     payment = SupplierPayment.objects.select_for_update().prefetch_related(
         "allocations__installment__purchase_document"

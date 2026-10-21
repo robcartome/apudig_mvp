@@ -158,7 +158,8 @@ def get_sales_documents_for_store(store_id: str, status: str | None = None):
 def search_sales_documents(
     store_id: str, query: str | None = None, status: str | None = None, *,
     date_from=None, date_to=None, created_from=None, created_to=None,
-    number=None, series=None, customer=None, total_min=None, total_max=None,
+    number=None, series=None, customer=None, customer_id=None, total_min=None,
+    total_max=None,
 ):
     qs = (
         SalesDocument.objects.for_store(store_id)
@@ -191,6 +192,8 @@ def search_sales_documents(
             Q(customer_legal_name__icontains=customer)
             | Q(customer_document_number__icontains=customer)
         )
+    if customer_id:
+        qs = qs.filter(customer_id=customer_id)
     if total_min is not None:
         qs = qs.filter(total__gte=total_min)
     if total_max is not None:

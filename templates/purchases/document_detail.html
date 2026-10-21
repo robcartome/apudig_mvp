@@ -49,7 +49,7 @@
       data-bs-toggle="modal"
       data-bs-target="#receiptLinkModal"
     >
-      <i class="ti ti-link me-1"></i>Conciliar recepciÃ³n</button
+      <i class="ti ti-link me-1"></i>{% if linked_receipt_movements %}Modificar conciliaci&oacute;n{% else %}Conciliar recepci&oacute;n{% endif %}</button
     >
 {% endif %}
 {% if purchase_document.document_status != 'CANCELLED' and can_authorize_purchase_documents %}
@@ -253,10 +253,12 @@
     <table class="table table-sm card-table">
       <thead>
         <tr>
-          <th>Ingreso</th>
+          <th>Documento de entrada</th>
+          <th>Ingreso interno</th>
           <th>Fecha</th>
           <th>AlmacÃ©n</th>
           <th>Proveedor</th>
+          <th class="text-end">Cantidad conciliada</th>
           <th>Estado</th>
           <th class="text-end">AcciÃ³n</th>
         </tr>
@@ -264,12 +266,12 @@
       <tbody>
         {% for movement in linked_receipt_movements %}
         <tr>
-          <td class="fw-semibold">
-            {{ movement.number|default:"Sin nÃºmero" }}
-          </td>
+          <td><div class="fw-semibold">{{ movement.source_document_label }}</div></td>
+          <td class="fw-semibold">{{ movement.operation_code }}</td>
           <td>{{ movement.date|date:"d/m/Y H:i" }}</td>
           <td>{{ movement.warehouse|default:"â€”" }}</td>
           <td>{{ movement.supplier|default:"â€”" }}</td>
+          <td class="text-end">{{ movement.reconciled_quantity|smart_number }}</td>
           <td>
             {% include "components/status_badge.html" with status=movement.status label=movement.get_status_display %}
           </td>
@@ -346,102 +348,18 @@
     </table>
   </div>
 </div>
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">Cuenta por pagar</h3></div>
-  <div class="card-body">
-    <div class="row g-3">
-      <div class="col-md-3">
-        <div class="text-muted">Total</div>
-        <div class="fs-3">
-          {{ purchase_document.currency|currency_symbol }} {{ payment_summary.total|floatformat:2 }}
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="text-muted">Pagado</div>
-        <div class="fs-3 text-success">
-          {{ purchase_document.currency|currency_symbol }} {{ payment_summary.paid|floatformat:2 }}
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="text-muted">Saldo</div>
-        <div
-          class="fs-3 {% if payment_summary.balance > 0 %}text-warning{% else %}text-success{% endif %}"
-        >
-          {{ purchase_document.currency|currency_symbol }} {{ payment_summary.balance|floatformat:2 }}
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="text-muted">Vencimiento</div>
-        <div class="fs-3">
-          {{ purchase_document.due_date|date:"d/m/Y"|default:"â€”" }}
-        </div>
-      </div>
-    </div>
-    <div class="mt-3">
-      <strong>Cuotas:</strong> {% for installment in purchase_document.installments.all %}<span class="badge bg-azure-lt me-1"
-        >#{{ installment.sequence }} Â· {{ installment.due_date|date:"d/m/Y" }} Â·
-        {{ purchase_document.currency|currency_symbol }} {{ installment.amount|floatformat:2 }}</span
-      >
-{% endfor %}
-    </div>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-sm card-table">
-      <thead>
-        <tr>
-          <th>Pago</th>
-          <th>Fecha</th>
-          <th>Medio</th>
-          <th>Referencia</th>
-          <th>Estado</th>
-          <th class="text-end">Importe</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for payment in supplier_payments %}
-        <tr>
-          <td>{{ payment.payment_number }}</td>
-          <td>{{ payment.payment_date|date:"d/m/Y H:i" }}</td>
-          <td>{{ payment.means_of_payment }}</td>
-          <td>{{ payment.reference|default:"â€”" }}</td>
-          <td>{{ payment.get_status_display }}</td>
-          <td class="text-end">
-            {{ payment.currency|currency_symbol }} {{ payment.amount|floatformat:2 }}
-          </td>
-          <td class="text-end">
-            {% if payment.status == 'REGISTERED' and can_authorize_purchase_documents %}
-            <form
-              method="post"
-              action="{% url 'purchases:payment_cancel' payment.pk %}"
-            >
-              {% csrf_token %}<button class="btn btn-sm btn-outline-danger">
-                Anular
-              </button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="7" class="text-center text-muted py-3">
-            No hay pagos registrados.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{% include "purchases/partials/payment_summary.html" %}
 {% if audit_logs %}
 <div class="card">
-  <div class="card-header"><h3 class="card-title">Bitacora</h3></div>
+  <div class="card-header"><h3 class="card-title">Bitácora</h3></div>
   <div class="table-responsive">
     <table class="table table-sm card-table">
       <thead>
         <tr>
           <th>Fecha</th>
+          <th>Registro</th>
           <th>Accion</th>
+          <th>Detalle</th>
           <th>Usuario</th>
         </tr>
       </thead>
@@ -449,7 +367,9 @@
         {% for log in audit_logs %}
         <tr>
           <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+          <td>{% if log.entity == 'SupplierPayment' %}Pago{% else %}Documento de compra{% endif %}</td>
           <td>{{ log.action }}</td>
+          <td class="small text-muted">{% if log.entity == 'SupplierPayment' and log.action == 'UPDATE' %}Datos operativos corregidos{% if log.meta_data.current.reference %} · Ref. {{ log.meta_data.current.reference }}{% endif %}{% elif log.entity == 'SupplierPayment' and log.action == 'CANCEL' %}Pago anulado y saldo recalculado{% else %}—{% endif %}</td>
           <td>{{ log.user|default:"Sistema" }}</td>
         </tr>
         {% endfor %}
@@ -459,7 +379,7 @@
 </div>
 {% endif %}
 <div class="modal fade" id="receiptLinkModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form
         method="post"
@@ -467,7 +387,7 @@
       >
         {% csrf_token %}
         <div class="modal-header">
-          <h5 class="modal-title">Conciliar guÃ­a o ingreso</h5>
+          <h5 class="modal-title">{% if linked_receipt_movements %}Modificar conciliaci&oacute;n de gu&iacute;a o ingreso{% else %}Conciliar gu&iacute;a o ingreso{% endif %}</h5>
           <button
             type="button"
             class="btn-close"
@@ -476,21 +396,48 @@
         </div>
         <div class="modal-body">
           <p class="text-muted small">
-            Selecciona ingresos confirmados del mismo proveedor. No se modifica
+            Selecciona ingresos confirmados del mismo proveedor. Puedes cambiar
+            la selecci&oacute;n o desmarcar todo para retirar la relaci&oacute;n. No se modifica
             el inventario ni los pagos.
           </p>
           <label class="form-label"
             >{{ receipt_link_form.receipt_movements.label }}</label
-          >{{ receipt_link_form.receipt_movements }}
+          ><div class="list-group" style="max-height: 380px; overflow-y: auto;">
+            {% for movement in receipt_link_form.movement_options %}
+            <label class="list-group-item list-group-item-action d-flex gap-3 align-items-start">
+              <input class="form-check-input mt-1 flex-shrink-0" type="checkbox"
+                name="receipt_movements" value="{{ movement.pk }}"
+                {% if movement.pk|stringformat:'s' in receipt_link_form.linked_movement_ids %}checked{% endif %}>
+              <span class="flex-fill">
+                <span class="d-flex justify-content-between gap-3 flex-wrap">
+                  <strong>{{ movement.operation_code }}</strong>
+                  <span class="text-muted small">{{ movement.date|date:"d/m/Y H:i" }}</span>
+                </span>
+                <span class="d-block fw-semibold">{{ movement.source_document_label }}</span>
+                <span class="d-block text-muted small">
+                  {{ movement.supplier|default:"Sin proveedor" }} · {{ movement.warehouse|default:"Sin almacen" }}
+                </span>
+              </span>
+            </label>
+            {% empty %}
+            <div class="border rounded text-center text-muted p-4">
+              No hay ingresos confirmados disponibles para este proveedor.
+            </div>
+            {% endfor %}
+          </div>
+          {% for error in receipt_link_form.receipt_movements.errors %}<div class="text-danger small mt-2">{{ error }}</div>{% endfor %}
         </div>
         <div class="modal-footer">
+          {% if linked_receipt_movements %}<button class="btn btn-outline-danger me-auto"
+            type="submit" name="clear_receipts" value="1"
+            onclick="return confirm('¿Retirar todas las guías vinculadas? El inventario no será modificado.');">Quitar v&iacute;nculos</button>{% endif %}
           <button
             type="button"
             class="btn btn-outline-secondary"
             data-bs-dismiss="modal"
           >
             Cancelar</button
-          ><button class="btn btn-primary">Conciliar</button>
+          ><button class="btn btn-primary">{% if linked_receipt_movements %}Guardar cambios{% else %}Conciliar{% endif %}</button>
         </div>
       </form>
     </div>

@@ -153,27 +153,44 @@ class PurchaseDocumentForm(forms.ModelForm):
         return cleaned
 
 
+class ReceiptMovementChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, movement):
+        supplier = movement.supplier.name if movement.supplier_id else "Sin proveedor"
+        warehouse = movement.warehouse.name if movement.warehouse_id else "Sin almacen"
+        return (
+            f"{movement.source_document_label} | {supplier} | "
+            f"Ingreso {movement.operation_code} | {movement.date:%d/%m/%Y} | {warehouse}"
+        )
+
+
 class PurchaseDocumentReceiptLinkForm(forms.Form):
-    receipt_movements = forms.ModelMultipleChoiceField(
+    receipt_movements = ReceiptMovementChoiceField(
         queryset=Movement.objects.none(),
+        required=False,
         label="Guías / ingresos confirmados",
-        widget=forms.SelectMultiple(attrs={"class": "form-select", "size": 4}),
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
     )
 
     def __init__(self, *args, document=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.movement_options = []
+        self.linked_movement_ids = set()
         if not document:
             return
-        linked_ids = document.lines.filter(receipt_matches__isnull=False).values_list(
+        linked_ids = list(document.lines.filter(receipt_matches__isnull=False).values_list(
             "receipt_matches__movement_detail__movement_id", flat=True
-        )
+        ).distinct())
         self.fields["receipt_movements"].queryset = Movement.objects.filter(
             store_id=document.store_id,
             supplier_id=document.supplier_id,
             type=MovementType.ENTRY,
             status=MovementStatus.CONFIRMED,
-        ).filter(Q(purchase_document__isnull=True) | Q(pk__in=linked_ids)).distinct().order_by("-date")
-        self.initial["receipt_movements"] = list(linked_ids)
+        ).filter(Q(purchase_document__isnull=True) | Q(pk__in=linked_ids)).select_related(
+            "document_type", "supplier", "warehouse"
+        ).distinct().order_by("-date")
+        self.initial["receipt_movements"] = linked_ids
+        self.linked_movement_ids = {str(value) for value in linked_ids}
+        self.movement_options = list(self.fields["receipt_movements"].queryset)
 
 
 class PurchaseDocumentLineForm(forms.Form):
@@ -359,6 +376,31 @@ class SupplierPaymentForm(forms.Form):
 
     def clean_payment_number(self):
         return (self.cleaned_data.get("payment_number") or "").strip().upper()
+
+
+class SupplierPaymentEditForm(forms.Form):
+    payment_date = forms.DateTimeField(
+        widget=forms.DateTimeInput(
+            attrs={**_text, "type": "datetime-local"},
+            format="%Y-%m-%dT%H:%M",
+        )
+    )
+    means_of_payment = forms.ModelChoiceField(
+        queryset=MeansOfPayment.objects.none(), widget=forms.Select(attrs=_select)
+    )
+    reference = forms.CharField(
+        max_length=100, required=False, widget=forms.TextInput(attrs=_text)
+    )
+    notes = forms.CharField(
+        required=False, widget=forms.Textarea(attrs={**_text, "rows": 2})
+    )
+
+    def __init__(self, *args, company_id=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["means_of_payment"].queryset = (
+            MeansOfPayment.objects.filter(company_id=company_id, active=True).order_by("name")
+            if company_id else MeansOfPayment.objects.none()
+        )
 
 
 class PurchaseInstallmentForm(forms.Form):

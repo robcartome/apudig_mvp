@@ -54,7 +54,7 @@ from apps.sales.services import (
     void_sales_document,
 )
 from apps.inventory.models import PriceList, Product, Warehouse
-from apps.partners.models import DocumentType
+from apps.partners.models import Customer, DocumentType
 from apps.core.models import AuditLog
 from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.companies.models import CompanyOperationalSettings
@@ -235,7 +235,7 @@ def document_list(request):
     if redirect_resp:
         return redirect_resp
 
-    _, store_id = _get_ids(request)
+    company_id, store_id = _get_ids(request)
     filters = read_list_filters(request)
     q = filters["q"]
     status = filters["status"]
@@ -261,6 +261,7 @@ def document_list(request):
         number=number or None,
         series=series or None,
         customer=customer or None,
+        customer_id=filters["customer_id_value"],
         total_min=filters["total_min_value"],
         total_max=filters["total_max_value"],
     )
@@ -279,6 +280,9 @@ def document_list(request):
     )
     paginator = Paginator(qs, 80)
     page = paginator.get_page(request.GET.get("page"))
+    selected_filter_customer = Customer.objects.filter(
+        pk=filters["customer_id_value"], company_id=company_id
+    ).first() if filters["customer_id_value"] else None
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
@@ -295,12 +299,14 @@ def document_list(request):
         "number": number,
         "series": series,
         "customer": customer,
+        "selected_filter_customer": selected_filter_customer,
         "total_min": total_min_text,
         "total_max": total_max_text,
         "filtered_totals": filtered_totals,
         "pagination_query": query_params.urlencode(),
         "advanced_filters_active": any((
             created_from_text, created_to_text, number, series, customer,
+            filters["customer_id"],
             total_min_text, total_max_text, status, document_type,
         )),
         "list_filters": {
@@ -308,6 +314,7 @@ def document_list(request):
             "party": customer,
             "advanced_filters_active": any((
                 created_from_text, created_to_text, number, series, customer,
+                filters["customer_id"],
                 total_min_text, total_max_text, status, document_type,
             )),
         },
