@@ -1,7 +1,9 @@
 from collections import defaultdict, deque
 from decimal import Decimal
 
-from django.db.models import DecimalField, ExpressionWrapper, F, Max, Q, Sum, Value
+from django.db.models import (
+    DecimalField, ExpressionWrapper, F, Max, Q, Sum, Value,
+)
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 

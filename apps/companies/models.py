@@ -210,6 +210,7 @@ class CompanyOperationalSettings(TimeStampedModel):
     purchases_value_unit_editable = models.BooleanField(default=True)
     purchases_price_unit_editable = models.BooleanField(default=True)
     purchases_total_editable = models.BooleanField(default=False)
+    purchase_due_notification_days = models.PositiveSmallIntegerField(default=3)
     pos_product_search_mode = models.CharField(
         max_length=10,
         choices=PosProductSearchMode.choices,

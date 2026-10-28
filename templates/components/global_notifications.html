@@ -1,0 +1,30 @@
+{% if notification_center %}
+<div class="nav-item dropdown global-notifications"
+     data-notification-center
+     data-dropdown-url="{% url 'notifications:dropdown' %}"
+     data-count-url="{% url 'notifications:unread_count' %}"
+     data-read-all-url="{% url 'notifications:mark_all_read' %}">
+  <button class="nav-link global-notifications__trigger" type="button"
+          data-bs-toggle="dropdown" data-bs-auto-close="outside"
+          aria-expanded="false" aria-label="Abrir notificaciones">
+    <i class="ti ti-bell-ringing global-notifications__bell" aria-hidden="true"></i>
+    <span class="global-notifications__badge" data-notification-badge hidden>0</span>
+  </button>
+  <div class="dropdown-menu dropdown-menu-end global-notifications__menu">
+    <div class="global-notifications__header">
+      <div class="global-notifications__title">Notificaciones</div>
+      <button type="button" class="global-notifications__read-all" data-notification-read-all hidden>Marcar todas como leídas</button>
+    </div>
+    <div class="global-notifications__tabs" role="tablist" aria-label="Filtrar notificaciones">
+      <button type="button" class="is-active" data-notification-tab="unread">Sin leer</button>
+      <button type="button" data-notification-tab="all">Todas</button>
+    </div>
+    <div class="global-notifications__body" data-notification-body aria-live="polite">
+      <div class="global-notifications__loading"><span class="spinner-border spinner-border-sm"></span> Cargando…</div>
+    </div>
+    <div class="global-notifications__footer">
+      <a href="{% url 'notifications:list' %}">Ver todas las notificaciones <i class="ti ti-arrow-right"></i></a>
+    </div>
+  </div>
+</div>
+{% endif %}

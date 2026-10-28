@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.pos.apps.PosConfig",
     "apps.treasury.apps.TreasuryConfig",
     "apps.billing.apps.BillingConfig",
+    "apps.notifications.apps.NotificationsConfig",
     "apps.web.apps.WebConfig",
 ]
 
@@ -72,6 +73,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "apps.companies.context_processors.active_company_context",
+                "apps.core.context_processors.global_notifications_context",
             ],
         },
     },

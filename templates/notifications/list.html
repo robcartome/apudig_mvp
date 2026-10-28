@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Notificaciones - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Centro de notificaciones</h2>{% endblock %}
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-sm-4 col-lg-3"><label class="form-label small mb-1">Estado</label><select name="status" class="form-select form-select-sm"><option value="">Todas</option><option value="unread" {% if status == 'unread' %}selected{% endif %}>Sin leer</option><option value="read" {% if status == 'read' %}selected{% endif %}>Leídas</option></select></div>
+      <div class="col-sm-4 col-lg-3"><label class="form-label small mb-1">Tipo</label><select name="type" class="form-select form-select-sm"><option value="">Todos</option>{% for value, label in notification_types %}<option value="{{ value }}" {% if notification_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Prioridad</label><select name="priority" class="form-select form-select-sm"><option value="">Todas</option>{% for value, label in priorities %}<option value="{{ value }}" {% if priority == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div class="col-sm-4 col-lg-2"><label class="form-label small mb-1">Ordenar</label><select name="sort" class="form-select form-select-sm"><option value="priority" {% if sort == 'priority' %}selected{% endif %}>Prioridad</option><option value="due_date" {% if sort == 'due_date' %}selected{% endif %}>Vencimiento</option><option value="newest" {% if sort == 'newest' %}selected{% endif %}>Más recientes</option><option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>Más antiguas</option></select></div>
+      <div class="col-lg-2 d-flex gap-2"><button class="btn btn-sm btn-primary">Aplicar</button><a href="{% url 'notifications:list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a></div>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <div class="list-group list-group-flush">
+    {% for recipient in page_obj %}{% with notification=recipient.notification %}
+    <a href="{{ notification.target_url }}" data-notification-page-link data-read-url="{% url 'notifications:mark_read' notification.pk %}" class="list-group-item list-group-item-action py-3{% if not recipient.read_at %} bg-red-lt{% endif %}">
+      <div class="d-flex gap-3 align-items-start">
+        <span class="global-notifications__item-icon priority-{{ notification.priority|lower }}"><i class="ti {% if notification.priority == 'HIGH' %}ti-alert-triangle{% else %}ti-calendar-due{% endif %}"></i></span>
+        <div class="flex-fill min-w-0"><div class="d-flex gap-2"><strong>{{ notification.title }}</strong>{% if not recipient.read_at %}<span class="badge bg-red text-white">Sin leer</span>{% endif %}</div><div class="text-muted">{{ notification.message }}</div><div class="small text-muted mt-1">Vencimiento {{ notification.due_date|date:"d/m/Y" }}{% if notification.amount is not None %} · {{ notification.currency|currency_symbol }} {{ notification.amount|floatformat:2 }} pendiente{% endif %} · Actualizada {{ notification.updated_at|date:"d/m/Y H:i" }}</div></div>
+        <i class="ti ti-chevron-right text-muted"></i>
+      </div>
+    </a>
+    {% endwith %}{% empty %}<div class="text-center text-muted py-5"><i class="ti ti-bell-check fs-1 d-block mb-2"></i>No hay notificaciones para estos filtros.</div>{% endfor %}
+  </div>
+  {% if page_obj.has_other_pages %}<div class="card-footer d-flex align-items-center"><span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><div class="btn-group ms-auto">{% if page_obj.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?status={{ status }}&type={{ notification_type }}&priority={{ priority }}&sort={{ sort }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}{% if page_obj.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?status={{ status }}&type={{ notification_type }}&priority={{ priority }}&sort={{ sort }}&page={{ page_obj.next_page_number }}">Siguiente</a>{% endif %}</div></div>{% endif %}
+</div>
+{% endblock %}
+
