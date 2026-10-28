@@ -201,6 +201,7 @@
             <tr class="line-row"
                 data-init-product="{{ f.initial.product|default:'' }}"
                 data-init-name="{{ f.initial.product_name|default:'' }}"
+                data-init-sku="{{ f.initial.product_sku|default:'' }}"
                 data-init-unit-id="{{ f.initial.product_unit_id|default:'' }}"
                 data-init-unit="{{ f.initial.product_unit|default:'' }}"
                 data-base-unit-id="{{ f.initial.base_unit_id|default:'' }}"
@@ -211,7 +212,10 @@
                 {{ f.product }}
                 <select class="product-select w-100">
                   {% if f.initial.product %}
-                  <option value="{{ f.initial.product }}" selected>{{ f.initial.product_name|default:'' }}</option>
+                  <option value="{{ f.initial.product }}"
+                          data-sku="{{ f.initial.product_sku|default:'' }}"
+                          data-name="{{ f.initial.product_name|default:'' }}"
+                          selected>{% if f.initial.product_sku %}{{ f.initial.product_sku }} | {% endif %}{{ f.initial.product_name|default:'' }}</option>
                   {% endif %}
                 </select>
                 {% if f.product.errors %}
@@ -355,9 +359,9 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/inventory/movement-form.js' %}?v=20260905-1"></script>
+<script src="{% static 'js/inventory/movement-form.js' %}?v=20261028-1"></script>
 {# All JS logic lives in static/js/** — nothing inline needed here #}
 {% endblock extra_js %}
 

@@ -76,6 +76,7 @@
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
   };
+  const boletaIdentificationThreshold = number(app.dataset.boletaIdentificationThreshold);
   const fixed = (value, digits = 2) => number(value).toFixed(digits);
   const roundMoney = (value) => Math.round((number(value) + Number.EPSILON) * 100) / 100;
   const escapeHtml = (value) =>
@@ -442,7 +443,7 @@
       legal_name: state.register.default_customer_name || 'Cliente predeterminado',
       document_number: state.register.default_customer_document_number || '',
       address: state.register.default_customer_address || '',
-      document_type: '',
+      document_type: state.register.default_customer_document_type || '',
     });
   }
 
@@ -601,6 +602,26 @@
     return line.taxType === '10' ? line.netPrice * (1 + line.igvRate / 100) : line.netPrice;
   }
 
+  function focusProductSearch() {
+    const search = byId('product-search');
+    search.focus();
+    search.select();
+  }
+
+  function focusCartField(lineId, action) {
+    requestAnimationFrame(() => {
+      const input = byId('cart-lines').querySelector(
+        `[data-line-id="${lineId}"] [data-action="${action}"]`,
+      );
+      if (!input || input.disabled) {
+        focusProductSearch();
+        return;
+      }
+      input.focus();
+      input.select?.();
+    });
+  }
+
   function addProduct(product) {
     if (product.unit_price === null) {
       showAlert(`No hay precio configurado en ${currencySymbol()} para ${product.name}.`);
@@ -653,15 +674,7 @@
     hideProductResults();
     renderCart();
     if (state.productSearchMode === 'CATALOG') loadCatalog('');
-    // On iOS, returning focus to a small search field keeps the software
-    // keyboard open and Safari's automatic zoom after choosing a product.
-    // Desktop scanners/keyboard workflows retain the convenient refocus.
-    if (window.matchMedia('(min-width: 821px)').matches) {
-      byId('product-search').focus();
-    } else {
-      document.activeElement?.blur();
-      requestAnimationFrame(() => window.scrollTo(0, window.scrollY));
-    }
+    focusCartField(product.id, 'quantity');
   }
 
   function renderCart() {
@@ -896,6 +909,65 @@
     updateCheckoutAvailability();
   }
 
+  function customerDocumentTypes() {
+    const select = byId('customer-document-type');
+    return {
+      noDocument: select.dataset.noDocumentType,
+      dni: select.dataset.dniType,
+      ruc: select.dataset.rucType,
+    };
+  }
+
+  function saleTotalInPen() {
+    return totals().total * (state.currency === 'PEN' ? 1 : number(byId('exchange-rate').value));
+  }
+
+  function customerDocumentProblem() {
+    const types = customerDocumentTypes();
+    const customer = state.selectedCustomer;
+    const documentNumber = customer?.document_number?.trim() || '';
+    if (
+      state.documentType === '01'
+      && (customer?.document_type !== types.ruc || !/^\d{11}$/.test(documentNumber))
+    ) {
+      return 'La factura requiere un cliente con RUC válido de 11 dígitos.';
+    }
+    if (
+      state.documentType === '03'
+      && saleTotalInPen() > boletaIdentificationThreshold
+      && (customer?.document_type !== types.dni || !/^\d{8}$/.test(documentNumber))
+    ) {
+      return `La boleta mayor a S/ ${fixed(boletaIdentificationThreshold)} requiere un cliente con DNI válido de 8 dígitos.`;
+    }
+    return null;
+  }
+
+  function updateCustomerDocumentInput() {
+    const select = byId('customer-document-type');
+    const input = byId('customer-document-number');
+    const types = customerDocumentTypes();
+    const withoutDocument = select.value === types.noDocument;
+    input.required = !withoutDocument;
+    input.disabled = withoutDocument;
+    input.inputMode = [types.dni, types.ruc].includes(select.value) ? 'numeric' : 'text';
+    input.maxLength = select.value === types.dni ? 8 : select.value === types.ruc ? 11 : 20;
+    if (withoutDocument) input.value = '';
+  }
+
+  function openCustomerDialog() {
+    const form = byId('customer-form');
+    const select = byId('customer-document-type');
+    const types = customerDocumentTypes();
+    form.reset();
+    select.value = state.documentType === '01'
+      ? types.ruc
+      : state.documentType === '03' && saleTotalInPen() > boletaIdentificationThreshold
+        ? types.dni
+        : types.noDocument;
+    updateCustomerDocumentInput();
+    openDialog(byId('customer-dialog'));
+  }
+
   function checkoutProblem() {
     if (!state.session) return 'Abra una sesión de caja.';
     if (!state.cart.size) return 'Agregue al menos un producto.';
@@ -922,12 +994,7 @@
       const entered = means?.kind === 'CASH' ? number(payment.received) : number(payment.amount);
       if (!means || entered <= 0) return 'Revise los importes de pago.';
     }
-    if (state.documentType === '01') {
-      if (!state.selectedCustomer || state.selectedCustomer.document_number?.length !== 11) {
-        return 'La factura requiere un cliente con RUC de 11 dígitos.';
-      }
-    }
-    return null;
+    return customerDocumentProblem();
   }
 
   function updateCheckoutAvailability() {
@@ -1298,12 +1365,7 @@
     byId('product-search').value = '';
     hideProductResults();
     renderCart();
-    requestAnimationFrame(() => {
-      const selector = search ? '[data-action="price"]' : '[data-action="description"]';
-      const input = byId('cart-lines').querySelector(`[data-line-id="${lineId}"] ${selector}`);
-      input?.focus();
-      input?.select();
-    });
+    focusCartField(lineId, search ? 'quantity' : 'description');
   }
 
   async function openProductCommercial(productId, view) {
@@ -1431,10 +1493,7 @@
     if (!state.session) return 'Abra una sesión de caja.';
     if (!state.cart.size) return 'Agregue al menos un producto.';
     if (!byId('document-series').value) return 'Configure una serie para el documento.';
-    if (state.documentType === '01' && state.selectedCustomer?.document_number?.length !== 11) {
-      return 'La factura requiere un cliente con RUC de 11 dígitos.';
-    }
-    return null;
+    return customerDocumentProblem();
   }
 
   async function saveDraft() {
@@ -2531,7 +2590,10 @@
   });
   byId('credit-due-date').addEventListener('change', markSaleDirty);
   byId('sale-notes').addEventListener('input', markSaleDirty);
-  byId('exchange-rate').addEventListener('input', markSaleDirty);
+  byId('exchange-rate').addEventListener('input', () => {
+    markSaleDirty();
+    updateCheckoutAvailability();
+  });
   byId('product-search').addEventListener('input', () => {
     clearTimeout(productSearchTimer);
     productSearchTimer = setTimeout(
@@ -2810,12 +2872,19 @@
     renderCart();
   });
   byId('cart-lines').addEventListener('keydown', (event) => {
-    if (
-      event.key === 'Enter' &&
-      ['description', 'code', 'quantity', 'price', 'discount'].includes(event.target.dataset.action)
-    ) {
-      event.preventDefault();
-      event.target.blur();
+    if (event.key !== 'Enter' || event.isComposing) return;
+    const row = event.target.closest('[data-line-id]');
+    const action = event.target.dataset.action;
+    if (!row || !['description', 'code', 'quantity', 'price', 'discount'].includes(action)) return;
+    event.preventDefault();
+    const lineId = row.dataset.lineId;
+    event.target.blur();
+    if (['description', 'code'].includes(action)) {
+      focusCartField(lineId, 'quantity');
+    } else if (action === 'quantity') {
+      focusCartField(lineId, 'price');
+    } else if (action === 'price') {
+      requestAnimationFrame(focusProductSearch);
     }
   });
   byId('clear-cart').addEventListener('click', () => {
@@ -2947,7 +3016,8 @@
     selectCustomer(state.customerResults.find((item) => item.id === button.dataset.customerId));
   });
   byId('clear-customer').addEventListener('click', () => selectCustomer(null));
-  byId('new-customer').addEventListener('click', () => openDialog(byId('customer-dialog')));
+  byId('new-customer').addEventListener('click', openCustomerDialog);
+  byId('customer-document-type').addEventListener('change', updateCustomerDocumentInput);
   byId('sale-currency').addEventListener('change', (event) => {
     if (
       state.cart.size &&

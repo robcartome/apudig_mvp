@@ -413,9 +413,17 @@
     if (taxSelect && product.tax_affectation) taxSelect.value = product.tax_affectation;
     if (rateInput && product.tax_rate !== undefined) rateInput.value = product.tax_rate;
 
-    // Fill description hidden field
+    // La descripción es complementaria; no debe duplicar el nombre del producto.
     const descHidden = row.querySelector('input[name*="-description"]');
-    if (descHidden) descHidden.value = product.name || '';
+    if (descHidden) {
+      const description = String(product.description || '').trim();
+      const productName = String(product.name || '').trim();
+      descHidden.value = description.localeCompare(
+        productName,
+        undefined,
+        { sensitivity: 'accent' },
+      ) === 0 ? '' : description;
+    }
 
     // Fill precio_unitario (inc-IGV) from price_sale
     const priceInput = row.querySelector('input.price-unit-input');
@@ -703,6 +711,9 @@
     } else {
       ProductPicker.init(row);
     }
+
+    const quantityInput = row.querySelector('input[name*="-quantity"]');
+    if (quantityInput) normalizeQuantityInput(quantityInput);
 
     // If unit_price (ex-tax) is set but price-unit-input is empty, compute inc-tax
     const priceInput = row.querySelector('input.price-unit-input');

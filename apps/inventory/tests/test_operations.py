@@ -8,10 +8,17 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.companies.models import Company, Store, UserCompanyAccess
-from apps.inventory.models import Movement, Product, StockByWarehouse, Unit, Warehouse
+from apps.inventory.models import (
+    Movement,
+    MovementDetail,
+    Product,
+    StockByWarehouse,
+    Unit,
+    Warehouse,
+)
 from apps.inventory.selectors import search_movements
 from apps.partners.models import Supplier
-from apps.users.models import User
+from apps.users.models import User, UserStore
 
 
 class MovementViewsTest(TestCase):
@@ -444,3 +451,64 @@ class MovementViewsTest(TestCase):
             f'title="Ver detalle del movimiento">{movement.operation_code}</a>',
             html=True,
         )
+
+    def test_movement_edit_uses_sku_and_name_once_in_product_picker(self):
+        UserStore.objects.create(user=self.user, store=self.store, role="WAREHOUSE")
+        movement = Movement.objects.create(
+            type="ENTRY",
+            store=self.store,
+            warehouse=self.warehouse,
+            date=timezone.now(),
+            reason="Prueba de selector",
+            created_by=self.user,
+        )
+        MovementDetail.objects.create(
+            movement=movement,
+            product=self.product,
+            quantity=Decimal("5"),
+            unit=self.unit,
+            unit_code=self.unit.code,
+            stock_quantity=Decimal("5"),
+            unit_price=Decimal("3.000000"),
+        )
+
+        response = self.client.get(reverse("inventory:movement_edit", args=[movement.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        line_form = response.context["formset"].forms[0]
+        self.assertEqual(line_form.initial["product_sku"], self.product.sku)
+        self.assertEqual(line_form.initial["product_name"], self.product.name)
+        self.assertEqual(line_form.initial["quantity"], "5.000")
+        self.assertEqual(line_form.initial["unit_price"], "3.000")
+        self.assertEqual(line_form.fields["unit_price"].decimal_places, 3)
+        self.assertEqual(line_form.fields["unit_price"].widget.input_type, "text")
+        self.assertContains(
+            response,
+            f"{self.product.sku} | {self.product.name}",
+            count=1,
+        )
+        self.assertContains(response, 'value="3.000"', html=False)
+
+        update_response = self.client.post(
+            reverse("inventory:movement_edit", args=[movement.pk]),
+            {
+                "date": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "warehouse": str(self.warehouse.pk),
+                "reason": "Prueba de selector",
+                "reference_doc": "",
+                "supplier": "",
+                "customer": "",
+                "carrier": "",
+                "document_type": "",
+                "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "1",
+                "lines-MIN_NUM_FORMS": "1",
+                "lines-MAX_NUM_FORMS": "1000",
+                "lines-0-product": str(self.product.pk),
+                "lines-0-unit": str(self.unit.pk),
+                "lines-0-quantity": "5.000",
+                "lines-0-unit_price": "3.000",
+            },
+        )
+
+        self.assertRedirects(update_response, reverse("inventory:movement_list"))

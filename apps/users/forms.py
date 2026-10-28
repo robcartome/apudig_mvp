@@ -209,6 +209,14 @@ class CompanyOperationalSettingsForm(forms.ModelForm):
         max_digits=5, decimal_places=2,
         widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
     )
+    purchase_due_notification_days = forms.IntegerField(
+        label="Avisar compras antes del vencimiento",
+        min_value=0,
+        max_value=30,
+        required=False,
+        widget=forms.NumberInput(attrs={"class": "form-control", "min": 0, "max": 30}),
+        help_text="Días de anticipación para las facturas de compra a crédito.",
+    )
     pos_product_search_mode = forms.ChoiceField(
         label="Modo de búsqueda de productos en POS",
         choices=CompanyOperationalSettings.PosProductSearchMode.choices,
@@ -232,6 +240,11 @@ class CompanyOperationalSettingsForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if cleaned.get("purchase_due_notification_days") is None:
+            cleaned["purchase_due_notification_days"] = (
+                self.instance.purchase_due_notification_days
+                if self.instance and self.instance.pk else 3
+            )
         for field_name in ("default_customer", "default_supplier", "default_sales_payment_method", "default_purchase_payment_method"):
             obj = cleaned.get(field_name)
             if obj and obj.company_id != self.company.pk:

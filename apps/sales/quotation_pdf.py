@@ -174,10 +174,15 @@ def _p(value, style, *, bold=False):
 
 
 def _line_name(line):
-    return line.description if getattr(line, "is_manual", False) else line.product.name
+    return getattr(line, "printable_description", None) or (
+        line.description if getattr(line, "is_manual", False) else line.product.name
+    )
 
 
 def _line_code(line):
+    printable_code = getattr(line, "printable_code", None)
+    if printable_code is not None:
+        return printable_code
     return line.product_code or ("" if getattr(line, "is_manual", False) else line.product.sku)
 
 
@@ -299,8 +304,9 @@ def _a4_story(quotation, company, logo_url, footer_text, primary, styles):
         _p("Total", styles["small"], bold=True),
     ]]
     for line in quotation.lines.all():
+        line_code = _line_code(line)
         line_data.append([
-            _p(_line_code(line), styles["small"]), _p(_number(line.quantity), styles["right"]),
+            _p(line_code, styles["small"]) if line_code else "", _p(_number(line.quantity), styles["right"]),
             _p(line.unit_code, styles["small"]), _p(_line_name(line), styles["body"]),
             _p(_money(line.unit_price), styles["right"]), _p(_money(line.price_unit), styles["right"]),
             _p(_money(line.total), styles["right"]),

@@ -1,0 +1,27 @@
+{% for recipient in notification_recipients %}
+{% with notification=recipient.notification %}
+<a href="{{ notification.target_url }}"
+   class="global-notifications__item{% if not recipient.read_at %} is-unread{% endif %}"
+   data-notification-link
+   data-read-url="{% url 'notifications:mark_read' notification.pk %}">
+  <span class="global-notifications__item-icon priority-{{ notification.priority|lower }}" aria-hidden="true">
+    <i class="ti {% if notification.priority == 'HIGH' %}ti-alert-triangle{% else %}ti-calendar-due{% endif %}"></i>
+  </span>
+  <span class="global-notifications__item-content">
+    <span class="global-notifications__document">{{ notification.title }}</span>
+    <span class="global-notifications__supplier">{{ notification.message }}</span>
+    <span class="global-notifications__meta">
+      {{ notification.due_date|date:"d/m/Y" }}{% if notification.amount is not None %} · {{ notification.currency|currency_symbol }}&nbsp;{{ notification.amount|floatformat:2 }} pendiente{% endif %}
+    </span>
+  </span>
+  {% if not recipient.read_at %}<span class="global-notifications__unread-dot" title="Sin leer"></span>{% else %}<i class="ti ti-chevron-right global-notifications__chevron" aria-hidden="true"></i>{% endif %}
+</a>
+{% endwith %}
+{% empty %}
+<div class="global-notifications__empty">
+  <i class="ti ti-bell-check" aria-hidden="true"></i>
+  <strong>Todo al día</strong>
+  <span>No tienes notificaciones en esta vista.</span>
+</div>
+{% endfor %}
+

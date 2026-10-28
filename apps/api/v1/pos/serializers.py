@@ -5,6 +5,7 @@ from django.db.models import Sum
 from django.urls import reverse
 from rest_framework import serializers
 
+from apps.partners.models import Customer
 from apps.pos.models import CashSession, PosRegister, PosReturn, PosTransaction, SalesPayment
 from apps.sales.models import SalesDocumentLine
 
@@ -23,6 +24,9 @@ class PosRegisterSerializer(serializers.ModelSerializer):
     default_customer_document_number = serializers.CharField(
         source="default_customer.document_number", read_only=True, allow_null=True
     )
+    default_customer_document_type = serializers.CharField(
+        source="default_customer.document_type", read_only=True, allow_null=True
+    )
     default_customer_address = serializers.CharField(
         source="default_customer.address", read_only=True, allow_null=True
     )
@@ -37,7 +41,8 @@ class PosRegisterSerializer(serializers.ModelSerializer):
             "default_warehouse", "default_warehouse_name",
             "default_price_list", "default_price_list_name",
             "default_customer", "default_customer_name",
-            "default_customer_document_number", "default_customer_address",
+            "default_customer_document_type", "default_customer_document_number",
+            "default_customer_address",
             "default_document_type", "default_document_type_code",
         )
 
@@ -432,8 +437,8 @@ class ConsolidatedInvoiceRequestSerializer(InvoiceTicketRequestSerializer):
 
 
 class PosCustomerCreateRequestSerializer(serializers.Serializer):
-    document_type = serializers.ChoiceField(choices=("0", "1", "4", "6", "7", "A"))
-    document_number = serializers.CharField(max_length=20)
+    document_type = serializers.ChoiceField(choices=Customer.IdentityDocumentType.choices)
+    document_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
     legal_name = serializers.CharField(max_length=300)
     trade_name = serializers.CharField(max_length=300, required=False, allow_blank=True)
     address = serializers.CharField(max_length=500, required=False, allow_blank=True)
@@ -442,8 +447,19 @@ class PosCustomerCreateRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=200, required=False, allow_blank=True)
 
     def validate(self, attrs):
-        number = attrs["document_number"].strip()
-        if attrs["document_type"] == "6" and (len(number) != 11 or not number.isdigit()):
+        document_type = attrs["document_type"]
+        number = attrs.get("document_number", "").strip()
+        if document_type == Customer.IdentityDocumentType.NO_DOCUMENT:
+            number = ""
+        elif not number:
+            raise serializers.ValidationError({"document_number": "Ingrese el número de documento."})
+        if document_type == Customer.IdentityDocumentType.DNI and (
+            len(number) != 8 or not number.isdigit()
+        ):
+            raise serializers.ValidationError({"document_number": "El DNI debe tener 8 dígitos."})
+        if document_type == Customer.IdentityDocumentType.RUC and (
+            len(number) != 11 or not number.isdigit()
+        ):
             raise serializers.ValidationError({"document_number": "El RUC debe tener 11 digitos."})
         attrs["document_number"] = number
         attrs["legal_name"] = attrs["legal_name"].strip()

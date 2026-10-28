@@ -28,6 +28,7 @@ from apps.sales.printing import (
     render_commercial_print,
 )
 from apps.pos.forms import PosRegisterForm
+from apps.pos.constants import BOLETA_IDENTIFICATION_THRESHOLD_PEN
 from apps.pos.models import (
     CashMovement, CashSession, PosRegister, PosTransaction, SalesPayment,
 )
@@ -128,6 +129,11 @@ def sale_workspace(request):
     )
     return render(request, "pos/sale.html", {
         "pos_product_search_mode": search_mode,
+        "customer_document_types": Customer.IdentityDocumentType.choices,
+        "customer_no_document_type": Customer.IdentityDocumentType.NO_DOCUMENT,
+        "customer_dni_type": Customer.IdentityDocumentType.DNI,
+        "customer_ruc_type": Customer.IdentityDocumentType.RUC,
+        "boleta_identification_threshold": BOLETA_IDENTIFICATION_THRESHOLD_PEN,
         "bank_accounts": BankAccount.objects.filter(
             company_id=company_id, active=True
         ).select_related("bank").order_by("bank__name", "name"),

@@ -262,7 +262,7 @@
               <div class="catalog-product-field {% if lf.is_manual.value %}d-none{% endif %}">
                 <select class="product-select w-100">
                   {% if lf.initial.product %}
-                  <option value="{{ lf.initial.product }}" selected>{{ lf.initial.product_name|default:'' }}</option>
+                  <option value="{{ lf.initial.product }}" selected>{% if lf.initial.product_sku %}{{ lf.initial.product_sku }} | {% endif %}{{ lf.initial.product_name|default:'' }}</option>
                   {% endif %}
                 </select>
               </div>
@@ -503,7 +503,7 @@
 <script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
 <script src="{% static 'js/sales/document-lines.js' %}?v=20261016-2"></script>
 <script>

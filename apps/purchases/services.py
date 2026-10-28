@@ -524,6 +524,8 @@ def register_purchase_document(document_id, *, company_id, registered_by=None):
     document.save(update_fields=["document_status", "updated_at"])
     from .payment_services import ensure_document_installment
     ensure_document_installment(document)
+    from .notification_providers import schedule_purchase_payable_notification_sync
+    schedule_purchase_payable_notification_sync(document)
     _audit(document, "REGISTER", registered_by)
     return document
 
@@ -576,6 +578,8 @@ def cancel_purchase_document(document_id, *, company_id, cancelled_by=None):
         confirm_movement(reversal, confirmed_by=cancelled_by)
     document.document_status = PurchaseDocumentStatus.CANCELLED
     document.save(update_fields=["document_status", "updated_at"])
+    from .notification_providers import schedule_purchase_payable_notification_sync
+    schedule_purchase_payable_notification_sync(document)
     _audit(document, "CANCEL", cancelled_by)
     return document
 

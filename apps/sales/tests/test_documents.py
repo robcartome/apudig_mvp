@@ -1186,6 +1186,41 @@ class SalesDocumentViewsTest(TestCase):
         document.refresh_from_db()
         self.assertEqual(document.subtotal, Decimal("40.00"))
 
+    def test_edit_draft_uses_sku_and_name_once_in_product_picker(self):
+        self._login()
+        UserCompanyAccess.objects.create(
+            user=self.user,
+            company=self.company,
+            store=self.store,
+            is_default=True,
+        )
+        UserStore.objects.create(user=self.user, store=self.store, role="SELLER")
+        self._grant_permission("manage")
+        document = self._create_draft()
+        line = document.lines.get()
+        line.description = self.product.name
+        line.save(update_fields=["description"])
+
+        response = self.client.get(
+            reverse("sales:document_edit", kwargs={"pk": document.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        line_form = response.context["line_formset"].forms[0]
+        self.assertEqual(line_form.initial["product_sku"], self.product.sku)
+        self.assertEqual(line_form.initial["product_name"], self.product.name)
+        self.assertEqual(line_form.initial["description"], "")
+        self.assertContains(
+            response,
+            f'data-sku="{self.product.sku}"',
+            html=False,
+        )
+        self.assertContains(
+            response,
+            f"{self.product.sku} | {self.product.name}",
+            count=1,
+        )
+
     def test_issue_view(self):
         self._login()
         v = self._create_draft()

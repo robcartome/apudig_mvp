@@ -206,6 +206,7 @@
           <tr class="line-row"
               data-init-product="{{ lf.initial.product|default:'' }}"
               data-init-name="{{ lf.initial.product_name|default:'' }}"
+              data-init-sku="{{ lf.initial.product_sku|default:'' }}"
               data-init-unit-id="{{ lf.initial.product_unit_id|default:'' }}"
               data-init-unit="{{ lf.initial.product_unit|default:'' }}"
               data-base-unit-id="{{ lf.initial.base_unit_id|default:'' }}"
@@ -220,7 +221,10 @@
               {{ lf.description }}{# hidden #}
               <select class="product-select w-100">
                 {% if lf.initial.product %}
-                <option value="{{ lf.initial.product }}" selected>{{ lf.initial.product_name|default:'' }}</option>
+                <option value="{{ lf.initial.product }}"
+                        data-sku="{{ lf.initial.product_sku|default:'' }}"
+                        data-name="{{ lf.initial.product_name|default:'' }}"
+                        selected>{% if lf.initial.product_sku %}{{ lf.initial.product_sku }} | {% endif %}{{ lf.initial.product_name|default:'' }}</option>
                 {% endif %}
               </select>
               {% if lf.product.errors %}<div class="text-danger" style="font-size:.75rem">{{ lf.product.errors.0 }}</div>{% endif %}
@@ -430,7 +434,7 @@
 <script src="{% static 'js/api.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
-<script src="{% static 'js/components/product-picker.js' %}?v=20260905-1"></script>
+<script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20260909-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20261028-1"></script>
 {% endblock %}

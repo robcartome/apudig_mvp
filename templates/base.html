@@ -86,6 +86,8 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
+          {% include "components/global_notifications.html" %}
+
           <!-- Empresa / Sucursal activa -->
           {% if available_accesses %}
           <form method="post" action="{% url 'select_company' %}" class="d-flex align-items-center gap-1">
@@ -169,6 +171,7 @@
 <script src="{% static 'js/components/sidebar.js' %}"></script>
 <script src="{% static 'js/components/alerts.js' %}"></script>
 <script src="{% static 'js/components/filter-toggle.js' %}"></script>
+<script src="{% static 'js/components/notifications.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/currency.js' %}?v=20260930-1"></script>
 {% block extra_js %}{% endblock %}
 </body>

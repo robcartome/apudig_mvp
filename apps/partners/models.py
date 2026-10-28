@@ -52,14 +52,22 @@ class DocumentType(models.Model):
 class Customer(TimeStampedModel):
     """customers - cliente canónico (source of truth)"""
 
+    class IdentityDocumentType(models.TextChoices):
+        NO_DOCUMENT = "0", "Sin documento"
+        DNI = "1", "DNI"
+        FOREIGN_RESIDENT_CARD = "4", "Carné de extranjería"
+        RUC = "6", "RUC"
+        PASSPORT = "7", "Pasaporte"
+        DIPLOMATIC_ID = "A", "Cédula diplomática"
+
     objects = CompanyScopedManager()
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(
         "companies.Company", on_delete=models.CASCADE,
         related_name="customers", null=True, blank=True,
     )
-    document_type = models.CharField(max_length=2)  # 6=RUC, 1=DNI, etc.
-    document_number = models.CharField(max_length=20)
+    document_type = models.CharField(max_length=2, choices=IdentityDocumentType.choices)
+    document_number = models.CharField(max_length=20, blank=True)
     legal_name = models.CharField(max_length=300)
     trade_name = models.CharField(max_length=300, blank=True)
     address = models.CharField(max_length=500, blank=True)
@@ -71,7 +79,13 @@ class Customer(TimeStampedModel):
     class Meta:
         db_table = "customers"
         ordering = ["legal_name"]
-        unique_together = (("company", "document_type", "document_number"),)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("company", "document_type", "document_number"),
+                condition=~models.Q(document_number=""),
+                name="uniq_customer_company_document",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.document_number} - {self.legal_name}"

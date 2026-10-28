@@ -175,6 +175,7 @@ def _restore_posted_line_metadata(line_formset, company_id):
         form.initial.update({
             "product": str(product.pk),
             "product_name": product.name,
+            "product_sku": product.sku,
             "product_unit_id": unit_id,
             "product_unit": unit_code,
             "base_unit_id": str(product.unit_id),
@@ -452,13 +453,14 @@ def document_edit(request, pk):
             {
                 "product": str(line.product_id),
                 "product_name": line.product.name,
+                "product_sku": line.product.sku,
                 "unit": str(line.unit_id or line.product.unit_id),
                 "product_unit": line.unit_code,
                 "product_unit_id": str(line.unit_id or line.product.unit_id),
                 "base_unit_id": str(line.product.unit_id),
                 "base_unit_code": line.product.unit.code,
                 "product_units": line.product.unit_conversions.filter(active=True).select_related("unit"),
-                "description": line.description,
+                "description": line.printable_secondary_description,
                 "quantity": line.quantity,
                 "unit_price": line.unit_price,
                 "price_with_igv": line.price_unit,

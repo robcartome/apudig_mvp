@@ -50,6 +50,8 @@ def replace_installment_schedule(document_id, *, company_id, schedule):
             due_date=row["due_date"], amount=row["amount"],
         ) for index, row in enumerate(normalized, start=1)
     ])
+    from .notification_providers import schedule_purchase_payable_notification_sync
+    schedule_purchase_payable_notification_sync(document)
     return document
 
 
@@ -140,6 +142,8 @@ def register_supplier_payment(*, company_id, store, supplier, payment_number, pa
         documents[installment.purchase_document_id] = installment.purchase_document
     for document in documents.values():
         _refresh_document_payment_status(document)
+        from .notification_providers import schedule_purchase_payable_notification_sync
+        schedule_purchase_payable_notification_sync(document)
     AuditLog.objects.create(
         user=created_by, action="REGISTER", entity="SupplierPayment", entity_id=str(payment.pk),
         meta_data={"supplier_id": str(supplier.pk), "amount": str(total), "currency": currency},
@@ -209,6 +213,8 @@ def cancel_supplier_payment(payment_id, *, company_id, cancelled_by=None):
     payment.save(update_fields=("status", "updated_at"))
     for document in documents.values():
         _refresh_document_payment_status(document)
+        from .notification_providers import schedule_purchase_payable_notification_sync
+        schedule_purchase_payable_notification_sync(document)
     AuditLog.objects.create(
         user=cancelled_by, action="CANCEL", entity="SupplierPayment", entity_id=str(payment.pk),
         meta_data={"supplier_id": str(payment.supplier_id), "amount": str(payment.amount)},
