@@ -602,6 +602,26 @@
     return line.taxType === '10' ? line.netPrice * (1 + line.igvRate / 100) : line.netPrice;
   }
 
+  function focusProductSearch() {
+    const search = byId('product-search');
+    search.focus();
+    search.select();
+  }
+
+  function focusCartField(lineId, action) {
+    requestAnimationFrame(() => {
+      const input = byId('cart-lines').querySelector(
+        `[data-line-id="${lineId}"] [data-action="${action}"]`,
+      );
+      if (!input || input.disabled) {
+        focusProductSearch();
+        return;
+      }
+      input.focus();
+      input.select?.();
+    });
+  }
+
   function addProduct(product) {
     if (product.unit_price === null) {
       showAlert(`No hay precio configurado en ${currencySymbol()} para ${product.name}.`);
@@ -654,15 +674,7 @@
     hideProductResults();
     renderCart();
     if (state.productSearchMode === 'CATALOG') loadCatalog('');
-    // On iOS, returning focus to a small search field keeps the software
-    // keyboard open and Safari's automatic zoom after choosing a product.
-    // Desktop scanners/keyboard workflows retain the convenient refocus.
-    if (window.matchMedia('(min-width: 821px)').matches) {
-      byId('product-search').focus();
-    } else {
-      document.activeElement?.blur();
-      requestAnimationFrame(() => window.scrollTo(0, window.scrollY));
-    }
+    focusCartField(product.id, 'quantity');
   }
 
   function renderCart() {
@@ -1353,12 +1365,7 @@
     byId('product-search').value = '';
     hideProductResults();
     renderCart();
-    requestAnimationFrame(() => {
-      const selector = search ? '[data-action="price"]' : '[data-action="description"]';
-      const input = byId('cart-lines').querySelector(`[data-line-id="${lineId}"] ${selector}`);
-      input?.focus();
-      input?.select();
-    });
+    focusCartField(lineId, search ? 'quantity' : 'description');
   }
 
   async function openProductCommercial(productId, view) {
@@ -2865,12 +2872,19 @@
     renderCart();
   });
   byId('cart-lines').addEventListener('keydown', (event) => {
-    if (
-      event.key === 'Enter' &&
-      ['description', 'code', 'quantity', 'price', 'discount'].includes(event.target.dataset.action)
-    ) {
-      event.preventDefault();
-      event.target.blur();
+    if (event.key !== 'Enter' || event.isComposing) return;
+    const row = event.target.closest('[data-line-id]');
+    const action = event.target.dataset.action;
+    if (!row || !['description', 'code', 'quantity', 'price', 'discount'].includes(action)) return;
+    event.preventDefault();
+    const lineId = row.dataset.lineId;
+    event.target.blur();
+    if (['description', 'code'].includes(action)) {
+      focusCartField(lineId, 'quantity');
+    } else if (action === 'quantity') {
+      focusCartField(lineId, 'price');
+    } else if (action === 'price') {
+      requestAnimationFrame(focusProductSearch);
     }
   });
   byId('clear-cart').addEventListener('click', () => {

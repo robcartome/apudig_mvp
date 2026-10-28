@@ -189,6 +189,17 @@ class PosWorkspaceViewTest(TestCase):
         self.assertIn("state.session ? 'Cerrar caja' : 'Abrir caja'", script)
         self.assertIn("hasPermission('open.pos.cash')", script)
 
+    def test_pos_javascript_supports_keyboard_line_entry_flow(self):
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn("function focusCartField(lineId, action)", script)
+        self.assertIn("focusCartField(product.id, 'quantity')", script)
+        self.assertIn("focusCartField(lineId, search ? 'quantity' : 'description')", script)
+        self.assertIn("focusCartField(lineId, 'price')", script)
+        self.assertIn("requestAnimationFrame(focusProductSearch)", script)
+
     def test_pos_success_alerts_auto_hide_but_errors_remain_visible(self):
         script_path = finders.find("js/pos.js")
 
