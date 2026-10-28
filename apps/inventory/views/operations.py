@@ -38,6 +38,13 @@ MOVEMENT_SORTS = {
     "status": "status",
 }
 
+MOVEMENT_DECIMAL_PLACES = 3
+
+
+def _movement_decimal(value):
+    """Render editable movement values with the precision accepted by forms."""
+    return format(value, f".{MOVEMENT_DECIMAL_PLACES}f")
+
 STOCK_SORTS = {
     "warehouse": "warehouse__name",
     "sku": "product__sku",
@@ -254,14 +261,19 @@ def _movement_forms(request, store_id, movement, company_id=None):
         {
             "product":      d.product_id,
             "product_name": d.product.name,
+            "product_sku":  d.product.sku,
             "unit":          d.unit_id or d.product.unit_id,
             "product_unit_id": d.unit_id or d.product.unit_id,
             "product_unit": d.unit_code,
             "base_unit_id": str(d.product.unit_id),
             "base_unit_code": d.product.unit.code,
             "product_units": d.product.unit_conversions.filter(active=True).select_related("unit"),
-            "quantity":     (d.physical_quantity / d.conversion_factor) if movement.type == MovementType.ADJUSTMENT and d.physical_quantity is not None else d.quantity,
-            "unit_price":   d.unit_price,
+            "quantity": _movement_decimal(
+                (d.physical_quantity / d.conversion_factor)
+                if movement.type == MovementType.ADJUSTMENT and d.physical_quantity is not None
+                else d.quantity
+            ),
+            "unit_price": _movement_decimal(d.unit_price),
         }
         for d in movement.details.all()
     ]
@@ -716,18 +728,19 @@ def movement_copy(request, pk):
         {
             "product": d.product_id,
             "product_name": d.product.name,
+            "product_sku": d.product.sku,
             "unit": d.unit_id or d.product.unit_id,
             "product_unit_id": d.unit_id or d.product.unit_id,
             "product_unit": d.unit_code,
             "base_unit_id": str(d.product.unit_id),
             "base_unit_code": d.product.unit.code,
             "product_units": d.product.unit_conversions.filter(active=True).select_related("unit"),
-            "quantity": (
+            "quantity": _movement_decimal(
                 d.physical_quantity / d.conversion_factor
                 if source.type == MovementType.ADJUSTMENT and d.physical_quantity is not None
                 else d.quantity
             ),
-            "unit_price": d.unit_price,
+            "unit_price": _movement_decimal(d.unit_price),
         }
         for d in source.details.all()
     ]

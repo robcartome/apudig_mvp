@@ -259,6 +259,11 @@ def _prepare_quotation_lines(lines, company_id):
             line["product"] = _manual_quotation_product(company_id, line.get("unit"))
             line["description"] = description
             line["product_code"] = (line.get("product_code") or "").strip()
+        else:
+            description = (line.get("description") or "").strip()
+            product_name = (getattr(line.get("product"), "name", "") or "").strip()
+            if " ".join(description.split()).casefold() == " ".join(product_name.split()).casefold():
+                line["description"] = ""
         prepared.append(line)
     return prepared
 

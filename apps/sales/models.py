@@ -195,6 +195,34 @@ class SaleLineBase(models.Model):
             return self.unit_price
         return self.unit_price * (Decimal("1") + self.igv_rate / Decimal("100"))
 
+    @property
+    def is_free_line(self):
+        """Identifica conceptos libres sin exponer el producto técnico interno."""
+        return bool(getattr(self, "is_manual", False)) or self.product.sku in {
+            "VARIOS-COT",
+            "VARIOS-POS",
+        }
+
+    @property
+    def printable_description(self):
+        return self.description.strip() if self.is_free_line else self.product.name
+
+    @property
+    def printable_secondary_description(self):
+        if self.is_free_line:
+            return ""
+        description = (self.description or "").strip()
+        product_name = (self.product.name or "").strip()
+        normalize = lambda value: " ".join(value.split()).casefold()
+        return "" if normalize(description) == normalize(product_name) else description
+
+    @property
+    def printable_code(self):
+        code = (self.product_code or "").strip()
+        if self.is_free_line:
+            return "" if code.upper() in {"VARIOS-COT", "VARIOS-POS", "SIN CODIGO"} else code
+        return code or self.product.sku
+
 
 # ── Cotizaciones ──────────────────────────────────────────────────────────────
 

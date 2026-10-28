@@ -505,7 +505,12 @@ class MovementDetailForm(forms.Form):
     unit_price = forms.DecimalField(
         max_digits=10, decimal_places=3, min_value=Decimal("0"),
         required=False,
-        widget=forms.NumberInput(attrs={"class": _sm, "step": "0.001", "min": "0"}),
+        widget=forms.TextInput(attrs={
+            "class": f"{_sm} text-end unit-price-input",
+            "inputmode": "decimal",
+            "autocomplete": "off",
+            "maxlength": "14",
+        }),
         label="P. Unitario",
     )
     location = forms.UUIDField(

@@ -40,15 +40,9 @@ class CustomerForm(forms.ModelForm):
         self._company = company
         self.fields["document_type"].widget = forms.Select(
             attrs=_select,
-            choices=[
-                ("", "— Seleccione —"),
-                ("1", "DNI"),
-                ("6", "RUC"),
-                ("4", "Carné de extranjería"),
-                ("7", "Pasaporte"),
-                ("0", "Otro"),
-            ],
+            choices=[("", "— Seleccione —"), *Customer.IdentityDocumentType.choices],
         )
+        self.fields["document_number"].required = False
         self.fields["trade_name"].required = False
         self.fields["address"].required = False
         self.fields["phone"].required = False
@@ -65,7 +59,11 @@ class CustomerForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         document_type = cleaned_data.get("document_type")
-        document_number = cleaned_data.get("document_number")
+        document_number = (cleaned_data.get("document_number") or "").strip()
+        if document_type == Customer.IdentityDocumentType.NO_DOCUMENT:
+            cleaned_data["document_number"] = ""
+        elif document_type and not document_number:
+            self.add_error("document_number", "Ingrese el número de documento.")
         if self._company and document_type and document_number:
             qs = Customer.objects.filter(
                 company=self._company,

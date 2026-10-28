@@ -205,6 +205,17 @@ class QuotationServiceTest(TestCase):
         self.assertFalse(line.product.tracks_inventory)
         self.assertEqual(q.total, Decimal("188.80"))
 
+    def test_registered_line_does_not_store_product_name_as_secondary_description(self):
+        line_data = _make_line(self.product)
+        line_data["description"] = self.product.name
+
+        quotation = self._create(lines=[line_data])
+        line = quotation.lines.get()
+
+        self.assertEqual(line.description, "")
+        self.assertEqual(line.printable_description, self.product.name)
+        self.assertEqual(line.printable_secondary_description, "")
+
     def test_update_preserves_manual_line(self):
         q = self._create()
         update_quotation(
@@ -537,6 +548,96 @@ class QuotationViewsTest(TestCase):
         self.assertContains(print_response, "Descargar PDF")
         self.assertContains(print_response, "SON:")
         self.assertContains(print_response, "SOLES")
+
+    def test_a4_print_hides_duplicate_and_free_line_technical_labels(self):
+        quotation = create_quotation(
+            store_id=str(self.store.id),
+            customer=self.customer,
+            series=self.series,
+            lines=[_make_line(self.product)],
+            issue_date=timezone.localdate(),
+        )
+        registered_line = quotation.lines.get()
+        registered_line.description = self.product.name
+        registered_line.save(update_fields=["description"])
+
+        response = self.client.get(
+            reverse("sales:quotation_print", args=[quotation.pk]),
+            {"format": "A4"},
+        )
+
+        self.assertContains(response, self.product.name, count=1)
+
+        manual_quotation = create_quotation(
+            store_id=str(self.store.id),
+            customer=self.customer,
+            series=self.series,
+            lines=[_make_manual_line(self.product.unit, description="Wincha de 10m")],
+            issue_date=timezone.localdate(),
+        )
+        manual_response = self.client.get(
+            reverse("sales:quotation_print", args=[manual_quotation.pk]),
+            {"format": "A4"},
+        )
+
+        self.assertContains(manual_response, "Wincha de 10m", count=1)
+        self.assertNotContains(manual_response, "Concepto libre de cotización")
+        self.assertNotContains(manual_response, "VARIOS-COT")
+        self.assertNotContains(manual_response, "Línea libre")
+
+    def test_edit_formats_quantity_and_product_label_without_duplication(self):
+        quotation = create_quotation(
+            store_id=str(self.store.id),
+            customer=self.customer,
+            series=self.series,
+            lines=[_make_line(self.product, qty="10.0000")],
+            issue_date=timezone.localdate(),
+        )
+        line = quotation.lines.get()
+        line.description = self.product.name
+        line.save(update_fields=["description"])
+
+        response = self.client.get(reverse("sales:quotation_update", args=[quotation.pk]))
+        line_form = response.context["line_formset"].forms[0]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(line_form["quantity"].value(), "10.00")
+        self.assertEqual(line_form.initial["description"], "")
+        self.assertEqual(line_form.initial["product_sku"], self.product.sku)
+        self.assertNotContains(response, f"{self.product.name} | {self.product.name}")
+
+        update_response = self.client.post(
+            reverse("sales:quotation_update", args=[quotation.pk]),
+            {
+                "store": str(self.store.pk),
+                "series": str(self.series.pk),
+                "number": str(quotation.number),
+                "customer": str(self.customer.pk),
+                "issue_date": timezone.localdate().isoformat(),
+                "valid_until": "",
+                "currency": "PEN",
+                "exchange_rate": "1",
+                "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "1",
+                "lines-MIN_NUM_FORMS": "1",
+                "lines-MAX_NUM_FORMS": "1000",
+                "lines-0-product": str(self.product.pk),
+                "lines-0-description": "",
+                "lines-0-unit": str(self.product.unit_id),
+                "lines-0-quantity": "10.00",
+                "lines-0-unit_price": "100.000000",
+                "lines-0-discount_amount": "0",
+                "lines-0-tax_type": "10",
+                "lines-0-igv_rate": "18",
+                "lines-0-memo": "",
+            },
+        )
+
+        self.assertRedirects(
+            update_response,
+            reverse("sales:quotation_detail", args=[quotation.pk]),
+            fetch_redirect_response=False,
+        )
 
     def test_approve_view(self):
         self._post_create()

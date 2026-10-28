@@ -35,6 +35,7 @@ from .models import (
     SalesDocumentSource,
     SalesPayment,
 )
+from .constants import BOLETA_IDENTIFICATION_THRESHOLD_PEN
 from apps.treasury.models import CashSafeMovement
 from .selectors import calculate_cash_session_totals
 
@@ -57,6 +58,31 @@ def _money(value, field_name="importe") -> Decimal:
     if not amount.is_finite():
         raise PosDomainError("INVALID_AMOUNT", f"El {field_name} no es valido.")
     return amount
+
+
+def _validate_pos_customer_for_document(document: SalesDocument, customer: Customer) -> None:
+    if document.document_type.code == "01" and (
+        customer.document_type != Customer.IdentityDocumentType.RUC
+        or len(customer.document_number.strip()) != 11
+        or not customer.document_number.strip().isdigit()
+    ):
+        raise PosDomainError("RUC_REQUIRED", "La factura requiere un cliente con RUC válido.")
+
+    total_in_pen = document.total
+    if document.currency != "PEN":
+        total_in_pen = (document.total * document.exchange_rate).quantize(MONEY_QUANTUM)
+    if document.document_type.code == "03" and total_in_pen > BOLETA_IDENTIFICATION_THRESHOLD_PEN:
+        document_number = customer.document_number.strip()
+        if (
+            customer.document_type != Customer.IdentityDocumentType.DNI
+            or len(document_number) != 8
+            or not document_number.isdigit()
+        ):
+            raise PosDomainError(
+                "DNI_REQUIRED",
+                f"La boleta mayor a S/ {BOLETA_IDENTIFICATION_THRESHOLD_PEN:.2f} "
+                "requiere un cliente con DNI válido.",
+            )
 
 
 def _manual_pos_product(company_id, unit_id) -> Product:
@@ -1229,9 +1255,11 @@ def checkout_pos_sale(
     if customer is None:
         raise PosDomainError("CUSTOMER_REQUIRED", "Debe seleccionar un cliente valido.")
     if document_type_code == "01" and (
-        customer.document_type != "6" or len(customer.document_number.strip()) != 11
+        customer.document_type != Customer.IdentityDocumentType.RUC
+        or len(customer.document_number.strip()) != 11
+        or not customer.document_number.strip().isdigit()
     ):
-        raise PosDomainError("RUC_REQUIRED", "La factura requiere un cliente con RUC valido.")
+        raise PosDomainError("RUC_REQUIRED", "La factura requiere un cliente con RUC válido.")
 
     if payment_condition not in PosTransaction.PaymentCondition.values:
         raise PosDomainError("INVALID_PAYMENT_CONDITION", "La condicion de pago no es valida.")
@@ -1269,7 +1297,10 @@ def checkout_pos_sale(
                 "CREDIT_PAYMENT_METHOD_REQUIRED",
                 "Seleccione una condicion comercial de credito.",
             )
-        if customer.document_type == "0" or not customer.document_number.strip():
+        if (
+            customer.document_type == Customer.IdentityDocumentType.NO_DOCUMENT
+            or not customer.document_number.strip()
+        ):
             raise PosDomainError(
                 "IDENTIFIED_CUSTOMER_REQUIRED",
                 "La venta a credito requiere un cliente identificado.",
@@ -1380,6 +1411,11 @@ def checkout_pos_sale(
                 created_by=cashier,
                 **document_kwargs,
             )
+            pos_transaction = None
+
+        _validate_pos_customer_for_document(document, customer)
+
+        if pos_transaction is None:
             pos_transaction, _ = start_pos_transaction(
                 cash_session_id=session.pk,
                 sales_document_id=document.pk,

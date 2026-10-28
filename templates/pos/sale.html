@@ -23,6 +23,7 @@
   id="pos-app"
   class="pos-shell"
   data-product-search-mode="{{ pos_product_search_mode|default:'SEARCH' }}"
+  data-boleta-identification-threshold="{{ boleta_identification_threshold }}"
   data-bootstrap-url="{% url 'api_v1_pos_bootstrap' %}"
   data-products-url="{% url 'api_v1_pos_products' %}"
   data-product-create-url="{% url 'api_v1_pos_product_create' %}"
@@ -485,17 +486,18 @@
       <div class="pos-form-grid">
         <div>
           <label for="customer-document-type">Tipo de documento</label>
-          <select id="customer-document-type" class="form-select">
-            <option value="1">DNI</option>
-            <option value="6">RUC</option>
-            <option value="0">Sin documento</option>
-            <option value="4">Carné de extranjería</option>
-            <option value="7">Pasaporte</option>
+          <select id="customer-document-type" class="form-select"
+                  data-no-document-type="{{ customer_no_document_type }}"
+                  data-dni-type="{{ customer_dni_type }}"
+                  data-ruc-type="{{ customer_ruc_type }}">
+            {% for value, label in customer_document_types %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
           </select>
         </div>
         <div>
           <label for="customer-document-number">Número</label>
-          <input id="customer-document-number" class="form-control" maxlength="20" required>
+          <input id="customer-document-number" class="form-control" maxlength="20">
         </div>
         <div class="pos-form-grid__full">
           <label for="customer-legal-name">Nombre o razón social</label>

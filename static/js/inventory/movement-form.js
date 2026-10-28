@@ -18,6 +18,7 @@
   const locationUrl = configEl.dataset.locationUrl;
   const movementType = configEl.dataset.movementType;
   const showUnitPrice = configEl.dataset.showUnitPrice === '1';
+  const MOVEMENT_DECIMALS = 3;
   const warehouseInput = document.getElementById(
     movementType === 'TRANSFER' ? 'id_warehouse_origin' : 'id_warehouse'
   );
@@ -164,8 +165,9 @@
     row.className = 'line-row';
     const unitPriceCell = showUnitPrice
       ? `<td>
-        <input type="number" name="lines-${index}-unit_price" id="id_lines-${index}-unit_price"
-               class="form-control form-control-sm" step="0.001" min="0" value="">
+        <input type="text" name="lines-${index}-unit_price" id="id_lines-${index}-unit_price"
+               class="form-control form-control-sm text-end unit-price-input"
+               inputmode="decimal" autocomplete="off" maxlength="14" value="">
       </td>`
       : '';
 
@@ -228,7 +230,7 @@
     const priceInput = row.querySelector('input[name*="-unit_price"]');
     if (priceInput && parseFloat(basePrice) > 0 &&
         (!priceInput.value || priceInput.value === '0' || priceInput.value === '0.000')) {
-      priceInput.value = priceForSelectedUnit(row, basePrice).toFixed(3);
+      priceInput.value = priceForSelectedUnit(row, basePrice).toFixed(MOVEMENT_DECIMALS);
     }
   });
 
@@ -254,20 +256,26 @@
       const configuredPrice = option?.dataset.price
         ?? (movementType === 'ENTRY' ? option?.dataset.purchasePrice : option?.dataset.salePrice);
       if ((configuredPrice === undefined || configuredPrice === '') && row.dataset.basePrice === undefined) return;
-      priceInput.value = priceForSelectedUnit(row, row.dataset.basePrice || 0).toFixed(3);
+      priceInput.value = priceForSelectedUnit(row, row.dataset.basePrice || 0).toFixed(MOVEMENT_DECIMALS);
     }
   });
 
+  function normalizeDecimalInput(input, decimalPlaces) {
+    let value = input.value.replace(',', '.').replace(/[^\d.]/g, '');
+    const separator = value.indexOf('.');
+    if (separator !== -1) {
+      value = value.slice(0, separator + 1)
+        + value.slice(separator + 1).replace(/\./g, '').slice(0, decimalPlaces);
+    }
+    input.value = value;
+  }
+
   linesBody.addEventListener('input', event => {
     if (event.target.matches('input[name*="-quantity"]')) {
-      let value = event.target.value.replace(',', '.').replace(/[^\d.]/g, '');
-      const separator = value.indexOf('.');
-      if (separator !== -1) {
-        value = value.slice(0, separator + 1)
-          + value.slice(separator + 1).replace(/\./g, '').slice(0, 3);
-      }
-      event.target.value = value;
+      normalizeDecimalInput(event.target, MOVEMENT_DECIMALS);
       updateUnitEquivalence(event.target.closest('.line-row'));
+    } else if (event.target.matches('input[name*="-unit_price"]')) {
+      normalizeDecimalInput(event.target, MOVEMENT_DECIMALS);
     }
   });
 
@@ -318,6 +326,10 @@
       const unitLabel = row.dataset.initUnit || row.querySelector('.product-unit-select option')?.textContent || '—';
       const unitId = row.dataset.initUnitId || row.querySelector('.product-unit-select option')?.value || '';
       setUnitSelect(row, unitId, unitLabel);
+      const quantityInput = row.querySelector('input[name*="-quantity"]');
+      const priceInput = row.querySelector('input[name*="-unit_price"]');
+      if (quantityInput) normalizeDecimalInput(quantityInput, MOVEMENT_DECIMALS);
+      if (priceInput) normalizeDecimalInput(priceInput, MOVEMENT_DECIMALS);
       updateUnitEquivalence(row);
       ProductPicker.init(row);
       refreshStock(row);

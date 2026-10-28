@@ -1027,6 +1027,71 @@ class PosApiTest(TestCase):
         self.assertEqual(pdf["Content-Type"], "application/pdf")
         self.assertTrue(pdf.content.startswith(b"%PDF"))
 
+    def test_receipt_up_to_700_allows_customer_without_document(self):
+        customer = Customer.objects.create(
+            company=self.company,
+            document_type=Customer.IdentityDocumentType.NO_DOCUMENT,
+            document_number="",
+            legal_name="Robert 2",
+        )
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload.update({
+            "document_type": "03",
+            "series_id": str(self.receipt_series.pk),
+            "customer_id": str(customer.pk),
+        })
+        payload["lines"][0]["quantity"] = "7.000"
+        payload["payments"][0].update({"amount": "700.00", "received_amount": "700.00"})
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 201, response.content)
+
+    def test_receipt_over_700_rejects_customer_without_dni(self):
+        customer = Customer.objects.create(
+            company=self.company,
+            document_type=Customer.IdentityDocumentType.NO_DOCUMENT,
+            document_number="",
+            legal_name="Cliente sin documento",
+        )
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload.update({
+            "document_type": "03",
+            "series_id": str(self.receipt_series.pk),
+            "customer_id": str(customer.pk),
+        })
+        payload["lines"][0]["quantity"] = "8.000"
+        payload["payments"][0].update({"amount": "800.00", "received_amount": "800.00"})
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["code"], "DNI_REQUIRED")
+        self.assertFalse(SalesDocument.objects.exists())
+
+    def test_receipt_over_700_accepts_customer_with_dni(self):
+        customer = Customer.objects.create(
+            company=self.company,
+            document_type=Customer.IdentityDocumentType.DNI,
+            document_number="44556677",
+            legal_name="Cliente identificado",
+        )
+        session_id = self._open_session()
+        payload = self._checkout_payload(session_id)
+        payload.update({
+            "document_type": "03",
+            "series_id": str(self.receipt_series.pk),
+            "customer_id": str(customer.pk),
+        })
+        payload["lines"][0]["quantity"] = "8.000"
+        payload["payments"][0].update({"amount": "800.00", "received_amount": "800.00"})
+
+        response = self._post("/api/v1/pos/sales/checkout/", payload)
+
+        self.assertEqual(response.status_code, 201, response.content)
+
     def test_sunat_hash_enables_official_qr_payload(self):
         session_id = self._open_session()
         payload = self._checkout_payload(session_id)
@@ -1317,6 +1382,30 @@ class PosApiTest(TestCase):
         self.assertEqual(repeated.status_code, 200)
         self.assertEqual(created.json()["id"], repeated.json()["id"])
         self.assertEqual(Customer.objects.filter(company=self.company).count(), 2)
+
+    def test_quick_customer_creation_allows_multiple_customers_without_document(self):
+        first = self._post("/api/v1/pos/customers/", {
+            "document_type": Customer.IdentityDocumentType.NO_DOCUMENT,
+            "document_number": "",
+            "legal_name": "Robert 2",
+        })
+        second = self._post("/api/v1/pos/customers/", {
+            "document_type": Customer.IdentityDocumentType.NO_DOCUMENT,
+            "legal_name": "María sin documento",
+        })
+
+        self.assertEqual(first.status_code, 201, first.content)
+        self.assertEqual(second.status_code, 201, second.content)
+        self.assertNotEqual(first.json()["id"], second.json()["id"])
+        self.assertEqual(first.json()["document_number"], "")
+        self.assertEqual(
+            Customer.objects.filter(
+                company=self.company,
+                document_type=Customer.IdentityDocumentType.NO_DOCUMENT,
+                document_number="",
+            ).count(),
+            2,
+        )
 
     def test_pending_tickets_are_consolidated_before_cash_close_without_double_stock(self):
         session_id = self._open_session()

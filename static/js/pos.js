@@ -76,6 +76,7 @@
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
   };
+  const boletaIdentificationThreshold = number(app.dataset.boletaIdentificationThreshold);
   const fixed = (value, digits = 2) => number(value).toFixed(digits);
   const roundMoney = (value) => Math.round((number(value) + Number.EPSILON) * 100) / 100;
   const escapeHtml = (value) =>
@@ -442,7 +443,7 @@
       legal_name: state.register.default_customer_name || 'Cliente predeterminado',
       document_number: state.register.default_customer_document_number || '',
       address: state.register.default_customer_address || '',
-      document_type: '',
+      document_type: state.register.default_customer_document_type || '',
     });
   }
 
@@ -896,6 +897,65 @@
     updateCheckoutAvailability();
   }
 
+  function customerDocumentTypes() {
+    const select = byId('customer-document-type');
+    return {
+      noDocument: select.dataset.noDocumentType,
+      dni: select.dataset.dniType,
+      ruc: select.dataset.rucType,
+    };
+  }
+
+  function saleTotalInPen() {
+    return totals().total * (state.currency === 'PEN' ? 1 : number(byId('exchange-rate').value));
+  }
+
+  function customerDocumentProblem() {
+    const types = customerDocumentTypes();
+    const customer = state.selectedCustomer;
+    const documentNumber = customer?.document_number?.trim() || '';
+    if (
+      state.documentType === '01'
+      && (customer?.document_type !== types.ruc || !/^\d{11}$/.test(documentNumber))
+    ) {
+      return 'La factura requiere un cliente con RUC válido de 11 dígitos.';
+    }
+    if (
+      state.documentType === '03'
+      && saleTotalInPen() > boletaIdentificationThreshold
+      && (customer?.document_type !== types.dni || !/^\d{8}$/.test(documentNumber))
+    ) {
+      return `La boleta mayor a S/ ${fixed(boletaIdentificationThreshold)} requiere un cliente con DNI válido de 8 dígitos.`;
+    }
+    return null;
+  }
+
+  function updateCustomerDocumentInput() {
+    const select = byId('customer-document-type');
+    const input = byId('customer-document-number');
+    const types = customerDocumentTypes();
+    const withoutDocument = select.value === types.noDocument;
+    input.required = !withoutDocument;
+    input.disabled = withoutDocument;
+    input.inputMode = [types.dni, types.ruc].includes(select.value) ? 'numeric' : 'text';
+    input.maxLength = select.value === types.dni ? 8 : select.value === types.ruc ? 11 : 20;
+    if (withoutDocument) input.value = '';
+  }
+
+  function openCustomerDialog() {
+    const form = byId('customer-form');
+    const select = byId('customer-document-type');
+    const types = customerDocumentTypes();
+    form.reset();
+    select.value = state.documentType === '01'
+      ? types.ruc
+      : state.documentType === '03' && saleTotalInPen() > boletaIdentificationThreshold
+        ? types.dni
+        : types.noDocument;
+    updateCustomerDocumentInput();
+    openDialog(byId('customer-dialog'));
+  }
+
   function checkoutProblem() {
     if (!state.session) return 'Abra una sesión de caja.';
     if (!state.cart.size) return 'Agregue al menos un producto.';
@@ -922,12 +982,7 @@
       const entered = means?.kind === 'CASH' ? number(payment.received) : number(payment.amount);
       if (!means || entered <= 0) return 'Revise los importes de pago.';
     }
-    if (state.documentType === '01') {
-      if (!state.selectedCustomer || state.selectedCustomer.document_number?.length !== 11) {
-        return 'La factura requiere un cliente con RUC de 11 dígitos.';
-      }
-    }
-    return null;
+    return customerDocumentProblem();
   }
 
   function updateCheckoutAvailability() {
@@ -1431,10 +1486,7 @@
     if (!state.session) return 'Abra una sesión de caja.';
     if (!state.cart.size) return 'Agregue al menos un producto.';
     if (!byId('document-series').value) return 'Configure una serie para el documento.';
-    if (state.documentType === '01' && state.selectedCustomer?.document_number?.length !== 11) {
-      return 'La factura requiere un cliente con RUC de 11 dígitos.';
-    }
-    return null;
+    return customerDocumentProblem();
   }
 
   async function saveDraft() {
@@ -2531,7 +2583,10 @@
   });
   byId('credit-due-date').addEventListener('change', markSaleDirty);
   byId('sale-notes').addEventListener('input', markSaleDirty);
-  byId('exchange-rate').addEventListener('input', markSaleDirty);
+  byId('exchange-rate').addEventListener('input', () => {
+    markSaleDirty();
+    updateCheckoutAvailability();
+  });
   byId('product-search').addEventListener('input', () => {
     clearTimeout(productSearchTimer);
     productSearchTimer = setTimeout(
@@ -2947,7 +3002,8 @@
     selectCustomer(state.customerResults.find((item) => item.id === button.dataset.customerId));
   });
   byId('clear-customer').addEventListener('click', () => selectCustomer(null));
-  byId('new-customer').addEventListener('click', () => openDialog(byId('customer-dialog')));
+  byId('new-customer').addEventListener('click', openCustomerDialog);
+  byId('customer-document-type').addEventListener('change', updateCustomerDocumentInput);
   byId('sale-currency').addEventListener('change', (event) => {
     if (
       state.cart.size &&

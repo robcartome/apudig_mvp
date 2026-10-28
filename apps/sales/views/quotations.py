@@ -10,7 +10,7 @@ Rutas:
   quotation_reject  POST     /ventas/cotizaciones/<uuid:pk>/rechazar/
   quotation_cancel  POST     /ventas/cotizaciones/<uuid:pk>/cancelar/
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -78,6 +78,14 @@ def _quotation_reference(quotation):
         '<a href="{}"><strong>{}</strong></a>',
         reverse("sales:quotation_detail", args=[quotation.pk]),
         f"{quotation.series_code}-{quotation.number:08d}",
+    )
+
+
+def _quantity_form_value(value):
+    """Presenta cantidades con los 2 decimales admitidos por el formulario."""
+    return format(
+        Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        "f",
     )
 
 
@@ -352,16 +360,17 @@ def quotation_update(request, pk):
             {
                 "product": "" if line.is_manual else str(line.product_id),
                 "product_name": "" if line.is_manual else line.product.name,
+                "product_sku": "" if line.is_manual else line.product.sku,
                 "unit": str(line.unit_id or line.product.unit_id),
                 "product_unit": line.unit_code,
                 "product_unit_id": str(line.unit_id or line.product.unit_id),
                 "base_unit_id": str(line.product.unit_id),
                 "base_unit_code": line.product.unit.code,
                 "product_units": [] if line.is_manual else line.product.unit_conversions.filter(active=True).select_related("unit"),
-                "description": line.description,
+                "description": line.description if line.is_manual else line.printable_secondary_description,
                 "product_code": line.product_code,
                 "is_manual": line.is_manual,
-                "quantity": line.quantity,
+                "quantity": _quantity_form_value(line.quantity),
                 "unit_price": line.unit_price,
                 "price_with_igv": line.price_unit,
                 "discount_amount": line.discount_amount,
@@ -433,16 +442,17 @@ def quotation_copy(request, pk):
         {
             "product": "" if line.is_manual else str(line.product_id),
             "product_name": "" if line.is_manual else line.product.name,
+            "product_sku": "" if line.is_manual else line.product.sku,
             "unit": str(line.unit_id or line.product.unit_id),
             "product_unit": line.unit_code,
             "product_unit_id": str(line.unit_id or line.product.unit_id),
             "base_unit_id": str(line.product.unit_id),
             "base_unit_code": line.product.unit.code,
             "product_units": [] if line.is_manual else line.product.unit_conversions.filter(active=True).select_related("unit"),
-            "description": line.description,
+            "description": line.description if line.is_manual else line.printable_secondary_description,
             "product_code": line.product_code,
             "is_manual": line.is_manual,
-            "quantity": line.quantity,
+            "quantity": _quantity_form_value(line.quantity),
             "unit_price": line.unit_price,
             "price_with_igv": line.price_unit,
             "discount_amount": line.discount_amount,

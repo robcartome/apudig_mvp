@@ -1240,20 +1240,30 @@ class PosCustomerCreateAPIView(PosAPIView):
         serializer = PosCustomerCreateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        customer, created = Customer.objects.get_or_create(
-            company_id=company_id,
-            document_type=data["document_type"],
-            document_number=data["document_number"],
-            defaults={
-                "legal_name": data["legal_name"],
-                "trade_name": data.get("trade_name", ""),
-                "address": data.get("address", ""),
-                "ubigeo": data.get("ubigeo", ""),
-                "phone": data.get("phone", ""),
-                "email": data.get("email", ""),
-                "active": True,
-            },
-        )
+        customer_values = {
+            "legal_name": data["legal_name"],
+            "trade_name": data.get("trade_name", ""),
+            "address": data.get("address", ""),
+            "ubigeo": data.get("ubigeo", ""),
+            "phone": data.get("phone", ""),
+            "email": data.get("email", ""),
+            "active": True,
+        }
+        if data["document_type"] == Customer.IdentityDocumentType.NO_DOCUMENT:
+            customer = Customer.objects.create(
+                company_id=company_id,
+                document_type=data["document_type"],
+                document_number="",
+                **customer_values,
+            )
+            created = True
+        else:
+            customer, created = Customer.objects.get_or_create(
+                company_id=company_id,
+                document_type=data["document_type"],
+                document_number=data["document_number"],
+                defaults=customer_values,
+            )
         return Response({
             "id": str(customer.pk),
             "document_type": customer.document_type,
