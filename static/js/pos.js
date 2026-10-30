@@ -1,6 +1,5 @@
 (() => {
   'use strict';
-  console.log('POS script loaded');
   const app = document.getElementById('pos-app');
   if (!app) return;
 
@@ -1646,7 +1645,7 @@
       '03': 'BOLETA',
       '01': 'FACTURA',
     };
-    console.log(result);
+
     // Prefer the persisted snapshot: it contains the definitive description and memo.
     const sourceLines = result.lines?.length ? result.lines : lines || [];
     const symbol = currencySymbol(result.currency);
@@ -2136,7 +2135,6 @@
       });
       closeDialog(byId('reprint-dialog'));
       setReceiptWidth(result.print_width || width);
-      console.log("ENTRO REPRINT");
       renderReceipt(result, result.lines);
       openDialog(byId('success-dialog'));
     } catch (error) {
@@ -3214,7 +3212,6 @@
       return;
     }
     const button = event.target.closest('[data-reprint-id]');
-    console.log('Reprint button clicked:', button);
     if (button) prepareReprint(button.dataset.reprintId);
   });
   byId('invoiceable-tickets').addEventListener('change', updateConsolidationTotal);
