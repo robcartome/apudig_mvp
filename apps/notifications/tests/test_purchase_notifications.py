@@ -216,5 +216,5 @@ class NotificationViewTest(NotificationTestBase):
         self.assertContains(response, 'data-notification-center', html=False)
         self.assertContains(response, 'data-notification-tab="unread"', html=False)
         self.assertContains(response, 'data-notification-read-all', html=False)
-        self.assertContains(response, "js/components/notifications.js")
+        self.assertContains(response, "js/components/notifications")
 
