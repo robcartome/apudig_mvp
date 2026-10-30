@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-
+  console.log('POS script loaded');
   const app = document.getElementById('pos-app');
   if (!app) return;
 
@@ -1646,6 +1646,7 @@
       '03': 'BOLETA',
       '01': 'FACTURA',
     };
+    console.log(result);
     // Prefer the persisted snapshot: it contains the definitive description and memo.
     const sourceLines = result.lines?.length ? result.lines : lines || [];
     const symbol = currencySymbol(result.currency);
@@ -1757,6 +1758,77 @@
       result.status === 'COMPLETED' &&
       (['01', '03'].includes(result.document_type) || result.billing_status === 'INVOICED')
     );
+    byId('correct-payment-button').hidden = !(
+      hasPermission('correct.pos.payment') &&
+      result.status === 'COMPLETED' &&
+      result.cash_session === state.session?.id &&
+      (result.payments || []).length
+    );
+  }
+
+  function syncPaymentCorrectionSelection() {
+    const receipt = state.currentReceipt;
+    const payment = (receipt?.payments || []).find(
+      (item) => item.id === byId('payment-correction-payment').value,
+    );
+    if (!payment) return;
+    const alternative = state.means.find((item) => item.id !== payment.means_of_payment);
+    byId('payment-correction-means').value = (alternative || state.means[0])?.id || '';
+    byId('payment-correction-reference').value = '';
+  }
+
+  function openPaymentCorrectionDialog() {
+    const receipt = state.currentReceipt;
+    if (
+      !receipt ||
+      !state.session ||
+      receipt.cash_session !== state.session.id ||
+      !hasPermission('correct.pos.payment')
+    ) {
+      showAlert('La correcci\u00f3n requiere permiso y que la caja original contin\u00fae abierta.');
+      return;
+    }
+    byId('payment-correction-payment').innerHTML = (receipt.payments || [])
+      .map(
+        (payment) =>
+          `<option value="${payment.id}">${escapeHtml(payment.means_of_payment_name)} &middot; ${escapeHtml(currencySymbol(payment.currency))} ${fixed(payment.amount_in_sale_currency)}</option>`,
+      )
+      .join('');
+    byId('payment-correction-means').innerHTML = state.means
+      .map((means) => `<option value="${means.id}">${escapeHtml(means.name)}</option>`)
+      .join('');
+    byId('payment-correction-reason').value = '';
+    syncPaymentCorrectionSelection();
+    openDialog(byId('payment-correction-dialog'));
+  }
+
+  async function submitPaymentCorrection(event) {
+    event.preventDefault();
+    const receipt = state.currentReceipt;
+    const paymentId = byId('payment-correction-payment').value;
+    if (!receipt || !paymentId) return;
+    const correctionUrl = endpoints.recentSales.replace(
+      /recent\/?$/,
+      `${encodeURIComponent(receipt.id)}/payments/${encodeURIComponent(paymentId)}/correct/`,
+    );
+    setBusy(true, 'Corrigiendo medio de pago...');
+    try {
+      const result = await api(correctionUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          means_of_payment_id: byId('payment-correction-means').value,
+          operation_reference: byId('payment-correction-reference').value.trim(),
+          reason: byId('payment-correction-reason').value.trim(),
+        }),
+      });
+      closeDialog(byId('payment-correction-dialog'));
+      renderReceipt(result, result.lines);
+      showAlert('El medio de pago fue corregido y qued\u00f3 registrado en auditor\u00eda.', 'success');
+    } catch (error) {
+      showAlert(error.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function openReturnDialog() {
@@ -2064,6 +2136,7 @@
       });
       closeDialog(byId('reprint-dialog'));
       setReceiptWidth(result.print_width || width);
+      console.log("ENTRO REPRINT");
       renderReceipt(result, result.lines);
       openDialog(byId('success-dialog'));
     } catch (error) {
@@ -3141,6 +3214,7 @@
       return;
     }
     const button = event.target.closest('[data-reprint-id]');
+    console.log('Reprint button clicked:', button);
     if (button) prepareReprint(button.dataset.reprintId);
   });
   byId('invoiceable-tickets').addEventListener('change', updateConsolidationTotal);
@@ -3162,6 +3236,9 @@
   byId('return-form').addEventListener('submit', submitReturn);
   byId('debit-note-button').addEventListener('click', openDebitNoteDialog);
   byId('debit-note-form').addEventListener('submit', submitDebitNote);
+  byId('correct-payment-button').addEventListener('click', openPaymentCorrectionDialog);
+  byId('payment-correction-payment').addEventListener('change', syncPaymentCorrectionSelection);
+  byId('payment-correction-form').addEventListener('submit', submitPaymentCorrection);
   byId('receipt-width').addEventListener('change', (event) => setReceiptWidth(event.target.value));
   byId('print-receipt-button').addEventListener('click', () => window.print());
 
@@ -3181,6 +3258,12 @@
   updateNetworkStatus();
 
   if ('serviceWorker' in navigator) {
+    let reloadingForServiceWorkerUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadingForServiceWorkerUpdate) return;
+      reloadingForServiceWorkerUpdate = true;
+      window.location.reload();
+    });
     window.addEventListener('load', () => {
       navigator.serviceWorker
         .register('/pos/service-worker.js', { scope: '/pos/' })

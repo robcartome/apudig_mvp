@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.contrib.staticfiles import finders
 from django.test import TestCase
 from django.urls import reverse
@@ -134,8 +135,8 @@ class PosWorkspaceViewTest(TestCase):
         self.assertTrue(response["Content-Type"].startswith("text/javascript"))
         self.assertEqual(response["Service-Worker-Allowed"], "/pos/")
         self.assertIn("no-cache", response["Cache-Control"])
-        self.assertContains(response, "apudig-pos-static-v17")
-        self.assertContains(response, "/static/js/pos.js?v=20261016-1")
+        self.assertContains(response, f"apudig-pos-static-{settings.POS_STATIC_VERSION}")
+        self.assertContains(response, f"/static/js/pos.js?v={settings.POS_STATIC_VERSION}")
         self.assertContains(response, "ApuDig POS necesita")
         self.assertNotContains(response, "'/api/")
 
@@ -148,6 +149,14 @@ class PosWorkspaceViewTest(TestCase):
         self.assertIn('new CustomEvent("pos:scan-requested"', script)
         self.assertIn('barcodeField: "barcode"', script)
 
+    def test_pos_reloads_when_a_new_service_worker_takes_control(self):
+        script_path = finders.find("js/pos.js")
+
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn("navigator.serviceWorker.addEventListener('controllerchange'", script)
+        self.assertIn("reloadingForServiceWorkerUpdate", script)
+
     def test_cash_close_uses_bank_account_field_from_current_markup(self):
         self.activate_context()
 
@@ -157,7 +166,7 @@ class PosWorkspaceViewTest(TestCase):
         with open(script_path, encoding="utf-8") as script_file:
             script = script_file.read()
         self.assertContains(response, 'id="bank-deposit-account"')
-        self.assertContains(response, "/static/js/pos.js?v=20261016-1")
+        self.assertContains(response, f"/static/js/pos.js?v={settings.POS_STATIC_VERSION}")
         self.assertIn("byId('bank-deposit-account').value = '';", script)
         self.assertNotIn("bank-deposit-destination", script)
 

@@ -91,7 +91,7 @@ class UserOperationalFlagsForm(forms.ModelForm):
                 "is_seller_profile", "restricted_shop_access",
                 "can_authorize_purchase_request", "can_close_purchase_order",
                 "restrict_unaccepted_po_pdf", "can_close_sale_order",
-                "see_all_price_lists", "can_close_credits",
+                "see_all_price_lists", "can_close_credits", "can_correct_pos_payment",
             ]
         }
 

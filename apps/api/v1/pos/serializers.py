@@ -129,7 +129,7 @@ class PosTransactionSerializer(serializers.ModelSerializer):
     due_date = serializers.DateField(source="sales_document.due_date", read_only=True)
     paid_amount = serializers.SerializerMethodField()
     outstanding_amount = serializers.SerializerMethodField()
-    payments = SalesPaymentSerializer(source="sales_document.pos_payments", many=True, read_only=True)
+    payments = serializers.SerializerMethodField()
     lines = PosReceiptLineSerializer(source="sales_document.lines", many=True, read_only=True)
     document_pdf_url = serializers.SerializerMethodField()
     electronic_status = serializers.SerializerMethodField()
@@ -184,6 +184,12 @@ class PosTransactionSerializer(serializers.ModelSerializer):
             ),
             Decimal("0.00"),
         ).quantize(Decimal("0.01")))
+
+    def get_payments(self, obj):
+        payments = obj.sales_document.pos_payments.filter(
+            status=SalesPayment.Status.REGISTERED
+        ).select_related("means_of_payment")
+        return SalesPaymentSerializer(payments, many=True).data
 
     def get_cashier_name(self, obj):
         if obj.cashier is None:
@@ -398,6 +404,12 @@ class PosPaymentInputSerializer(serializers.Serializer):
         max_digits=14, decimal_places=2, min_value=Decimal("0.00"), required=False
     )
     operation_reference = serializers.CharField(max_length=120, required=False, allow_blank=True)
+
+
+class PosPaymentCorrectionRequestSerializer(serializers.Serializer):
+    means_of_payment_id = serializers.UUIDField()
+    operation_reference = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    reason = serializers.CharField(max_length=500, allow_blank=False, trim_whitespace=True)
 
 
 class PosCheckoutRequestSerializer(serializers.Serializer):

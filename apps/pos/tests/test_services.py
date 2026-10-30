@@ -21,13 +21,23 @@ from apps.pos.models import (
     CashTenderDeclaration,
     PosRegister,
     PosTransaction,
+    SalesPayment,
     SalesDocumentSource,
 )
-from apps.treasury.models import Bank, BankAccount, BankMovement, CashSafeMovement
+from apps.treasury.models import (
+    Bank,
+    BankAccount,
+    BankMovement,
+    BankReconciliationMatch,
+    BankStatement,
+    BankStatementLine,
+    CashSafeMovement,
+)
 from apps.pos.services import (
     PosDomainError,
     close_cash_session,
     complete_pos_transaction,
+    correct_pos_sales_payment,
     link_tickets_to_consolidated_invoice,
     open_cash_session,
     request_consolidated_invoice,
@@ -386,6 +396,153 @@ class PosServiceTest(TestCase):
         self.assertEqual(movement.direction, BankMovement.Direction.IN)
         self.assertEqual(movement.amount, payment.amount)
         self.assertEqual(movement.reference, "YAPE-BCP-001")
+
+    def test_completed_cash_payment_can_be_corrected_to_wallet(self):
+        session = self._session(opening="0.00")
+        document, pos_transaction = self._completed_ticket(session, means=self.cash)
+        original = document.pos_payments.get(status=SalesPayment.Status.REGISTERED)
+
+        replacement = correct_pos_sales_payment(
+            pos_transaction_id=pos_transaction.pk,
+            payment_id=original.pk,
+            means_of_payment_id=self.wallet.pk,
+            operation_reference="YAPE-CORREGIDO-01",
+            reason="El cliente pago por Yape.",
+            corrected_by=self.user,
+        )
+
+        original.refresh_from_db()
+        self.assertEqual(original.status, SalesPayment.Status.CANCELLED)
+        self.assertEqual(replacement.means_of_payment, self.wallet)
+        self.assertEqual(replacement.operation_reference, "YAPE-CORREGIDO-01")
+        self.assertEqual(selectors.calculate_cash_session_totals(session)["cash_payments"], Decimal("0.00"))
+        audit = AuditLog.objects.get(action="CORRECT_PAYMENT_METHOD", entity_id=str(original.pk))
+        self.assertEqual(audit.meta_data["replacement_payment_id"], str(replacement.pk))
+        self.assertEqual(audit.meta_data["reason"], "El cliente pago por Yape.")
+
+    def test_payment_correction_only_replaces_selected_split_payment(self):
+        session = self._session(opening="0.00")
+        document = self._document()
+        pos_transaction, _ = start_pos_transaction(
+            cash_session_id=session.pk,
+            sales_document_id=document.pk,
+            idempotency_key=uuid.uuid4(),
+            cashier=self.user,
+        )
+        cash_payment = register_sales_payment(
+            sales_document_id=document.pk,
+            cash_session_id=session.pk,
+            means_of_payment_id=self.cash.pk,
+            amount="50.00",
+            received_amount="50.00",
+            created_by=self.user,
+        )
+        wallet_payment = register_sales_payment(
+            sales_document_id=document.pk,
+            cash_session_id=session.pk,
+            means_of_payment_id=self.wallet.pk,
+            amount=document.total - Decimal("50.00"),
+            operation_reference="YAPE-ORIGINAL",
+            created_by=self.user,
+        )
+        complete_pos_transaction(pos_transaction.pk, completed_by=self.user)
+
+        replacement = correct_pos_sales_payment(
+            pos_transaction_id=pos_transaction.pk,
+            payment_id=cash_payment.pk,
+            means_of_payment_id=self.wallet.pk,
+            operation_reference="YAPE-SEGUNDO",
+            reason="Pago dividido mal clasificado.",
+            corrected_by=self.user,
+        )
+
+        wallet_payment.refresh_from_db()
+        self.assertEqual(wallet_payment.status, SalesPayment.Status.REGISTERED)
+        self.assertEqual(replacement.amount, cash_payment.amount)
+        self.assertEqual(
+            document.pos_payments.filter(status=SalesPayment.Status.REGISTERED).count(),
+            2,
+        )
+
+    def test_payment_correction_is_rejected_after_cash_session_close(self):
+        session = self._session(opening="0.00")
+        document, pos_transaction = self._completed_ticket(session, means=self.cash)
+        payment = document.pos_payments.get(status=SalesPayment.Status.REGISTERED)
+        close_cash_session(
+            cash_session_id=session.pk,
+            closed_by=self.user,
+            counted_cash_total=document.total,
+        )
+
+        with self.assertRaises(PosDomainError) as error:
+            correct_pos_sales_payment(
+                pos_transaction_id=pos_transaction.pk,
+                payment_id=payment.pk,
+                means_of_payment_id=self.wallet.pk,
+                reason="Correccion tardia.",
+                corrected_by=self.user,
+            )
+
+        self.assertEqual(error.exception.code, "CASH_SESSION_CLOSED")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, SalesPayment.Status.REGISTERED)
+
+    def test_reconciled_wallet_movement_blocks_payment_correction(self):
+        bank = Bank.objects.create(company=self.company, name="BCP correcciones")
+        account = BankAccount.objects.create(
+            company=self.company,
+            bank=bank,
+            name="Yape conciliado",
+            account_number="YAPE-CONCILIADO",
+            opening_balance=Decimal("0.00"),
+            opening_balance_date=timezone.localdate(),
+        )
+        self.wallet.bank_account = account
+        self.wallet.save(update_fields=("bank_account", "updated_at"))
+        session = self._session(opening="0.00")
+        document, pos_transaction = self._completed_ticket(
+            session,
+            means=self.wallet,
+            reference="YAPE-CONCILIADO-01",
+        )
+        payment = document.pos_payments.get(status=SalesPayment.Status.REGISTERED)
+        movement = BankMovement.objects.get(source_type="POS_SALE_PAYMENT", source_id=str(payment.pk))
+        statement = BankStatement.objects.create(
+            company=self.company,
+            account=account,
+            date_from=timezone.localdate(),
+            date_to=timezone.localdate(),
+            opening_balance=Decimal("0.00"),
+            closing_balance=document.total,
+            created_by=self.user,
+        )
+        statement_line = BankStatementLine.objects.create(
+            statement=statement,
+            transaction_date=timezone.localdate(),
+            direction=BankMovement.Direction.IN,
+            amount=document.total,
+            reference="YAPE-CONCILIADO-01",
+            description="Cobro conciliado",
+            fingerprint="payment-correction-reconciled",
+        )
+        BankReconciliationMatch.objects.create(
+            statement_line=statement_line,
+            bank_movement=movement,
+            matched_by=self.user,
+        )
+
+        with self.assertRaises(PosDomainError) as error:
+            correct_pos_sales_payment(
+                pos_transaction_id=pos_transaction.pk,
+                payment_id=payment.pk,
+                means_of_payment_id=self.cash.pk,
+                reason="Intento sobre movimiento conciliado.",
+                corrected_by=self.user,
+            )
+
+        self.assertEqual(error.exception.code, "BANK_MOVEMENT_CORRECTION_BLOCKED")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, SalesPayment.Status.REGISTERED)
 
     def test_payment_cannot_exceed_document_total(self):
         session = self._session()

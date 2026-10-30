@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.core.exceptions import PermissionDenied
@@ -82,7 +83,11 @@ def pos_service_worker(request):
     if not worker_path:
         return HttpResponse("Service Worker no disponible.", status=404)
     with open(worker_path, encoding="utf-8") as worker_file:
-        response = HttpResponse(worker_file.read(), content_type="text/javascript")
+        worker_script = worker_file.read().replace(
+            "__POS_STATIC_VERSION__",
+            settings.POS_STATIC_VERSION,
+        )
+        response = HttpResponse(worker_script, content_type="text/javascript")
     response["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response["Service-Worker-Allowed"] = reverse("pos:sale")
     return response
@@ -128,6 +133,7 @@ def sale_workspace(request):
         else CompanyOperationalSettings.PosProductSearchMode.SEARCH
     )
     return render(request, "pos/sale.html", {
+        "pos_static_version": settings.POS_STATIC_VERSION,
         "pos_product_search_mode": search_mode,
         "customer_document_types": Customer.IdentityDocumentType.choices,
         "customer_no_document_type": Customer.IdentityDocumentType.NO_DOCUMENT,

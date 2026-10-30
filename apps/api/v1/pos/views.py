@@ -25,6 +25,7 @@ from apps.pos.services import (
     cancel_pos_draft,
     checkout_pos_sale,
     close_cash_session,
+    correct_pos_sales_payment,
     create_consolidated_invoice,
     issue_pos_debit_note,
     open_cash_session,
@@ -46,6 +47,7 @@ from .serializers import (
     ConsolidatedInvoiceRequestSerializer,
     InvoiceTicketRequestSerializer,
     PosCheckoutRequestSerializer,
+    PosPaymentCorrectionRequestSerializer,
     PosCustomerCreateRequestSerializer,
     PosProductCreateRequestSerializer,
     PosDebitNoteRequestSerializer,
@@ -955,6 +957,38 @@ class PosTransactionDetailAPIView(PosAPIView):
             ),
             pk=transaction_id,
         )
+        return Response(PosTransactionSerializer(record).data)
+
+
+class PosPaymentCorrectionAPIView(PosAPIView):
+    @extend_schema(
+        tags=["POS"],
+        summary="Corregir medio de pago de una venta POS completada",
+        request=PosPaymentCorrectionRequestSerializer,
+        responses={200: PosTransactionSerializer},
+    )
+    def post(self, request, transaction_id, payment_id):
+        company_id, store_id = self.require_pos_permission("correct.pos.payment")
+        record = get_object_or_404(
+            PosTransaction.objects.filter(company_id=company_id, store_id=store_id),
+            pk=transaction_id,
+        )
+        serializer = PosPaymentCorrectionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        correct_pos_sales_payment(
+            pos_transaction_id=record.pk,
+            payment_id=payment_id,
+            means_of_payment_id=data["means_of_payment_id"],
+            operation_reference=data.get("operation_reference", ""),
+            reason=data["reason"],
+            corrected_by=request.user,
+        )
+        record = selectors.get_recent_pos_transactions(
+            company_id=company_id,
+            store_id=store_id,
+            limit=None,
+        ).get(pk=record.pk)
         return Response(PosTransactionSerializer(record).data)
 
 

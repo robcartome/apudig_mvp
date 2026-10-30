@@ -990,6 +990,117 @@ def register_sales_payment(
 
 
 @transaction.atomic
+def correct_pos_sales_payment(
+    *, pos_transaction_id, payment_id, means_of_payment_id,
+    operation_reference="", reason, corrected_by,
+) -> SalesPayment:
+    """Replace a registered checkout payment without reopening the issued sale."""
+    clean_reason = (reason or "").strip()
+    if not clean_reason:
+        raise PosDomainError(
+            "PAYMENT_CORRECTION_REASON_REQUIRED",
+            "Debe indicar el motivo de la correccion.",
+        )
+
+    pos_transaction = (
+        PosTransaction.objects.select_for_update(of=("self",))
+        .select_related("cash_session", "sales_document")
+        .get(pk=pos_transaction_id)
+    )
+    if pos_transaction.status != PosTransaction.Status.COMPLETED:
+        raise PosDomainError(
+            "INVALID_POS_TRANSACTION_STATE",
+            "Solo se puede corregir el pago de una venta POS completada.",
+        )
+    if pos_transaction.cash_session.status != CashSession.Status.OPEN:
+        raise PosDomainError(
+            "CASH_SESSION_CLOSED",
+            "Solo se puede corregir el medio de pago mientras la caja de la venta siga abierta.",
+        )
+
+    payment = (
+        SalesPayment.objects.select_for_update(of=("self",))
+        .select_related("means_of_payment")
+        .filter(
+            pk=payment_id,
+            sales_document_id=pos_transaction.sales_document_id,
+            cash_session_id=pos_transaction.cash_session_id,
+        )
+        .first()
+    )
+    if payment is None:
+        raise PosDomainError("PAYMENT_NOT_FOUND", "El pago no pertenece a la venta seleccionada.")
+    if payment.status != SalesPayment.Status.REGISTERED:
+        raise PosDomainError("PAYMENT_ALREADY_CORRECTED", "El pago ya no se encuentra registrado.")
+    if payment.purpose != SalesPayment.Purpose.SALE_CHECKOUT:
+        raise PosDomainError("INVALID_PAYMENT_PURPOSE", "Solo se pueden corregir pagos del cobro inicial.")
+
+    new_means = MeansOfPayment.objects.filter(
+        pk=means_of_payment_id,
+        company_id=pos_transaction.company_id,
+        active=True,
+    ).first()
+    if new_means is None:
+        raise PosDomainError("INVALID_MEANS_OF_PAYMENT", "El nuevo medio de pago no es valido.")
+
+    from apps.treasury.models import BankMovement
+    from apps.treasury.services import TreasuryDomainError, reverse_bank_movement
+
+    linked_movement = BankMovement.objects.select_for_update().filter(
+        company_id=pos_transaction.company_id,
+        source_type="POS_SALE_PAYMENT",
+        source_id=str(payment.pk),
+    ).first()
+    if linked_movement and linked_movement.status == BankMovement.Status.POSTED:
+        try:
+            reverse_bank_movement(
+                movement_id=linked_movement.pk,
+                company_id=pos_transaction.company_id,
+                reason=f"Correccion de medio de pago POS: {clean_reason}",
+                user=corrected_by,
+            )
+        except TreasuryDomainError as exc:
+            raise PosDomainError("BANK_MOVEMENT_CORRECTION_BLOCKED", str(exc)) from exc
+
+    old_means_id = payment.means_of_payment_id
+    old_means_name = payment.means_of_payment.name
+    old_reference = payment.operation_reference
+    payment.status = SalesPayment.Status.CANCELLED
+    payment.save(update_fields=("status", "updated_at"))
+
+    replacement = register_sales_payment(
+        sales_document_id=payment.sales_document_id,
+        cash_session_id=payment.cash_session_id,
+        means_of_payment_id=new_means.pk,
+        amount=payment.amount,
+        currency=payment.currency,
+        exchange_rate=payment.exchange_rate,
+        amount_in_sale_currency=payment.amount_in_sale_currency,
+        received_amount=payment.amount,
+        change_amount=Decimal("0.00"),
+        operation_reference=(operation_reference or "").strip(),
+        purpose=payment.purpose,
+        created_by=corrected_by,
+    )
+    _audit(
+        payment,
+        "CORRECT_PAYMENT_METHOD",
+        corrected_by,
+        pos_transaction_id=str(pos_transaction.pk),
+        replacement_payment_id=str(replacement.pk),
+        old_means_of_payment_id=str(old_means_id),
+        old_means_of_payment_name=old_means_name,
+        old_operation_reference=old_reference,
+        new_means_of_payment_id=str(new_means.pk),
+        new_means_of_payment_name=new_means.name,
+        new_operation_reference=replacement.operation_reference,
+        amount=str(payment.amount_in_sale_currency),
+        reason=clean_reason,
+    )
+    return replacement
+
+
+@transaction.atomic
 def register_credit_collection(
     *, sales_document_id, cash_session_id, means_of_payment_id, amount,
     created_by, idempotency_key, currency=None, exchange_rate=1,
