@@ -1,6 +1,6 @@
 """Evaluación central de permisos por empresa para vistas web."""
 
-from .models import Permission, Role, UserRole, UserStore
+from .models import Permission, Role, UserOperationalFlags, UserRole, UserStore
 
 
 COMPANY_ADMIN_ROLE = "ADMIN"
@@ -83,6 +83,13 @@ def user_has_company_permission(
 
     store_role = user_store_role(user, company_id, store_id)
     if store_role == COMPANY_ADMIN_ROLE:
+        return True
+
+    if permission_code == "correct.pos.payment" and UserOperationalFlags.objects.filter(
+        user=user,
+        company_id=company_id,
+        can_correct_pos_payment=True,
+    ).exists():
         return True
 
     module = permission_code.split(".", 1)[1] if "." in permission_code else ""

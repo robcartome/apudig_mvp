@@ -23,6 +23,7 @@ POS_PERMISSION_DEFINITIONS = (
     ("void", "pos.sale", "Anular ventas POS"),
     ("refund", "pos.sale", "Registrar devoluciones POS"),
     ("reprint", "pos.receipt", "Reimprimir tickets POS"),
+    ("correct", "pos.payment", "Corregir medios de pago de ventas POS emitidas"),
 )
 
 

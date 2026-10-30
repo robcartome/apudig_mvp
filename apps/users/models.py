@@ -87,6 +87,7 @@ class Permission(models.Model):
     ACTION_VOID = "void"
     ACTION_REFUND = "refund"
     ACTION_REPRINT = "reprint"
+    ACTION_CORRECT = "correct"
     ACTION_CHOICES = [
         (ACTION_READ, "Leer"),
         (ACTION_MANAGE, "Gestionar"),
@@ -102,6 +103,7 @@ class Permission(models.Model):
         (ACTION_VOID, "Anular"),
         (ACTION_REFUND, "Devolver"),
         (ACTION_REPRINT, "Reimprimir"),
+        (ACTION_CORRECT, "Corregir"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -178,6 +180,10 @@ class UserOperationalFlags(models.Model):
     can_close_sale_order = models.BooleanField(default=False, verbose_name="Activar para cerrar OV")
     see_all_price_lists = models.BooleanField(default=False, verbose_name="Ver todas las listas de precio en ventas")
     can_close_credits = models.BooleanField(default=False, verbose_name="Activar para cerrar Créditos")
+    can_correct_pos_payment = models.BooleanField(
+        default=False,
+        verbose_name="Puede corregir medios de pago de ventas POS",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

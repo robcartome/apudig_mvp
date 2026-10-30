@@ -15,7 +15,7 @@ from apps.companies.models import (
     UserCompanyAccess,
 )
 from apps.users.forms import CompanyBrandingAdminForm
-from apps.users.models import Role, UserRole, UserStore
+from apps.users.models import Role, UserOperationalFlags, UserRole, UserStore
 
 
 User = get_user_model()
@@ -70,6 +70,25 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         session["active_company_id"] = str((company or self.company).pk)
         session["active_store_id"] = str((store or self.store_a).pk)
         session.save()
+
+    def test_company_admin_can_enable_pos_payment_correction_for_user(self):
+        self.activate(self.company_admin)
+
+        response = self.client.post(
+            f"{reverse('users:user_detail', args=[self.seller.pk])}?tab=operativos",
+            {
+                "save_flags": "1",
+                "can_correct_pos_payment": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        flags = UserOperationalFlags.objects.get(user=self.seller, company=self.company)
+        self.assertTrue(flags.can_correct_pos_payment)
+        page = self.client.get(
+            f"{reverse('users:user_detail', args=[self.seller.pk])}?tab=operativos"
+        )
+        self.assertContains(page, "Puede corregir medios de pago de ventas POS")
 
     @staticmethod
     def _logo_upload(width=1200, height=400):

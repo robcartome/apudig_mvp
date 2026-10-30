@@ -14,8 +14,8 @@
 {% endblock %}
 
 {% block extra_css %}
-  <link href="{% static 'css/pos.css' %}?v=20261008-2" rel="stylesheet">
-  <link href="{% static 'css/components/cash-count.css' %}?v=20261012-1" rel="stylesheet">
+  <link href="{% static 'css/pos.css' %}?v={{ pos_static_version }}" rel="stylesheet">
+  <link href="{% static 'css/components/cash-count.css' %}?v={{ pos_static_version }}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -606,6 +606,9 @@
         <button id="debit-note-button" class="btn btn-outline-secondary" type="button">
           <i class="ti ti-file-plus me-1"></i>Nota de débito
         </button>
+        <button id="correct-payment-button" class="btn btn-outline-warning" type="button" hidden>
+          <i class="ti ti-credit-card me-1"></i>Corregir medio de pago
+        </button>
         <select id="receipt-width" class="form-select pos-receipt-width" aria-label="Ancho del ticket">
           <option value="80">Ticket 80 mm</option>
           <option value="58">Ticket 58 mm</option>
@@ -616,6 +619,29 @@
         <button id="print-receipt-button" class="btn btn-primary" type="button"><i class="ti ti-printer me-1"></i>Imprimir</button>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="payment-correction-dialog" class="pos-dialog">
+    <form id="payment-correction-form">
+      <button class="pos-dialog__close" type="button" data-close-dialog aria-label="Cerrar"><i class="ti ti-x"></i></button>
+      <h2>Corregir medio de pago</h2>
+      <p>La venta permanecer&aacute; emitida. El pago original se conservar&aacute; como cancelado para auditor&iacute;a.</p>
+      <div class="alert alert-warning py-2">
+        Esta operaci&oacute;n solo est&aacute; disponible mientras la caja original contin&uacute;e abierta.
+      </div>
+      <label for="payment-correction-payment">Pago a corregir</label>
+      <select id="payment-correction-payment" class="form-select" required></select>
+      <label for="payment-correction-means">Nuevo medio de pago</label>
+      <select id="payment-correction-means" class="form-select" required></select>
+      <label for="payment-correction-reference">Referencia de operaci&oacute;n</label>
+      <input id="payment-correction-reference" class="form-control" maxlength="120">
+      <label for="payment-correction-reason">Motivo de la correcci&oacute;n</label>
+      <textarea id="payment-correction-reason" class="form-control" maxlength="500" rows="3" required></textarea>
+      <div class="pos-dialog__actions">
+        <button class="btn btn-outline-secondary" type="button" data-close-dialog>Cancelar</button>
+        <button class="btn btn-warning" type="submit">Confirmar correcci&oacute;n</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="debit-note-dialog" class="pos-dialog">
@@ -704,6 +730,6 @@
 
 {% block extra_js %}
   <script src="{% static 'vendor/zxing/zxing-browser-0.2.1.min.js' %}?v=0.2.1"></script>
-  <script src="{% static 'js/pos-barcode-scanner.js' %}?v=20261006-2"></script>
-  <script src="{% static 'js/pos.js' %}?v=20261016-1"></script>
+  <script src="{% static 'js/pos-barcode-scanner.js' %}?v={{ pos_static_version }}"></script>
+  <script src="{% static 'js/pos.js' %}?v={{ pos_static_version }}"></script>
 {% endblock %}

@@ -20,10 +20,10 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.partners.models import Customer, DocumentType
-from apps.pos.models import PosRegister, PosTransaction, SalesDocumentSource
+from apps.pos.models import PosRegister, PosTransaction, SalesDocumentSource, SalesPayment
 from apps.pos.permissions import POS_PERMISSION_DEFINITIONS, POS_ROLE_ACTIONS
 from apps.sales.models import DocumentSeries, MeansOfPayment, PaymentMethod, SalesDocument
-from apps.users.models import Permission, Role, RolePermission, User, UserStore
+from apps.users.models import Permission, Role, RolePermission, User, UserOperationalFlags, UserStore
 
 
 class PosApiTest(TestCase):
@@ -251,6 +251,53 @@ class PosApiTest(TestCase):
         self.assertIn("product_categories", data)
         self.assertEqual(data["suggested_opening_totals"], {"PEN": "0.00", "USD": "0.00"})
         self.assertIn("create.pos.product", data["permissions"])
+
+    def test_user_operational_flag_allows_correcting_completed_pos_payment(self):
+        wallet = MeansOfPayment.objects.create(
+            company=self.company,
+            name="Yape correccion",
+            kind=MeansOfPayment.Kind.DIGITAL_WALLET,
+            requires_reference=True,
+        )
+        session_id = self._open_session()
+        checkout = self._post(
+            "/api/v1/pos/sales/checkout/",
+            self._checkout_payload(session_id),
+        )
+        self.assertEqual(checkout.status_code, 201, checkout.content)
+        transaction_id = checkout.json()["id"]
+        payment_id = checkout.json()["payments"][0]["id"]
+        correction_path = (
+            f"/api/v1/pos/sales/{transaction_id}/payments/{payment_id}/correct/"
+        )
+        payload = {
+            "means_of_payment_id": str(wallet.pk),
+            "operation_reference": "YAPE-API-001",
+            "reason": "El cajero selecciono efectivo por error.",
+        }
+
+        denied = self._post(correction_path, payload)
+        self.assertEqual(denied.status_code, 403, denied.content)
+
+        UserOperationalFlags.objects.create(
+            user=self.user,
+            company=self.company,
+            can_correct_pos_payment=True,
+        )
+        bootstrap = self.client.get("/api/v1/pos/bootstrap/")
+        self.assertIn("correct.pos.payment", bootstrap.json()["permissions"])
+        corrected = self._post(correction_path, payload)
+
+        self.assertEqual(corrected.status_code, 200, corrected.content)
+        self.assertEqual(corrected.json()["payments"][0]["means_of_payment"], str(wallet.pk))
+        self.assertEqual(corrected.json()["payments"][0]["operation_reference"], "YAPE-API-001")
+        self.assertEqual(
+            SalesPayment.objects.filter(
+                sales_document_id=corrected.json()["sales_document_id"],
+                status=SalesPayment.Status.CANCELLED,
+            ).count(),
+            1,
+        )
 
     def test_product_commercial_detail_returns_prices_and_stock_by_warehouse(self):
         wholesale = PriceList.objects.create(company=self.company, name="Mayorista")

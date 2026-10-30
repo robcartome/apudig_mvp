@@ -1,9 +1,10 @@
-const CACHE_NAME = 'apudig-pos-static-v17';
+const CACHE_NAME = 'apudig-pos-static-__POS_STATIC_VERSION__';
 const STATIC_ASSETS = [
-  '/static/css/pos.css?v=20261008-2',
+  '/static/css/pos.css?v=__POS_STATIC_VERSION__',
+  '/static/css/components/cash-count.css?v=__POS_STATIC_VERSION__',
   '/static/vendor/zxing/zxing-browser-0.2.1.min.js?v=0.2.1',
-  '/static/js/pos-barcode-scanner.js?v=20261006-2',
-  '/static/js/pos.js?v=20261016-1',
+  '/static/js/pos-barcode-scanner.js?v=__POS_STATIC_VERSION__',
+  '/static/js/pos.js?v=__POS_STATIC_VERSION__',
   '/static/pwa/pos-icon-192.png',
   '/static/pwa/pos-icon-512.png',
 ];
