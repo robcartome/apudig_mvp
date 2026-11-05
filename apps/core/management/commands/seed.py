@@ -98,15 +98,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.MIGRATE_HEADING("=== SEED APUDIG MVP ==="))
 
+        company, store = self._seed_company(options["company"], options["ruc"])
         self._seed_units()
         self._seed_doc_types()
-        self._seed_categories()
-        self._seed_brands()
-        self._seed_price_lists()
+        self._seed_categories(company)
+        self._seed_brands(company)
+        self._seed_price_lists(company)
         self._seed_roles()
         self._seed_sales_document_permissions()
         self._seed_pos_permissions()
-        company, store = self._seed_company(options["company"], options["ruc"])
         self._seed_purchase_expense_categories(company)
         user = self._seed_superuser(options["email"], options["password"])
         self._seed_user_access(user, company, store)
@@ -135,18 +135,22 @@ class Command(BaseCommand):
                 created += 1
         self.stdout.write(f"  Tipos comprobante:    {created} creados / {len(DOCUMENT_TYPES)} total")
 
-    def _seed_categories(self):
+    def _seed_categories(self, company):
         created = 0
         for code, name in CATEGORIES:
-            _, ok = Category.objects.get_or_create(code=code, defaults={"name": name})
+            _, ok = Category.objects.get_or_create(
+                company=company,
+                code=code,
+                defaults={"name": name},
+            )
             if ok:
                 created += 1
         self.stdout.write(f"  Categorías:           {created} creadas / {len(CATEGORIES)} total")
 
-    def _seed_brands(self):
+    def _seed_brands(self, company):
         created = 0
         for name in BRANDS:
-            _, ok = Brand.objects.get_or_create(name=name)
+            _, ok = Brand.objects.get_or_create(company=company, name=name)
             if ok:
                 created += 1
         self.stdout.write(f"  Marcas:               {created} creadas / {len(BRANDS)} total")
@@ -164,7 +168,7 @@ class Command(BaseCommand):
             f"  Categorías de gasto:  {created} creadas / {len(PURCHASE_EXPENSE_CATEGORIES)} total"
         )
 
-    def _seed_price_lists(self):
+    def _seed_price_lists(self, company):
         lists = [
             ("PRECIO LISTA", "Precio estándar de lista"),
             ("PRECIO POR MAYOR", "Precio mayorista"),
@@ -172,7 +176,11 @@ class Command(BaseCommand):
         ]
         created = 0
         for name, desc in lists:
-            _, ok = PriceList.objects.get_or_create(name=name, defaults={"description": desc})
+            _, ok = PriceList.objects.get_or_create(
+                company=company,
+                name=name,
+                defaults={"description": desc},
+            )
             if ok:
                 created += 1
         self.stdout.write(f"  Listas de precios:    {created} creadas / {len(lists)} total")

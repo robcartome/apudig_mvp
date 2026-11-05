@@ -906,13 +906,15 @@ def configuracion(request):
             item_delete_url = "inventory:warehouse_location_delete"
         elif item == "categorias":
             item_label = "Categorías"
-            item_objects = list(Category.objects.all())
+            qs = Category.objects.filter(company=company) if company else Category.objects.none()
+            item_objects = list(qs.order_by("name"))
             item_add_url = reverse("inventory:category_create")
             item_edit_url = "inventory:category_update"
             item_delete_url = "inventory:category_delete"
         elif item == "marcas":
             item_label = "Marcas"
-            item_objects = list(Brand.objects.all())
+            qs = Brand.objects.filter(company=company) if company else Brand.objects.none()
+            item_objects = list(qs.order_by("name"))
             item_add_url = reverse("inventory:brand_create")
             item_edit_url = "inventory:brand_update"
             item_delete_url = "inventory:brand_delete"

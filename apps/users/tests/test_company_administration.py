@@ -14,6 +14,7 @@ from apps.companies.models import (
     Store,
     UserCompanyAccess,
 )
+from apps.inventory.models import Brand, Category
 from apps.users.forms import CompanyBrandingAdminForm
 from apps.users.models import Role, UserOperationalFlags, UserRole, UserStore
 
@@ -321,6 +322,58 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         self.assertEqual(
             settings.pos_product_search_mode,
             CompanyOperationalSettings.PosProductSearchMode.CATALOG,
+        )
+
+    def test_configuration_categories_are_scoped_to_active_company(self):
+        own_category = Category.objects.create(
+            company=self.company,
+            code="OWN",
+            name="Categoria propia",
+        )
+        foreign_category = Category.objects.create(
+            company=self.other_company,
+            code="OTHER",
+            name="Categoria ajena",
+        )
+        self.activate(self.company_admin)
+
+        response = self.client.get(
+            reverse("users:configuracion"),
+            {"item": "categorias"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, own_category.name)
+        self.assertContains(
+            response,
+            reverse("inventory:category_update", args=[own_category.pk]),
+        )
+        self.assertNotContains(response, foreign_category.name)
+        self.assertNotContains(
+            response,
+            reverse("inventory:category_update", args=[foreign_category.pk]),
+        )
+
+    def test_configuration_brands_are_scoped_to_active_company(self):
+        own_brand = Brand.objects.create(company=self.company, name="Marca propia")
+        foreign_brand = Brand.objects.create(company=self.other_company, name="Marca ajena")
+        self.activate(self.company_admin)
+
+        response = self.client.get(
+            reverse("users:configuracion"),
+            {"item": "marcas"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, own_brand.name)
+        self.assertContains(
+            response,
+            reverse("inventory:brand_update", args=[own_brand.pk]),
+        )
+        self.assertNotContains(response, foreign_brand.name)
+        self.assertNotContains(
+            response,
+            reverse("inventory:brand_update", args=[foreign_brand.pk]),
         )
 
     def test_spoofed_store_session_is_cleared(self):
