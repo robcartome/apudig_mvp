@@ -164,9 +164,16 @@
     const priceInc = parseFloat(priceIncInput?.value) || 0;
     const qty      = parseFloat(qtyInput?.value)  || 0;
     const taxType  = taxSel?.value || '10';
-    const igvRate  = parseFloat(igvHidden?.value) || IGV_RATE;
+    const submittedIgvRate = parseFloat(igvHidden?.value);
+    const igvRate  = submittedIgvRate || IGV_RATE;
     const discount = parseFloat(discHidden?.value) || 0;
     const mult     = TAXED.has(taxType) ? 1 + igvRate / 100 : 1;
+
+    // Keep the submitted rate in sync with the rate used on screen. This is
+    // especially important when a blank formset row is reused as a free line.
+    if (igvHidden && TAXED.has(taxType) && !submittedIgvRate && igvRate > 0) {
+      igvHidden.value = igvRate;
+    }
 
     // ex-tax unit price (what backend stores as unit_price)
     const unitPriceEx = priceInc / mult;
