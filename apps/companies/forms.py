@@ -15,7 +15,10 @@ class CompanyForm(forms.ModelForm):
 class CompanyBrandingForm(forms.ModelForm):
     class Meta:
         model = CompanyBranding
-        fields = ("app_logo_url", "pdf_logo_url", "primary_color", "secondary_color")
+        fields = (
+            "app_logo_url", "pdf_logo_url", "show_company_name_with_logo",
+            "primary_color", "secondary_color",
+        )
         widgets = {
             "primary_color": forms.TextInput(attrs={"type": "color"}),
             "secondary_color": forms.TextInput(attrs={"type": "color"}),

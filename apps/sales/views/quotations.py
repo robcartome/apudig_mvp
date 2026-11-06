@@ -27,6 +27,7 @@ from apps.sales.services import (
     approve_quotation,
     cancel_quotation,
     create_quotation,
+    normalize_taxed_line_rates,
     reject_quotation,
     update_quotation,
 )
@@ -176,11 +177,14 @@ def quotation_create(request):
         line_formset = QuotationLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
-            lines = _lines_from_formset(line_formset)
+            cd = header_form.cleaned_data
+            lines = normalize_taxed_line_rates(
+                _lines_from_formset(line_formset),
+                cd.get("igv_rate_default"),
+            )
             if not lines:
                 messages.error(request, "La cotización debe tener al menos una línea.")
             else:
-                cd = header_form.cleaned_data
                 series = cd.get("series") or _default_quotation_series(company_id, store_id)
                 if not series:
                     messages.error(request, "No hay una serie activa para cotizaciones en esta sucursal.")
@@ -310,11 +314,14 @@ def quotation_update(request, pk):
         line_formset = QuotationLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
-            lines = _lines_from_formset(line_formset)
+            cd = header_form.cleaned_data
+            lines = normalize_taxed_line_rates(
+                _lines_from_formset(line_formset),
+                cd.get("igv_rate_default"),
+            )
             if not lines:
                 messages.error(request, "La cotización debe tener al menos una línea.")
             else:
-                cd = header_form.cleaned_data
                 series = cd.get("series") or _default_quotation_series(company_id, store_id)
                 if not series:
                     messages.error(request, "No hay una serie activa para cotizaciones en esta sucursal.")
@@ -470,11 +477,14 @@ def quotation_copy(request, pk):
         line_formset = QuotationLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
-            lines = _lines_from_formset(line_formset)
+            cd = header_form.cleaned_data
+            lines = normalize_taxed_line_rates(
+                _lines_from_formset(line_formset),
+                cd.get("igv_rate_default"),
+            )
             if not lines:
                 messages.error(request, "La cotización debe tener al menos una línea.")
             else:
-                cd = header_form.cleaned_data
                 series = cd.get("series") or _default_quotation_series(company_id, store_id)
                 if not series:
                     messages.error(request, "No hay una serie activa para cotizaciones en esta sucursal.")

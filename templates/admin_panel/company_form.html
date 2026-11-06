@@ -49,11 +49,24 @@
           </div>
           {% if company.branding.logo_file %}
           <div class="mt-2 d-flex align-items-center gap-3">
-            <img src="{% url 'company_branding_logo' company.pk %}" alt="Logo actual"
+            <img src="{% url 'company_branding_logo' company.pk %}?v={{ company.branding.updated_at|date:'U' }}" alt="Logo actual"
                  style="width:240px;height:80px;object-fit:contain;border:1px solid #dee2e6;border-radius:4px;padding:6px;background:#fff;">
             <span class="text-muted small">Vista previa en proporción imprimible</span>
           </div>
           {% endif %}
+        </div>
+      </div>
+
+      <div class="mb-3 row">
+        <label class="col-sm-3 col-form-label text-end fw-semibold">Nombre junto al logo</label>
+        <div class="col-sm-9 pt-2">
+          <div class="form-check">
+            {{ branding_form.show_company_name_with_logo }}
+            <label class="form-check-label" for="{{ branding_form.show_company_name_with_logo.id_for_label }}">
+              Mostrar la razón social debajo del logo en los formatos de impresión
+            </label>
+          </div>
+          <div class="form-text">Si se desactiva, el nombre solo se imprime cuando no existe un logo.</div>
         </div>
       </div>
 

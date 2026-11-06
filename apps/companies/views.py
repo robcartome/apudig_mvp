@@ -98,5 +98,5 @@ def branding_logo(request, pk):
         logo_stream = branding.logo_file
         content_type = mimetypes.guess_type(branding.logo_file.name)[0] or "application/octet-stream"
     response = FileResponse(logo_stream, content_type=content_type)
-    response["Cache-Control"] = "private, max-age=3600"
+    response["Cache-Control"] = "private, no-cache, max-age=0, must-revalidate"
     return response

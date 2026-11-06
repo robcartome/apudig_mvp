@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.inventory.models import Brand, Category, Unit
-from apps.users.models import User
+from apps.users.models import User, UserStore
 
 
 class MasterViewsTest(TestCase):
@@ -15,6 +15,7 @@ class MasterViewsTest(TestCase):
         self.company = Company.objects.create(name="Demo SA", ruc="20999999901")
         self.store = Store.objects.create(company=self.company, name="Principal")
         UserCompanyAccess.objects.create(user=self.user, company=self.company, store=self.store, is_default=True)
+        UserStore.objects.create(user=self.user, store=self.store, role="ADMIN")
 
         self.client.login(username="test@demo.com", password="testpass")
         session = self.client.session
@@ -52,6 +53,20 @@ class MasterViewsTest(TestCase):
         cat.refresh_from_db()
         self.assertEqual(cat.name, "Nuevo nombre")
 
+    def test_category_update_rejects_category_from_another_company(self):
+        other_company = Company.objects.create(name="Otra SA", ruc="20999999902")
+        foreign_category = Category.objects.create(
+            company=other_company,
+            code="OTHER",
+            name="Categoria ajena",
+        )
+
+        response = self.client.get(
+            reverse("inventory:category_update", args=[foreign_category.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
     def test_category_delete(self):
         cat = Category.objects.create(company=self.company, code="DEL", name="Borrar")
         resp = self.client.post(reverse("inventory:category_delete", args=[cat.pk]))
@@ -74,6 +89,22 @@ class MasterViewsTest(TestCase):
         )
         self.assertRedirects(resp, reverse("inventory:brand_list"))
         self.assertTrue(Brand.objects.filter(name="Samsung").exists())
+
+    def test_catalog_searches_return_empty_without_active_company(self):
+        Category.objects.create(company=self.company, code="PRIVATE", name="Privada")
+        Brand.objects.create(company=self.company, name="Marca privada")
+        session = self.client.session
+        session.pop("active_company_id", None)
+        session.pop("active_store_id", None)
+        session.save()
+
+        category_response = self.client.get(reverse("inventory:api_category_search"))
+        brand_response = self.client.get(reverse("inventory:api_brand_search"))
+
+        self.assertEqual(category_response.status_code, 200)
+        self.assertEqual(category_response.json(), {"results": []})
+        self.assertEqual(brand_response.status_code, 200)
+        self.assertEqual(brand_response.json(), {"results": []})
 
     # ── Units ─────────────────────────────────────────────────────────────────
 

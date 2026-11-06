@@ -109,6 +109,10 @@ class CompanyBranding(TimeStampedModel):
     app_logo_url = models.CharField(max_length=1000, blank=True)
     pdf_logo_url = models.CharField(max_length=1000, blank=True)
     logo_file = models.ImageField(upload_to="company_logos/%Y/%m/", blank=True)
+    show_company_name_with_logo = models.BooleanField(
+        default=False,
+        verbose_name="Mostrar razón social junto al logo",
+    )
     primary_color = models.CharField(max_length=20, blank=True, default="#066fd1")
     secondary_color = models.CharField(max_length=20, blank=True, default="#4a4a4a")
 

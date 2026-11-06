@@ -16,9 +16,10 @@
     .btn-primary { border-color: var(--brand); color: white; background: var(--brand); }
     .sheet { width: 210mm; min-height: 297mm; margin: auto; padding: 13mm 14mm 16mm; background: white; box-shadow: 0 3px 18px rgba(20, 30, 40, .12); }
     .header { display: grid; grid-template-columns: 1fr 62mm; gap: 10mm; align-items: start; margin-bottom: 5mm; }
-    .logo { width: 90mm; height: 30mm; object-fit: contain; object-position: left center; display: block; margin-bottom: 2mm; }
+    .logo { width: 105mm; height: 30mm; object-fit: contain; object-position: center; display: block; margin: 0 auto 2mm; }
     .company-name { margin: 0 0 2mm; color: var(--brand); font-size: 18px; }
-    .company p { margin: 1mm 0; }
+    .company { text-align: center; }
+    .company p { margin: .7mm 0; }
     .document-box { border: 1.5px solid var(--ink); text-align: center; padding: 4mm 3mm; }
     .document-box .ruc { font-size: 14px; font-weight: 700; }
     .document-box .type { margin: 2mm 0; font-size: 16px; font-weight: 700; }
@@ -92,10 +93,11 @@
   <main class="sheet">
     <header class="ticket-header">
       {% if company_logo_url %}<img class="logo" src="{{ company_logo_url }}" alt="Logo de {{ company.name }}">{% endif %}
-      <h1>{{ company.name }}</h1>
+      {% if not company_logo_url or branding.show_company_name_with_logo %}<h1>{{ company.name }}</h1>{% endif %}
       <p><strong>RUC: {{ company.ruc }}</strong></p>
-      {% if company.address %}<p>{{ company.address }}</p>{% endif %}
-      {% if company.phone %}<p>{{ company.phone }}</p>{% endif %}
+      {% firstof quotation.store.address company.address as company_print_address %}
+      {% if company_print_address %}<p>{{ company_print_address }}</p>{% endif %}
+      {% if company.phone or company.email %}<p>{{ company.phone }}{% if company.phone and company.email %} · {% endif %}{{ company.email }}</p>{% endif %}
     </header>
     <section class="ticket-title">
       <span>{{ quotation.document_label|upper }}</span>
@@ -138,11 +140,10 @@
     <header class="header">
       <div class="company">
         {% if company_logo_url %}<img class="logo" src="{{ company_logo_url }}" alt="Logo de {{ company.name }}">{% endif %}
-        <h1 class="company-name">{{ company.name }}</h1>
-        <p><strong>RUC: {{ company.ruc }}</strong></p>
-        {% if company.address %}<p>{{ company.address }}</p>{% endif %}
-        {% if company.phone or company.email %}<p>{{ company.phone }}{% if company.phone and company.email %} · {% endif %}{{ company.email }}</p>{% endif %}
-        <p><strong>Sucursal:</strong> {{ quotation.store.name }}</p>
+        {% if not company_logo_url or branding.show_company_name_with_logo %}<h1 class="company-name">{{ company.name }}</h1>{% endif %}
+        {% firstof quotation.store.address company.address as company_print_address %}
+        {% if company_print_address %}<p>{{ company_print_address }}</p>{% endif %}
+        {% if company.phone or company.email or quotation.store %}<p>{% if company.phone %}Teléfono: {{ company.phone }}{% endif %}{% if company.phone and company.email %} · {% endif %}{% if company.email %}E-mail: {{ company.email }}{% endif %}{% if company.phone or company.email %} · {% endif %}<strong>Sucursal:</strong> {{ quotation.store.name }}</p>{% endif %}
       </div>
       <div class="document-box">
         <div class="ruc">RUC: {{ company.ruc }}</div>

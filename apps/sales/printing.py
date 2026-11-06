@@ -194,7 +194,8 @@ def printable_logo_url(branding):
     if not branding:
         return ""
     if branding.logo_file:
-        return reverse("company_branding_logo", args=[branding.company_id])
+        version = int(branding.updated_at.timestamp()) if branding.updated_at else 0
+        return f'{reverse("company_branding_logo", args=[branding.company_id])}?v={version}'
     return branding.pdf_logo_url or branding.app_logo_url or ""
 
 

@@ -170,6 +170,26 @@ def _calculate_line(line: dict) -> dict:
     }
 
 
+def normalize_taxed_line_rates(lines: list[dict], default_igv_rate) -> list[dict]:
+    """Fill a missing browser tax rate for taxable lines.
+
+    The sales UI works with final prices including IGV. A reused blank row can
+    submit the calculated net unit price while its hidden tax rate is still
+    zero. Normalizing the posted payload keeps the persisted total aligned with
+    the total shown to the user. An explicitly configured zero default remains
+    zero.
+    """
+    default_rate = Decimal(str(default_igv_rate or 0))
+    normalized = []
+    for raw in lines:
+        line = dict(raw)
+        current_rate = Decimal(str(line.get("igv_rate") or 0))
+        if line.get("tax_type", "10") == "10" and current_rate == 0 and default_rate > 0:
+            line["igv_rate"] = default_rate
+        normalized.append(line)
+    return normalized
+
+
 def _normalize_line_uom(line: dict) -> dict:
     """Valida la presentación del producto y congela su conversión a stock."""
     normalized = dict(line)

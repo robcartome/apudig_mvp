@@ -50,9 +50,11 @@ from apps.sales.services import (
     create_sales_document_draft,
     delete_sales_document_draft,
     issue_sales_document,
+    normalize_taxed_line_rates,
     update_sales_document_draft,
     void_sales_document,
 )
+from apps.inventory.pricing import tax_rate_for_company
 from apps.inventory.models import PriceList, Product, Warehouse
 from apps.partners.models import Customer, DocumentType
 from apps.core.models import AuditLog
@@ -354,7 +356,10 @@ def document_create(request):
         line_formset = SalesDocumentLineFormSet(request.POST, prefix="lines")
 
         if header_form.is_valid() and line_formset.is_valid():
-            lines = _lines_from_formset(line_formset)
+            lines = normalize_taxed_line_rates(
+                _lines_from_formset(line_formset),
+                tax_rate_for_company(company_id),
+            )
             if not lines:
                 messages.error(request, "El documento debe tener al menos una línea.")
             else:
@@ -422,7 +427,10 @@ def document_edit(request, pk):
         )
         line_formset = SalesDocumentLineFormSet(request.POST, prefix="lines")
         if header_form.is_valid() and line_formset.is_valid():
-            lines = _lines_from_formset(line_formset)
+            lines = normalize_taxed_line_rates(
+                _lines_from_formset(line_formset),
+                tax_rate_for_company(company_id),
+            )
             if not lines:
                 messages.error(request, "El documento debe tener al menos una línea.")
             else:

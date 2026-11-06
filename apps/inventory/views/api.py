@@ -407,9 +407,9 @@ def category_search(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
     query = request.GET.get("q", "").strip()
     company_id = _get_company_id(request)
-    qs = Category.objects.filter(active=True)
-    if company_id:
-        qs = qs.filter(company_id=company_id)
+    if not company_id:
+        return JsonResponse({"results": []})
+    qs = Category.objects.filter(company_id=company_id, active=True)
     if query:
         qs = qs.filter(Q(name__icontains=query) | Q(code__icontains=query))
     return JsonResponse({"results": [{"id": str(c.pk), "text": c.name} for c in qs.order_by("name")[:50]]})
@@ -421,9 +421,9 @@ def brand_search(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
     query = request.GET.get("q", "").strip()
     company_id = _get_company_id(request)
-    qs = Brand.objects.filter(active=True)
-    if company_id:
-        qs = qs.filter(company_id=company_id)
+    if not company_id:
+        return JsonResponse({"results": []})
+    qs = Brand.objects.filter(company_id=company_id, active=True)
     if query:
         qs = qs.filter(name__icontains=query)
     return JsonResponse({"results": [{"id": str(b.pk), "text": b.name} for b in qs.order_by("name")[:50]]})

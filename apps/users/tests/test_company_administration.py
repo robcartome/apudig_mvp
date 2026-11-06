@@ -14,6 +14,7 @@ from apps.companies.models import (
     Store,
     UserCompanyAccess,
 )
+from apps.inventory.models import Brand, Category
 from apps.users.forms import CompanyBrandingAdminForm
 from apps.users.models import Role, UserOperationalFlags, UserRole, UserStore
 
@@ -91,7 +92,7 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         self.assertContains(page, "Puede corregir medios de pago de ventas POS")
 
     @staticmethod
-    def _logo_upload(width=1200, height=400):
+    def _logo_upload(width=1200, height=400, filename="logo-empresa.png"):
         stream = BytesIO()
         image = Image.new("RGBA", (width, height), (255, 255, 255, 255))
         if width >= 600 and height >= 200:
@@ -103,7 +104,7 @@ class CompanyAdministrationAuthorizationTest(TestCase):
             )
         image.save(stream, "PNG")
         return SimpleUploadedFile(
-            "logo-empresa.png", stream.getvalue(), content_type="image/png"
+            filename, stream.getvalue(), content_type="image/png"
         )
 
     def test_branding_accepts_recommended_logo_and_serves_it_privately(self):
@@ -124,6 +125,7 @@ class CompanyAdministrationAuthorizationTest(TestCase):
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response["Content-Type"], "image/png")
+            self.assertIn("no-cache", response["Cache-Control"])
             payload = b"".join(response.streaming_content)
             self.assertTrue(payload.startswith(b"\x89PNG"))
             rendered_logo = Image.open(BytesIO(payload))
@@ -136,6 +138,34 @@ class CompanyAdministrationAuthorizationTest(TestCase):
             )
             self.assertTrue(unchanged_form.is_valid(), unchanged_form.errors)
             saved.logo_file.delete(save=False)
+
+    def test_uploading_a_new_logo_replaces_the_previous_file(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            branding, _ = CompanyBranding.objects.get_or_create(company=self.company)
+            initial_form = CompanyBrandingAdminForm(
+                data={"primary_color": "#1769aa", "secondary_color": "#ffffff"},
+                files={"logo_file": self._logo_upload(filename="logo-anterior.png")},
+                instance=branding,
+            )
+            self.assertTrue(initial_form.is_valid(), initial_form.errors)
+            saved = initial_form.save()
+            old_name = saved.logo_file.name
+            storage = saved.logo_file.storage
+            self.assertTrue(storage.exists(old_name))
+
+            replacement_form = CompanyBrandingAdminForm(
+                data={"primary_color": "#1769aa", "secondary_color": "#ffffff"},
+                files={"logo_file": self._logo_upload(filename="logo-nuevo.png")},
+                instance=saved,
+            )
+            self.assertTrue(replacement_form.is_valid(), replacement_form.errors)
+            with self.captureOnCommitCallbacks(execute=True):
+                replaced = replacement_form.save()
+
+            self.assertNotEqual(replaced.logo_file.name, old_name)
+            self.assertFalse(storage.exists(old_name))
+            self.assertTrue(storage.exists(replaced.logo_file.name))
+            replaced.logo_file.delete(save=False)
 
     def test_branding_rejects_logo_below_print_minimum(self):
         branding, _ = CompanyBranding.objects.get_or_create(company=self.company)
@@ -321,6 +351,58 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         self.assertEqual(
             settings.pos_product_search_mode,
             CompanyOperationalSettings.PosProductSearchMode.CATALOG,
+        )
+
+    def test_configuration_categories_are_scoped_to_active_company(self):
+        own_category = Category.objects.create(
+            company=self.company,
+            code="OWN",
+            name="Categoria propia",
+        )
+        foreign_category = Category.objects.create(
+            company=self.other_company,
+            code="OTHER",
+            name="Categoria ajena",
+        )
+        self.activate(self.company_admin)
+
+        response = self.client.get(
+            reverse("users:configuracion"),
+            {"item": "categorias"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, own_category.name)
+        self.assertContains(
+            response,
+            reverse("inventory:category_update", args=[own_category.pk]),
+        )
+        self.assertNotContains(response, foreign_category.name)
+        self.assertNotContains(
+            response,
+            reverse("inventory:category_update", args=[foreign_category.pk]),
+        )
+
+    def test_configuration_brands_are_scoped_to_active_company(self):
+        own_brand = Brand.objects.create(company=self.company, name="Marca propia")
+        foreign_brand = Brand.objects.create(company=self.other_company, name="Marca ajena")
+        self.activate(self.company_admin)
+
+        response = self.client.get(
+            reverse("users:configuracion"),
+            {"item": "marcas"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, own_brand.name)
+        self.assertContains(
+            response,
+            reverse("inventory:brand_update", args=[own_brand.pk]),
+        )
+        self.assertNotContains(response, foreign_brand.name)
+        self.assertNotContains(
+            response,
+            reverse("inventory:brand_update", args=[foreign_brand.pk]),
         )
 
     def test_spoofed_store_session_is_cleared(self):

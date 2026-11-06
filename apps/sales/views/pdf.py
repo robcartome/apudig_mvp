@@ -129,6 +129,7 @@ def quotation_xlsx(request):
     wb.save(buffer)
     buffer.seek(0)
 
+    query = filters["q"]
     filename = f"cotizaciones_{slugify(query) if query else 'lista'}.xlsx"
     response = HttpResponse(
         buffer.getvalue(),
