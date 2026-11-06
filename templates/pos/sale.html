@@ -128,29 +128,40 @@
     <section class="pos-sale-panel" aria-label="Productos de la venta">
       <div class="pos-search-wrap">
         <div class="pos-search">
-          <span class="pos-search__icon"><i class="ti ti-search"></i></span>
+          <span class="pos-search__icon"><i class="ti ti-search" aria-hidden="true"></i></span>
           <label class="visually-hidden" for="product-search">Buscar producto</label>
           <input
             id="product-search"
             type="search"
             autocomplete="off"
-            placeholder="Buscar por nombre, código o escanear código de barras"
+            placeholder="Buscar por nombre, SKU o código"
             aria-controls="product-results"
             aria-expanded="false"
           >
           <kbd>F2</kbd>
         </div>
         <button
+          id="product-entry-mode"
+          class="btn btn-outline-primary pos-reader-button"
+          type="button"
+          aria-label="Activar lector de código de barras"
+          aria-pressed="false"
+          title="Activar lector USB o Bluetooth"
+        >
+          <i class="ti ti-barcode" aria-hidden="true"></i>
+          <strong class="pos-reader-keyboard-glyph" aria-hidden="true">ABC</strong>
+        </button>
+        <button
           id="scan-barcode"
           class="btn btn-primary pos-scan-button"
           type="button"
           aria-label="Escanear código de barras con la cámara"
-          title="Escanear código de barras"
+          title="Escanear con la cámara"
         >
-          <i class="ti ti-scan" aria-hidden="true"></i><span>Escanear</span>
+          <i class="ti ti-camera" aria-hidden="true"></i>
         </button>
         <button id="add-manual-line" class="btn btn-outline-primary pos-manual-line-button" type="button" title="Agregar producto no registrado o servicio (Alt+L)">
-          <i class="ti ti-file-plus me-1"></i><span>Línea libre</span><kbd>Alt+L</kbd>
+          <i class="ti ti-file-plus"></i><span class="visually-hidden">Línea libre</span>
         </button>
         <div id="product-results" class="pos-search-results" role="listbox" hidden></div>
       </div>

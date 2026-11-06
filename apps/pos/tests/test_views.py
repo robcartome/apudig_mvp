@@ -209,14 +209,13 @@ class PosWorkspaceViewTest(TestCase):
         self.assertIn("focusCartField(lineId, 'price')", script)
         self.assertIn("requestAnimationFrame(focusProductSearch)", script)
 
-    def test_pos_success_alerts_auto_hide_but_errors_remain_visible(self):
+    def test_pos_alerts_auto_hide_with_longer_timeout_for_errors(self):
         script_path = finders.find("js/pos.js")
 
         with open(script_path, encoding="utf-8") as script_file:
             script = script_file.read()
-        self.assertIn("if (kind === 'success')", script)
-        self.assertIn("window.setTimeout(hideAlert, 5000)", script)
-        self.assertNotIn("if (kind === 'error')", script)
+        self.assertIn("const timeout = kind === 'success' ? 5000 : 8000", script)
+        self.assertIn("window.setTimeout(hideAlert, timeout)", script)
 
     def test_barcode_scanner_releases_camera_and_uses_local_zxing(self):
         scanner_path = finders.find("js/pos-barcode-scanner.js")
@@ -239,8 +238,27 @@ class PosWorkspaceViewTest(TestCase):
         with open(script_path, encoding="utf-8") as script_file:
             script = script_file.read()
         self.assertIn('params.set("barcode", barcode)', script)
-        self.assertIn('addProduct(products[0])', script)
+        self.assertIn('addProduct(products[0], { fromBarcode: true })', script)
         self.assertIn("Hay más de un producto con este código de barras", script)
+
+    def test_pos_supports_explicit_search_and_barcode_entry_modes(self):
+        self.activate_context()
+
+        response = self.client.get("/pos/")
+        script_path = finders.find("js/pos.js")
+
+        self.assertContains(response, 'id="product-entry-mode"')
+        self.assertContains(response, 'aria-pressed="false"')
+        self.assertContains(response, 'class="pos-reader-keyboard-glyph"')
+        with open(script_path, encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn("productEntryMode: 'SEARCH'", script)
+        self.assertIn("function setProductEntryMode(mode)", script)
+        self.assertIn("state.productEntryMode === 'BARCODE' && event.key === 'Enter'", script)
+        self.assertIn("queueBarcodeSearch(event.currentTarget.value)", script)
+        self.assertIn("addProduct(product, { fromBarcode = false } = {})", script)
+        self.assertIn("app.dataset.productEntryMode = state.productEntryMode", script)
+        self.assertNotIn("toggle.querySelector('span')", script)
 
     def test_workspace_uses_visual_catalog_mode_from_company_settings(self):
         CompanyOperationalSettings.objects.create(

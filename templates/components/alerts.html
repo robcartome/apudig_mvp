@@ -3,7 +3,7 @@
   {% for message in messages %}
   <div class="alert app-alert alert-{% if 'error' in message.tags or 'danger' in message.tags %}danger{% elif 'warning' in message.tags %}warning{% elif 'success' in message.tags %}success{% else %}info{% endif %} fade show py-2 px-3 mb-2"
        role="{% if 'error' in message.tags or 'danger' in message.tags %}alert{% else %}status{% endif %}"
-       {% if 'auto-dismiss' in message.tags %}data-auto-dismiss="5000"{% endif %}>
+       data-auto-dismiss="{% if 'error' in message.tags or 'danger' in message.tags %}8000{% elif 'warning' in message.tags %}7000{% else %}5000{% endif %}">
     <div class="d-flex align-items-center gap-2 w-100">
       <i class="ti {% if 'error' in message.tags or 'danger' in message.tags %}ti-circle-x-filled{% elif 'warning' in message.tags %}ti-alert-triangle-filled{% elif 'success' in message.tags %}ti-circle-check-filled{% else %}ti-info-circle-filled{% endif %} app-alert-icon" aria-hidden="true"></i>
       <div class="app-alert-content flex-grow-1">

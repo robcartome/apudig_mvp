@@ -426,7 +426,7 @@ class ProductSupplierViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No se pudieron guardar los proveedores")
         self.assertContains(response, "Error:")
-        self.assertNotContains(response, "data-auto-dismiss")
+        self.assertContains(response, 'data-auto-dismiss="8000"')
 
     def test_product_search_api_uses_selected_supplier_and_company(self):
         response = self.client.get(reverse("inventory:api_product_search"), {
