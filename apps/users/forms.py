@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db import transaction
 
 from apps.companies.models import Company, CompanyBranding, CompanyOperationalSettings, Store
 from apps.partners.models import Customer, DocumentType, Supplier
@@ -142,19 +143,30 @@ class CompanyAdminForm(forms.ModelForm):
 class CompanyBrandingAdminForm(forms.ModelForm):
     class Meta:
         model = CompanyBranding
-        fields = ("logo_file", "app_logo_url", "primary_color", "secondary_color")
+        fields = (
+            "logo_file", "app_logo_url", "show_company_name_with_logo",
+            "primary_color", "secondary_color",
+        )
         widgets = {
             "primary_color": forms.TextInput(attrs={"type": "color", "class": "form-control form-control-color"}),
             "secondary_color": forms.TextInput(attrs={"type": "color", "class": "form-control form-control-color"}),
             "app_logo_url": forms.URLInput(attrs={"placeholder": "https://...  (URL del logo)"}),
             "logo_file": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/png,image/jpeg,image/webp"}),
+            "show_company_name_with_logo": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
         labels = {
             "logo_file": "Archivo del logo",
             "app_logo_url": "URL del logo",
+            "show_company_name_with_logo": "Mostrar razón social junto al logo",
             "primary_color": "Color primario",
             "secondary_color": "Color secundario",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        logo = getattr(self.instance, "logo_file", None)
+        self._original_logo_name = logo.name if logo else ""
+        self._original_logo_storage = logo.storage if logo else None
 
     def clean_logo_file(self):
         logo = self.cleaned_data.get("logo_file")
@@ -173,6 +185,22 @@ class CompanyBrandingAdminForm(forms.ModelForm):
         if width < 240 or height < 80:
             raise forms.ValidationError("El logo debe medir al menos 240 × 80 px.")
         return logo
+
+    def save(self, commit=True):
+        branding = super().save(commit=commit)
+        new_logo = self.files.get(self.add_prefix("logo_file"))
+        new_name = branding.logo_file.name if branding.logo_file else ""
+        if (
+            commit
+            and new_logo
+            and self._original_logo_name
+            and self._original_logo_name != new_name
+            and self._original_logo_storage
+        ):
+            old_name = self._original_logo_name
+            old_storage = self._original_logo_storage
+            transaction.on_commit(lambda: old_storage.delete(old_name))
+        return branding
 
 
 class StoreAdminForm(forms.ModelForm):

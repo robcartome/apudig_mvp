@@ -115,12 +115,12 @@ def _logo(url, *, ticket=False):
         return None
     try:
         image = Image(normalized_logo_stream(source))
-        max_width = 62 * mm if ticket else 90 * mm
+        max_width = 62 * mm if ticket else 105 * mm
         max_height = 28 * mm if ticket else 30 * mm
         ratio = min(max_width / image.imageWidth, max_height / image.imageHeight)
         image.drawWidth = image.imageWidth * ratio
         image.drawHeight = image.imageHeight * ratio
-        image.hAlign = "CENTER" if ticket else "LEFT"
+        image.hAlign = "CENTER"
         return image
     except (OSError, ValueError):
         return None
@@ -140,6 +140,15 @@ def _styles(primary):
         "company": ParagraphStyle(
             "QuoteCompany", parent=sample["Heading1"], fontName="Helvetica-Bold",
             fontSize=14, leading=16, textColor=primary, spaceAfter=2,
+        ),
+        "company_center": ParagraphStyle(
+            "QuoteCompanyCenter", parent=sample["Heading1"], fontName="Helvetica-Bold",
+            fontSize=14, leading=16, alignment=TA_CENTER, textColor=primary, spaceAfter=2,
+        ),
+        "company_contact": ParagraphStyle(
+            "QuoteCompanyContact", parent=sample["Normal"], fontName="Helvetica",
+            fontSize=7, leading=8.5, alignment=TA_CENTER,
+            textColor=colors.HexColor("#52616b"),
         ),
         "title": ParagraphStyle(
             "QuoteTitle", parent=sample["Heading1"], fontName="Helvetica-Bold",
@@ -218,23 +227,27 @@ def _qr_image(payload, size=27 * mm):
     return result
 
 
-def _a4_story(quotation, company, logo_url, footer_text, primary, styles):
+def _a4_story(
+    quotation, company, logo_url, footer_text, primary, styles,
+    *, show_company_name_with_logo=False,
+):
     story = []
     company_parts = []
     logo = _logo(logo_url)
     if logo:
         company_parts.extend([logo, Spacer(1, 2 * mm)])
-    company_parts.extend([
-        _p(company.name, styles["company"]),
-        _p(f"RUC: {company.ruc}", styles["body"], bold=True),
-    ])
-    if company.address:
-        company_parts.append(_p(company.address, styles["small"]))
-    contact = " · ".join(filter(None, [company.phone, company.email]))
+    if not logo or show_company_name_with_logo:
+        company_parts.append(_p(company.name, styles["company_center"]))
+    address = getattr(quotation.store, "address", "") or company.address
+    if address:
+        company_parts.append(_p(address, styles["company_contact"]))
+    contact = " · ".join(filter(None, [
+        f"Teléfono: {company.phone}" if company.phone else "",
+        f"E-mail: {company.email}" if company.email else "",
+        f"Sucursal: {quotation.store.name}" if quotation.store else "",
+    ]))
     if contact:
-        company_parts.append(_p(contact, styles["small"]))
-    if quotation.store:
-        company_parts.append(_p(f"Sucursal: {quotation.store.name}", styles["small"]))
+        company_parts.append(_p(contact, styles["company_contact"]))
 
     reference = _reference(quotation)
     document_box = Table(
@@ -256,7 +269,7 @@ def _a4_story(quotation, company, logo_url, footer_text, primary, styles):
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
-    story.extend([header, Spacer(1, 5 * mm)])
+    story.extend([header, Spacer(1, 3 * mm)])
 
     client_rows = [
         [_p("RAZÓN SOCIAL", styles["small"], bold=True), _p(quotation.customer_legal_name, styles["body"]),
@@ -371,16 +384,20 @@ def _a4_story(quotation, company, logo_url, footer_text, primary, styles):
     return story
 
 
-def _ticket_story(quotation, company, logo_url, footer_text, styles):
+def _ticket_story(
+    quotation, company, logo_url, footer_text, styles,
+    *, show_company_name_with_logo=False,
+):
     story = []
     logo = _logo(logo_url, ticket=True)
     if logo:
         story.extend([logo, Spacer(1, 1.5 * mm)])
-    story.extend([
-        _p(company.name, styles["ticket_title"]),
-        _p(f"RUC: {company.ruc}", styles["ticket_center"], bold=True),
-    ])
-    for text in (company.address, company.phone, company.email):
+    if not logo or show_company_name_with_logo:
+        story.append(_p(company.name, styles["ticket_title"]))
+    story.append(_p(f"RUC: {company.ruc}", styles["ticket_center"], bold=True))
+    address = getattr(quotation.store, "address", "") or company.address
+    contact = " · ".join(filter(None, [company.phone, company.email]))
+    for text in (address, contact):
         if text:
             story.append(_p(text, styles["ticket_center"]))
     story.extend([
@@ -478,6 +495,9 @@ def build_quotation_pdf(quotation, *, pdf_format="A4", document_settings=None, b
         or (branding.printable_logo_source() if branding else "")
     )
     footer_text = getattr(document_settings, "footer_text", "")
+    show_company_name_with_logo = bool(
+        getattr(branding, "show_company_name_with_logo", False)
+    )
     buffer = BytesIO()
     if pdf_format == "TICKET":
         line_count = quotation.lines.count()
@@ -494,7 +514,10 @@ def build_quotation_pdf(quotation, *, pdf_format="A4", document_settings=None, b
             title=f"{_document_label(quotation)} {_reference(quotation)}",
             author=company.name,
         )
-        story = _ticket_story(quotation, company, logo_url, footer_text, styles)
+        story = _ticket_story(
+            quotation, company, logo_url, footer_text, styles,
+            show_company_name_with_logo=show_company_name_with_logo,
+        )
     else:
         document = SimpleDocTemplate(
             buffer, pagesize=A4,
@@ -502,7 +525,10 @@ def build_quotation_pdf(quotation, *, pdf_format="A4", document_settings=None, b
             title=f"{_document_label(quotation)} {_reference(quotation)}",
             author=company.name,
         )
-        story = _a4_story(quotation, company, logo_url, footer_text, primary, styles)
+        story = _a4_story(
+            quotation, company, logo_url, footer_text, primary, styles,
+            show_company_name_with_logo=show_company_name_with_logo,
+        )
 
     def footer(canvas, doc):
         if pdf_format != "A4":

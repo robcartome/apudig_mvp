@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from apps.companies.models import Company, Store, UserCompanyAccess
+from apps.companies.models import Company, CompanyBranding, Store, UserCompanyAccess
 from apps.inventory.models import Category, Product, Unit
 from apps.partners.models import Customer, DocumentType
 from apps.sales.models import DocumentSeries, SalesDocument, SalesQuotation
@@ -625,6 +625,33 @@ class QuotationViewsTest(TestCase):
         self.assertEqual(resp["Content-Type"], "application/pdf")
         self.assertTrue(resp.content.startswith(b"%PDF-"))
         self.assertIn("attachment", resp["Content-Disposition"])
+
+    def test_print_hides_company_name_when_logo_exists_unless_configured(self):
+        self._post_create()
+        quotation = SalesQuotation.objects.get()
+        branding, _ = CompanyBranding.objects.update_or_create(
+            company=self.company,
+            defaults={
+                "app_logo_url": "https://cdn.example.test/logo.png",
+                "show_company_name_with_logo": False,
+            },
+        )
+
+        response = self.client.get(
+            reverse("sales:quotation_print", args=[quotation.pk]),
+            {"format": "A4"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'class="company-name"')
+
+        branding.show_company_name_with_logo = True
+        branding.save(update_fields=["show_company_name_with_logo", "updated_at"])
+        configured_response = self.client.get(
+            reverse("sales:quotation_print", args=[quotation.pk]),
+            {"format": "A4"},
+        )
+        self.assertContains(configured_response, 'class="company-name"')
 
     def test_ticket_pdf_and_print_view(self):
         self._post_create()

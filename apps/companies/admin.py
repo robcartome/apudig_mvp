@@ -21,7 +21,9 @@ class TaxRateAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyBranding)
 class CompanyBrandingAdmin(admin.ModelAdmin):
-    list_display = ("company", "primary_color", "secondary_color")
+    list_display = (
+        "company", "show_company_name_with_logo", "primary_color", "secondary_color",
+    )
     search_fields = ("company__name",)
 
 
