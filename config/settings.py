@@ -109,7 +109,7 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-POS_STATIC_VERSION = os.getenv("POS_STATIC_VERSION", "20261030-1")
+POS_STATIC_VERSION = os.getenv("POS_STATIC_VERSION", "20261106-6")
 
 STORAGES = {
     "default": {

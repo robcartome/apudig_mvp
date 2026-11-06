@@ -283,13 +283,17 @@
   position: relative;
   z-index: 15;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 52px);
   gap: 8px;
 }
 
 .pos-manual-line-button,
+.pos-reader-button,
 .pos-scan-button {
+  width: 52px;
+  min-width: 52px;
   min-height: 52px;
+  padding: 0;
   white-space: nowrap;
 }
 
@@ -300,15 +304,39 @@
   gap: 0.4rem;
 }
 
-.pos-scan-button i {
-  font-size: 1.25rem;
+.pos-reader-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
 }
 
-.pos-manual-line-button kbd {
-  margin-left: 6px;
-  color: inherit;
-  background: transparent;
-  border: 1px solid currentColor;
+.pos-reader-button[aria-pressed='true'] {
+  color: #fff;
+  border-color: var(--company-primary);
+  background: var(--company-primary);
+}
+
+.pos-reader-keyboard-glyph {
+  display: none;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.pos-reader-button[aria-pressed='true'] i {
+  display: none;
+}
+
+.pos-reader-button[aria-pressed='true'] .pos-reader-keyboard-glyph {
+  display: inline-block;
+}
+
+.pos-reader-button i,
+.pos-scan-button i {
+  font-size: 1.25rem;
 }
 
 .pos-search {
@@ -335,6 +363,16 @@
   color: #fff;
   background: var(--company-primary);
   font-size: 1.25rem;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pos-search.is-barcode {
+  border-color: var(--company-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary) 13%, transparent);
+}
+
+.pos-search.is-barcode .pos-search__icon {
+  background: color-mix(in srgb, var(--company-primary) 82%, #101828);
 }
 
 .pos-search input {
@@ -1466,20 +1504,16 @@
 
 @media (max-width: 575.98px) {
   .pos-search-wrap {
-    grid-template-columns: minmax(0, 1fr) 46px 46px;
+    grid-template-columns: minmax(0, 1fr) 46px 46px 46px;
   }
   .pos-manual-line-button,
+  .pos-reader-button,
   .pos-scan-button {
+    width: 46px;
     min-width: 46px;
     min-height: 46px;
     padding-inline: 0;
   }
-  .pos-scan-button span,
-  .pos-manual-line-button span,
-  .pos-manual-line-button kbd {
-    display: none;
-  }
-
   .pos-review-meta,
   .pos-review-settlement {
     grid-template-columns: 1fr;

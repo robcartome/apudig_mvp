@@ -20,6 +20,7 @@
     catalogProducts: [],
     catalogRequest: 0,
     productSearchMode: app.dataset.productSearchMode === 'CATALOG' ? 'CATALOG' : 'SEARCH',
+    productEntryMode: 'SEARCH',
     selectedPriceList: null,
     selectedCategory: '',
     permissions: new Set(),
@@ -31,6 +32,7 @@
     currency: 'PEN',
     productResults: [],
     activeProductIndex: -1,
+    productResultsFromBarcode: false,
     customerResults: [],
     activeCustomerIndex: -1,
     invoiceableTickets: [],
@@ -166,9 +168,8 @@
     alert.classList.toggle('is-success', kind === 'success');
     alert.hidden = false;
     byId('pos-live-region').textContent = message;
-    if (kind === 'success') {
-      alertHideTimer = window.setTimeout(hideAlert, 5000);
-    }
+    const timeout = kind === 'success' ? 5000 : 8000;
+    alertHideTimer = window.setTimeout(hideAlert, timeout);
   }
 
   function hideAlert() {
@@ -621,7 +622,7 @@
     });
   }
 
-  function addProduct(product) {
+  function addProduct(product, { fromBarcode = false } = {}) {
     if (product.unit_price === null) {
       showAlert(`No hay precio configurado en ${currencySymbol()} para ${product.name}.`);
       return;
@@ -673,7 +674,11 @@
     hideProductResults();
     renderCart();
     if (state.productSearchMode === 'CATALOG') loadCatalog('');
-    focusCartField(product.id, 'quantity');
+    if (fromBarcode) {
+      requestAnimationFrame(focusProductSearch);
+    } else {
+      focusCartField(product.id, 'quantity');
+    }
   }
 
   function renderCart() {
@@ -1166,6 +1171,7 @@
   function hideProductResults() {
     state.productResults = [];
     state.activeProductIndex = -1;
+    state.productResultsFromBarcode = false;
     byId('product-results').hidden = true;
     byId('product-search').setAttribute('aria-expanded', 'false');
   }
@@ -1186,6 +1192,38 @@
   }
 
   let productSearchTimer = null;
+  let barcodeScanQueue = Promise.resolve();
+
+  function setProductEntryMode(mode) {
+    const barcodeMode = mode === 'BARCODE';
+    const search = byId('product-search');
+    const toggle = byId('product-entry-mode');
+    if (!search || !toggle) return;
+    state.productEntryMode = barcodeMode ? 'BARCODE' : 'SEARCH';
+    app.dataset.productEntryMode = state.productEntryMode;
+    clearTimeout(productSearchTimer);
+    search.value = '';
+    hideProductResults();
+    search.closest('.pos-search').classList.toggle('is-barcode', barcodeMode);
+    search.placeholder = barcodeMode
+      ? 'Escanee un código de barras'
+      : 'Buscar por nombre, SKU o código';
+    search.setAttribute(
+      'aria-label',
+      barcodeMode ? 'Entrada del lector de código de barras' : 'Buscar producto',
+    );
+    toggle.setAttribute('aria-pressed', barcodeMode ? 'true' : 'false');
+    toggle.setAttribute(
+      'aria-label',
+      barcodeMode ? 'Desactivar lector y volver al teclado' : 'Activar lector de código de barras',
+    );
+    toggle.title = barcodeMode
+      ? 'Lector activo. Volver al ingreso por teclado'
+      : 'Activar lector USB o Bluetooth';
+    const searchIcon = search.closest('.pos-search')?.querySelector('.pos-search__icon i');
+    if (searchIcon) searchIcon.className = barcodeMode ? 'ti ti-barcode' : 'ti ti-search';
+    search.focus();
+  }
 
   function requestBarcodeScan() {
     hideProductResults();
@@ -1215,6 +1253,7 @@
       const params = productQuery(search, state.selectedCategory);
       const products = await api(`${endpoints.products}?${params}`);
       if (byId('product-search').value.trim() === search) {
+        state.productResultsFromBarcode = false;
         renderProductResults(products);
       }
     } catch (error) {
@@ -1230,18 +1269,29 @@
       params.delete('category_id');
       params.set('barcode', barcode);
       const products = await api(`${endpoints.products}?${params}`);
-      if (byId('product-search').value.trim() !== barcode) return;
       if (products.length === 1) {
-        addProduct(products[0]);
+        addProduct(products[0], { fromBarcode: true });
       } else {
+        state.productResultsFromBarcode = true;
         renderProductResults(products);
         if (products.length > 1) {
           showAlert('Hay más de un producto con este código de barras. Seleccione el correcto.');
+        } else {
+          showAlert(`No se encontró un producto con el código ${barcode}.`);
         }
       }
     } catch (error) {
       showAlert(error.message);
     }
+  }
+
+  function queueBarcodeSearch(barcode) {
+    const normalizedBarcode = String(barcode || '').trim();
+    if (!normalizedBarcode) return;
+    clearTimeout(productSearchTimer);
+    byId('product-search').value = '';
+    hideProductResults();
+    barcodeScanQueue = barcodeScanQueue.then(() => searchProductByBarcode(normalizedBarcode));
   }
 
   function openQuickProduct() {
@@ -2667,18 +2717,28 @@
   });
   byId('product-search').addEventListener('input', () => {
     clearTimeout(productSearchTimer);
+    if (state.productEntryMode === 'BARCODE') return;
     productSearchTimer = setTimeout(
       state.productSearchMode === 'CATALOG' ? loadCatalog : searchProducts,
       220,
     );
   });
   byId('product-search').addEventListener('pos:barcode-detected', (event) => {
-    clearTimeout(productSearchTimer);
-    searchProductByBarcode(event.detail.barcode);
+    queueBarcodeSearch(event.detail.barcode);
+  });
+  byId('product-entry-mode').addEventListener('click', () => {
+    setProductEntryMode(state.productEntryMode === 'SEARCH' ? 'BARCODE' : 'SEARCH');
   });
   byId('scan-barcode').addEventListener('click', requestBarcodeScan);
   byId('product-search').addEventListener('keydown', (event) => {
-    if (
+    if (state.productEntryMode === 'BARCODE' && event.key === 'Enter') {
+      event.preventDefault();
+      queueBarcodeSearch(event.currentTarget.value);
+    } else if (state.productEntryMode === 'BARCODE' && event.key === 'Escape') {
+      event.preventDefault();
+      event.currentTarget.value = '';
+      hideProductResults();
+    } else if (
       state.productSearchMode === 'SEARCH' &&
       event.key === 'ArrowDown' &&
       state.productResults.length
@@ -2718,7 +2778,7 @@
     const button = event.target.closest('[data-product-id]');
     if (!button) return;
     const product = state.productResults.find((item) => item.id === button.dataset.productId);
-    if (product) addProduct(product);
+    if (product) addProduct(product, { fromBarcode: state.productResultsFromBarcode });
   });
   byId('product-catalog').addEventListener('click', (event) => {
     const button = event.target.closest('[data-catalog-product-id]');
