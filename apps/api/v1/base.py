@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 
 from apps.core.managers import filter_by_company
 
@@ -34,3 +35,10 @@ class BaseCompanyAPIView(APIView):
 
     def scope_queryset(self, queryset):
         return filter_by_company(queryset, self.get_company_id())
+
+    def get_required_company_id(self):
+        """Return the active tenant or fail closed for private company APIs."""
+        company_id = self.get_company_id()
+        if not company_id:
+            raise PermissionDenied("Debe seleccionar una empresa activa.")
+        return company_id

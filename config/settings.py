@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "apps.billing.apps.BillingConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.web.apps.WebConfig",
+    "apps.websites.apps.WebsitesConfig",
 ]
 
 AUTH_USER_MODEL = "users.User"
@@ -166,6 +167,22 @@ PRODUCT_IMAGE_WEBP_QUALITY = int(os.getenv("PRODUCT_IMAGE_WEBP_QUALITY", "82"))
 PRODUCT_IMAGE_THUMBNAIL_DIMENSION = int(os.getenv("PRODUCT_IMAGE_THUMBNAIL_DIMENSION", "480"))
 PRODUCT_IMAGE_THUMBNAIL_QUALITY = int(os.getenv("PRODUCT_IMAGE_THUMBNAIL_QUALITY", "78"))
 
+# Storefront tenant routing. Reserved labels never become public websites.
+WEBSITE_PLATFORM_DOMAIN = os.getenv("WEBSITE_PLATFORM_DOMAIN", "apudig.com").lower().strip(".")
+WEBSITE_RESERVED_SUBDOMAINS = tuple(
+    item.strip().lower()
+    for item in os.getenv(
+        "WEBSITE_RESERVED_SUBDOMAINS",
+        "www,web,admin,api,media,status",
+    ).split(",")
+    if item.strip()
+)
+WEBSITE_PREVIEW_TOKEN_TTL = int(os.getenv("WEBSITE_PREVIEW_TOKEN_TTL", "900"))
+STOREFRONT_REVALIDATE_URL = os.getenv("STOREFRONT_REVALIDATE_URL", "")
+STOREFRONT_REVALIDATE_SECRET = os.getenv("STOREFRONT_REVALIDATE_SECRET", "")
+STOREFRONT_QUOTE_TTL = int(os.getenv("STOREFRONT_QUOTE_TTL", "900"))
+STOREFRONT_QUOTE_RATE = os.getenv("STOREFRONT_QUOTE_RATE", "20/min")
+
 # Documentos privados de Tesorería. Se sirven únicamente mediante vistas autenticadas.
 MEDIA_ROOT = BASE_DIR / "media"
 TREASURY_ATTACHMENT_MAX_SIZE = int(os.getenv("TREASURY_ATTACHMENT_MAX_SIZE", str(5 * 1024 * 1024)))
@@ -182,6 +199,9 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
     "DEFAULT_PAGINATION_CLASS": "apps.api.v1.pagination.DefaultLimitOffsetPagination",
+    "DEFAULT_THROTTLE_RATES": {
+        "storefront_quote": STOREFRONT_QUOTE_RATE,
+    },
 }
 
 

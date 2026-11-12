@@ -5,6 +5,7 @@ from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 
 from apps.api.v1.base import BaseCompanyAPIView
+from apps.api.v1.permissions import HasCompanyPermission
 from apps.api.v1.inventory.serializers import (
     CategorySerializer,
     BrandSerializer,
@@ -38,12 +39,14 @@ def _get_store_id_from_request(request):
 
 class ProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
     serializer_class = ProductListSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated, HasCompanyPermission]
+    required_company_permission = "read.inventory.products"
+    company_required = True
 
     @extend_schema(
         tags=["Inventory"],
         summary="List products",
-        description="List products with optional search, brand/category filters and limit/offset pagination.",
+        description="Authenticated product list scoped to the active authorized company.",
         parameters=[
             OpenApiParameter(name="search", required=False, type=str, description="Search by name or SKU."),
             OpenApiParameter(name="brand", required=False, type=str, description="Filter by brand UUID."),
@@ -57,7 +60,7 @@ class ProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        company_id = self.get_company_id()
+        company_id = self.get_required_company_id()
         search = (self.request.query_params.get("search") or "").strip()
         brand = (self.request.query_params.get("brand") or "").strip()
         category = (self.request.query_params.get("category") or "").strip()
@@ -77,20 +80,22 @@ class ProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
 
 class ProductDetailAPIView(BaseCompanyAPIView, generics.RetrieveAPIView):
     serializer_class = ProductDetailSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated, HasCompanyPermission]
+    required_company_permission = "read.inventory.products"
+    company_required = True
     lookup_field = "pk"
 
     @extend_schema(
         tags=["Inventory"],
         summary="Retrieve product",
-        description="Retrieve a single product including price-list values and stock by warehouse.",
+        description="Retrieve a product from the active authorized company.",
         responses={200: ProductDetailSerializer},
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        company_id = self.get_company_id()
+        company_id = self.get_required_company_id()
         return (
             inventory_selectors.get_products(company_id=company_id, active_only=True)
             .prefetch_related("prices__price_list", "stocks__warehouse")

@@ -206,6 +206,11 @@ def _storage_error_message(exc, operation: str) -> str:
 def upload_product_image(product, uploaded_file, slot: str = "main") -> ProductImageUpload:
     image_key = build_product_image_key(product, slot=slot)
     thumbnail_key = build_product_thumbnail_key(product, slot=slot)
+    return upload_processed_image(image_key, thumbnail_key, uploaded_file)
+
+
+def upload_processed_image(image_key: str, thumbnail_key: str, uploaded_file) -> ProductImageUpload:
+    """Optimize and upload an image using caller-owned, tenant-scoped R2 keys."""
     image_body = optimize_product_image(uploaded_file)
     thumbnail_body = optimize_product_image(
         uploaded_file,
