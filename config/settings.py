@@ -43,9 +43,18 @@ INSTALLED_APPS = [
     "apps.billing.apps.BillingConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.web.apps.WebConfig",
+    "apps.websites.apps.WebsitesConfig",
 ]
 
 AUTH_USER_MODEL = "users.User"
+
+# Domain registry policy only; B1 never verifies DNS or activates a domain.
+WEBSITE_PLATFORM_DOMAIN = os.getenv("WEBSITE_PLATFORM_DOMAIN", "apudig.com")
+WEBSITE_RESERVED_SUBDOMAINS = tuple(
+    label.strip().lower()
+    for label in os.getenv("WEBSITE_RESERVED_SUBDOMAINS", "www,web,admin,api,media,status").split(",")
+    if label.strip()
+)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -144,6 +153,11 @@ _raw_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://1
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 CORS_ALLOW_CREDENTIALS = False   # catalog is stateless (Bearer token)
+
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_HEADERS = (*default_headers, "if-match")
+CORS_EXPOSE_HEADERS = ("ETag",)
 
 # ── JWT (internal catalog auth) ───────────────────────────────────────────────
 import datetime as _dt

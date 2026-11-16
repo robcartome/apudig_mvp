@@ -76,6 +76,7 @@ class Permission(models.Model):
     ACTION_READ = "read"
     ACTION_MANAGE = "manage"
     ACTION_AUTHORIZE = "authorize"
+    ACTION_PUBLISH = "publish"
     ACTION_SELL = "sell"
     ACTION_OPEN = "open"
     ACTION_CLOSE = "close"
@@ -92,6 +93,7 @@ class Permission(models.Model):
         (ACTION_READ, "Leer"),
         (ACTION_MANAGE, "Gestionar"),
         (ACTION_AUTHORIZE, "Autorizar"),
+        (ACTION_PUBLISH, "Publicar"),
         (ACTION_SELL, "Vender"),
         (ACTION_OPEN, "Abrir"),
         (ACTION_CLOSE, "Cerrar"),
