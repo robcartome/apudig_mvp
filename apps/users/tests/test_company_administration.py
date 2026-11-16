@@ -197,7 +197,7 @@ class CompanyAdministrationAuthorizationTest(TestCase):
         self.assertEqual(response.status_code, 403)
 
         dashboard = self.client.get(reverse("dashboard"))
-        self.assertNotContains(dashboard, reverse("users:admin_panel"))
+        self.assertNotContains(dashboard, f'href="{reverse("users:admin_panel")}"')
 
     def test_store_admin_has_full_store_scope_but_not_company_management(self):
         store_admin = User.objects.create_user(
@@ -216,7 +216,7 @@ class CompanyAdministrationAuthorizationTest(TestCase):
 
         self.assertEqual(response.status_code, 403)
         dashboard = self.client.get(reverse("dashboard"))
-        self.assertNotContains(dashboard, reverse("users:admin_panel"))
+        self.assertNotContains(dashboard, f'href="{reverse("users:admin_panel")}"')
 
     def test_company_admin_cannot_manage_platform_role_catalog(self):
         self.activate(self.company_admin)

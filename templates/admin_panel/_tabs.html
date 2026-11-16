@@ -1,9 +1,11 @@
 {# admin_panel/_tabs.html — Navegación de tabs del panel de administración #}
+{% load website_access %}{% website_access request as website_capabilities %}
 <div class="page-header d-print-none mb-0">
   <div class="container-xl">
     <div class="row align-items-center">
       <div class="col">
         <div class="d-flex gap-2">
+          {% if website_capabilities.view %}<a href="{% url 'websites:management' %}" class="btn {% if active_tab == 'websites' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Website y dominios</a>{% endif %}
           <a href="{% url 'users:user_list' %}"
              class="btn {% if active_tab == 'usuarios' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
             <i class="ti ti-users me-1"></i>Usuarios

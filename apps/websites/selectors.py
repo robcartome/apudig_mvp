@@ -33,8 +33,8 @@ class PublicWebsiteContext:
 def resolve_public_website(hostname):
     """Resolve an explicit registered host, not request/forwarded headers.
 
-    B1 has no publication service. Even an explicitly PUBLISHED Website fails
-    closed until a same-site published Home revision is configured.
+    An explicitly PUBLISHED Website fails closed until a same-site published
+    Home revision is configured.
     No snapshot, Company data, settings or draft is returned here.
     """
     try:

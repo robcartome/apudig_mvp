@@ -72,7 +72,7 @@ def is_reserved_hostname(hostname: str) -> bool:
 
 
 class Website(TimeStampedModel):
-    """Minimal storefront identity used to scope the public catalog."""
+    """Company-owned editorial aggregate and published snapshot pointer."""
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Borrador"
@@ -87,8 +87,9 @@ class Website(TimeStampedModel):
     )
     name = models.CharField(max_length=255)
     template_key = models.CharField(max_length=64, default="ecommerce")
+    storage_prefix = models.CharField(max_length=160, blank=True, default="", editable=False)
     template_schema_version = models.PositiveSmallIntegerField(default=1)
-    # Aggregate version/pointer are schema preparation only; B1 cannot publish.
+    # All editorial writers coordinate through this aggregate version/pointer.
     editorial_revision = models.PositiveIntegerField(default=0)
     published_revision = models.ForeignKey(
         "websites.WebsitePageRevision",
@@ -126,6 +127,7 @@ class Website(TimeStampedModel):
         db_table = "websites"
         ordering = ("name",)
         constraints = [
+            models.UniqueConstraint(fields=("storage_prefix",), condition=~models.Q(storage_prefix=""), name="uniq_website_storage_prefix"),
             models.UniqueConstraint(
                 fields=("slug",),
                 condition=~models.Q(slug=""),
@@ -137,6 +139,15 @@ class Website(TimeStampedModel):
         super().clean()
         if self.template_key != "ecommerce" or self.template_schema_version != 1:
             raise ValidationError({"template_key": "La plantilla o versión no está registrada."})
+        from .storage_keys import website_storage_prefix
+        from .errors import WebsiteError
+        try:
+            website_storage_prefix(self)
+        except WebsiteError as exc:
+            raise ValidationError({"storage_prefix": str(exc)}) from exc
+        previous = Website.objects.filter(pk=self.pk).values_list("storage_prefix", flat=True).first()
+        if previous and previous != self.storage_prefix and self.media.exists():
+            raise ValidationError({"storage_prefix": "The media namespace cannot change after an upload."})
         if self.published_revision_id:
             page = self.published_revision.page
             if page.website_id != self.pk or page.page_type != "HOME":
@@ -500,6 +511,9 @@ class WebsiteMedia(TimeStampedModel):
     """Website-owned image stored in R2 and retained for published snapshots."""
 
     class Kind(models.TextChoices):
+        BANNER = "BANNER", "Banner"
+        PROMOTION = "PROMOTION", "Promotion"
+        SECTION = "SECTION", "Section"
         IMAGE = "IMAGE", "Imagen"
         LOGO = "LOGO", "Logo"
         FAVICON = "FAVICON", "Favicon"

@@ -1,0 +1,5 @@
+{% extends "admin/change_list.html" %}
+{% block content %}
+<p>Consulta técnica de Website. Para crear el Website o gestionar dominios, selecciona una empresa y abre <a href="{% url 'websites:management' %}">Website y dominios en Administración</a>. El contenido se guarda y publica desde el editor Next.js.</p>
+{{ block.super }}
+{% endblock %}

@@ -1,0 +1,16 @@
+{
+  "evidence": [
+    "Previously published content survives backend/Next process restarts without editorial localStorage.",
+    "Draft persisted in PostgreSQL; Next HTML does not reveal draft.",
+    "Next SSR renders published banner, identity, contact and SEO without fiscal IDs or actor data.",
+    "Stale ETag and cross-company editor/domain requests denied.",
+    "Second save stays private until publish; unknown domain returns HTTP 404.",
+    "Two published companies remain isolated; forged forwarded-host header does not override Host.",
+    "Preserved route smoke passes; unknown product remains HTTP 404.",
+    "Existing login, company selection and JWT refresh endpoints work over HTTP."
+  ],
+  "banner": "B3-public-banner-1794803871546",
+  "engine": "PostgreSQL 18.1",
+  "browserUI": false,
+  "realR2": false
+}

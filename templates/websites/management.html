@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Website y dominios{% endblock %}
+{% block page_title %}<h2 class="page-title">Website y dominios</h2>{% endblock %}
+{% block content %}
+{% include "admin_panel/_tabs.html" %}
+<h3>Website de la empresa seleccionada</h3>
+{% if website %}
+<div class="card mb-3"><div class="card-body">
+  <h4>{{ website.name }}</h4>
+  <p>Estado: {{ website.get_status_display }} · Revisión editorial: {{ website.editorial_revision }}</p>
+  <p>Edita y publica el contenido desde el editor Website de Next.js. Gestionar dominios no publica contenido.</p>
+</div></div>
+{% else %}
+<div class="alert alert-info">Esta empresa todavía no tiene Website. Se creará en borrador, sin contenido publicado ni cambios en su ficha fiscal.</div>
+{% if capabilities.edit %}<form method="post" class="mb-3">{% csrf_token %}<button class="btn btn-primary" name="operation" value="create">Crear Website de esta empresa</button></form>{% endif %}
+{% endif %}
+
+{% if website %}
+{% if capabilities.domains %}
+<div class="card mb-3"><div class="card-body">
+<h4>Registrar dominio</h4>
+<form method="post">{% csrf_token %}{{ form.as_p }}
+<button class="btn btn-primary" name="operation" value="register">Registrar como pendiente</button></form>
+<p class="text-muted mt-2">El dominio debe pertenecer a esta empresa. Registrarlo no lo verifica ni lo activa.</p>
+</div></div>
+{% endif %}
+<div class="card"><div class="table-responsive"><table class="table">
+<thead><tr><th>Dominio</th><th>Estado</th><th>Verificación</th><th>Principal</th><th>Acciones</th></tr></thead>
+<tbody>{% for domain in domains %}<tr>
+<td>{{ domain.hostname }}<br><small>{{ domain.get_kind_display }}</small></td>
+<td>{{ domain.get_status_display }}</td><td>{{ domain.verified_at|default:"Pendiente" }}</td><td>{{ domain.is_primary|yesno:"Sí,No" }}</td>
+<td>{% if capabilities.domains %}
+{% if domain.status == 'VERIFIED' %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="domain_id" value="{{ domain.pk }}"><button class="btn btn-sm btn-primary" name="operation" value="activate">Activar dominio verificado</button></form>{% endif %}
+{% if domain.status == 'ACTIVE' %}
+{% if not domain.is_primary %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="domain_id" value="{{ domain.pk }}"><button class="btn btn-sm btn-outline-primary" name="operation" value="primary">Usar como principal</button></form>{% endif %}
+<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="domain_id" value="{{ domain.pk }}"><button class="btn btn-sm btn-outline-danger" name="operation" value="disable">Desactivar</button></form>
+{% else %}
+{% if request.user.is_superuser %}
+<details><summary>Registrar comprobación de control (APUDIG)</summary>
+<p>Realiza la comprobación de control fuera de esta pantalla. Este formulario registra una atestación manual, no realiza consultas ni verifica DNS automáticamente. Para un dominio local registra su aprovisionamiento explícito.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="domain_id" value="{{ domain.pk }}">
+<label for="evidence-{{ domain.pk }}">Evidencia de la comprobación realizada (sin secretos)</label>
+<textarea class="form-control" id="evidence-{{ domain.pk }}" name="evidence" required minlength="20" maxlength="1000"></textarea>
+<button class="btn btn-sm btn-outline-primary mt-2" name="operation" value="verify">Registrar verificación manual</button></form></details>
+{% else %}<span>Solicita la verificación al personal APUDIG.</span>{% endif %}
+{% endif %}
+{% endif %}</td></tr>{% empty %}<tr><td colspan="5">Todavía no hay dominios registrados para este Website.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endif %}
+{% endblock %}

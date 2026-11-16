@@ -1,0 +1,804 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "APUDIG Website editorial API",
+    "version": "1"
+  },
+  "paths": {
+    "/api/v1/websites/{website_id}/draft/": {
+      "put": {
+        "operationId": "websites_draft_update",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Strong ETag of the entire website, for example \"4\".",
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current revision of the complete editorial aggregate."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorRecord"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/editor/": {
+      "get": {
+        "operationId": "websites_editor_retrieve",
+        "summary": "Read complete editorial draft and published snapshot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current revision of the complete editorial aggregate."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorRecord"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/media/": {
+      "get": {
+        "operationId": "websites_media_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaPage"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "websites_media_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadMedia"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebsiteMedia"
+                }
+              }
+            },
+            "description": ""
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebsiteMedia"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/media/{media_id}/": {
+      "delete": {
+        "operationId": "websites_media_destroy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "media_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/preview/": {
+      "get": {
+        "operationId": "websites_preview_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current revision of the complete editorial aggregate."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebsitePreview"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/publish/": {
+      "post": {
+        "operationId": "websites_publish_create",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Strong ETag of the entire website, for example \"4\".",
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current revision of the complete editorial aggregate."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorRecord"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/restore/": {
+      "post": {
+        "operationId": "websites_restore_create",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Strong ETag of the entire website, for example \"4\".",
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRevision"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Current revision of the complete editorial aggregate."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorRecord"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/revisions/": {
+      "get": {
+        "operationId": "websites_revisions_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionsPage"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/current/": {
+      "get": {
+        "operationId": "websites_current_retrieve",
+        "summary": "Discover the active company's website",
+        "tags": [
+          "Websites"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentWebsite"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CurrentWebsite": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "companyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "templateKey": {
+            "type": "string"
+          },
+          "documentSchemaVersion": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/WebsiteCapabilities"
+          }
+        },
+        "required": [
+          "capabilities",
+          "companyId",
+          "documentSchemaVersion",
+          "id",
+          "revision",
+          "templateKey"
+        ]
+      },
+      "EditorRecord": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "companyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "websiteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "draft": {},
+          "published": {
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/WebsiteCapabilities"
+          }
+        },
+        "required": [
+          "capabilities",
+          "companyId",
+          "draft",
+          "events",
+          "published",
+          "publishedAt",
+          "revision",
+          "schemaVersion",
+          "updatedAt",
+          "websiteId"
+        ]
+      },
+      "KindEnum": {
+        "enum": [
+          "IMAGE",
+          "LOGO",
+          "FAVICON"
+        ],
+        "type": "string",
+        "description": "* `IMAGE` - IMAGE\n* `LOGO` - LOGO\n* `FAVICON` - FAVICON"
+      },
+      "MediaPage": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebsiteMedia"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "results"
+        ]
+      },
+      "RestoreRevision": {
+        "type": "object",
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "revisionId"
+        ]
+      },
+      "RevisionSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "editorialRevision": {
+            "type": "integer",
+            "nullable": true
+          },
+          "operation": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "object",
+            "additionalProperties": {},
+            "nullable": true
+          },
+          "sourceRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "actor",
+          "at",
+          "editorialRevision",
+          "id",
+          "operation",
+          "sourceRevisionId",
+          "version"
+        ]
+      },
+      "RevisionsPage": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevisionSummary"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "results"
+        ]
+      },
+      "SaveDraft": {
+        "type": "object",
+        "properties": {
+          "document": {},
+          "mediaReferences": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "document"
+        ]
+      },
+      "UploadMedia": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "uri"
+          },
+          "kind": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KindEnum"
+              }
+            ],
+            "default": "IMAGE"
+          },
+          "altText": {
+            "type": "string",
+            "default": "",
+            "maxLength": 180
+          }
+        },
+        "required": [
+          "file"
+        ]
+      },
+      "WebsiteCapabilities": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "boolean"
+          },
+          "edit": {
+            "type": "boolean"
+          },
+          "publish": {
+            "type": "boolean"
+          },
+          "mediaUpload": {
+            "type": "boolean"
+          },
+          "domains": {
+            "type": "boolean"
+          },
+          "realPublication": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "domains",
+          "edit",
+          "mediaUpload",
+          "publish",
+          "realPublication",
+          "view"
+        ]
+      },
+      "WebsiteMedia": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "websiteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "altText": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "altText",
+          "height",
+          "id",
+          "kind",
+          "mimeType",
+          "size",
+          "thumbnailUrl",
+          "url",
+          "websiteId",
+          "width"
+        ]
+      },
+      "WebsitePreview": {
+        "type": "object",
+        "properties": {
+          "websiteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "content": {}
+        },
+        "required": [
+          "content",
+          "revision",
+          "websiteId"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

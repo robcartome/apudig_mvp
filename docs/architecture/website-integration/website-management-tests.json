@@ -1,0 +1,8 @@
+{
+  "engine": "PostgreSQL",
+  "database": "test_apudig_website_admin_tests",
+  "tests": 133,
+  "failures": [],
+  "errors": [],
+  "runnerOverrides": "StaticFilesStorage and MD5PasswordHasher in runner memory only"
+}

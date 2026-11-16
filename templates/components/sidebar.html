@@ -322,6 +322,10 @@
         </li>
 
         {# ─── Administración ERP ─── #}
+        {% load website_access %}{% website_access request as website_capabilities %}
+        {% if website_capabilities.view %}
+        <li class="nav-item"><a class="nav-link" href="{% url 'websites:management' %}" data-tooltip-label="Website y dominios"><span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-world fs-2"></i></span><span class="nav-link-title">Website y dominios</span></a></li>
+        {% endif %}
         {% if can_manage_company %}
         <li class="nav-item">
           <a class="nav-link {% if '/management/' in request.path %}active{% endif %}"

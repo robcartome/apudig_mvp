@@ -171,6 +171,6 @@ class WebsiteDiscoveryTest(TestCase):
     def test_discovery_is_read_only_and_commercial_routes_are_not_exposed(self):
         response = self.client.post(self.url, {}, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token()}")
         self.assertEqual(response.status_code, 405)
-        for suffix in (f"websites/{self.website.pk}/catalog-settings/", "storefront/resolve/", "storefront/sites/a.example.com/products/"):
+        for suffix in (f"websites/{self.website.pk}/catalog-settings/", "storefront/sites/a.example.com/products/"):
             with self.subTest(path=suffix), self.assertRaises(Resolver404):
                 resolve("/api/v1/" + suffix)

@@ -31,6 +31,19 @@ class WebsiteMediaTest(EditorialTestCase):
     def upload(self, file=None):
         return self.client.post(self.url("media"), {"file": file or image_file(), "kind": "IMAGE", "altText": "Banner autorizado"})
 
+    def test_upload_uses_persistent_company_prefix_and_preserves_old_media_keys(self):
+        self.website.storage_prefix = "ft_soledad"
+        self.website.save()
+        response = self.client.post(self.url("media"), {"file": image_file(), "kind": "BANNER", "altText": "Banner"})
+        self.assertEqual(response.status_code, 201, response.content)
+        media = WebsiteMedia.objects.get(pk=response.json()["id"])
+        self.assertTrue(media.storage_key.startswith("ft_soledad/website/banners/"))
+        self.assertTrue(media.thumbnail_key.endswith("-thumbnail.webp"))
+        self.assertEqual(response.json()["url"], f"https://media.example.com/{media.storage_key}")
+        self.document["banners"][0].update(imageUrl=media.url, imageAlt="Banner")
+        self.assertEqual(self.save_document().status_code, 200)
+        self.assertEqual(self.client.delete(self.url("media") + str(media.pk) + "/").status_code, 409)
+
     def test_upload_optimizes_and_returns_only_managed_metadata(self):
         response = self.upload()
         self.assertEqual(response.status_code, 201, response.content)

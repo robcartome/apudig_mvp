@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 3,
+  "identity": {
+    "name": "Empresa de prueba",
+    "shortName": "Empresa de prueba",
+    "location": "Zona de atención por configurar",
+    "primaryColor": "#FF8000",
+    "logoUrl": "",
+    "announcement": "Materiales, herramientas y soluciones para tu proyecto"
+  },
+  "contact": {
+    "phone": "",
+    "secondaryPhone": "",
+    "email": "",
+    "whatsapp": "",
+    "address": "",
+    "hours": "",
+    "socials": {
+      "facebook": "",
+      "instagram": "",
+      "tiktok": "",
+      "youtube": "",
+      "x": ""
+    }
+  },
+  "seo": {
+    "title": "Empresa de prueba | Construye tus proyectos",
+    "description": "Herramientas, materiales y asesoría para construir tus proyectos."
+  },
+  "announcements": {
+    "ctaLabel": "Ver más productos",
+    "href": "/shop",
+    "items": [
+      {
+        "id": "aviso-herramientas",
+        "enabled": true,
+        "ctaLabel": "Ver herramientas",
+        "description": "",
+        "title": "Equípate para tu proyecto",
+        "badge": "DESTACADO",
+        "badgePosition": "top-left",
+        "href": "/shop?category=herramientas",
+        "imageUrl": "",
+        "imageAlt": "",
+        "art": "drill"
+      },
+      {
+        "id": "aviso-pinturas",
+        "enabled": true,
+        "ctaLabel": "Inspírate",
+        "description": "",
+        "title": "Renueva tus espacios",
+        "badge": "INSPÍRATE",
+        "badgePosition": "top-left",
+        "href": "/shop?category=pinturas",
+        "imageUrl": "",
+        "imageAlt": "",
+        "art": "paint"
+      },
+      {
+        "id": "aviso-construccion",
+        "enabled": true,
+        "ctaLabel": "Prepara tu pedido",
+        "description": "",
+        "title": "Todo para empezar tu obra",
+        "badge": "",
+        "badgePosition": "top-left",
+        "href": "/shop?category=construccion",
+        "imageUrl": "",
+        "imageAlt": "",
+        "art": "brick"
+      },
+      {
+        "id": "aviso-seguridad",
+        "enabled": true,
+        "ctaLabel": "Conoce la selección",
+        "description": "",
+        "title": "Trabaja con confianza",
+        "badge": "SELECCIÓN",
+        "badgePosition": "top-left",
+        "href": "/shop?category=seguridad",
+        "imageUrl": "",
+        "imageAlt": "",
+        "art": "helmet"
+      }
+    ]
+  },
+  "specials": {
+    "productIds": []
+  },
+  "heroSlider": {
+    "autoplay": true,
+    "intervalMs": 6000
+  },
+  "banners": [
+    {
+      "id": "banner-principal",
+      "enabled": true,
+      "eyebrow": "MANOS A LA OBRA",
+      "title": "Tu próximo proyecto empieza aquí.",
+      "description": "Herramientas, materiales y soluciones. Todo para construir, renovar y hacer más.",
+      "ctaLabel": "Explorar productos",
+      "href": "/shop",
+      "imageUrl": "",
+      "mobileImageUrl": "",
+      "imageAlt": "",
+      "art": "drill"
+    },
+    {
+      "id": "banner-renueva",
+      "enabled": true,
+      "eyebrow": "DALE VIDA A TUS IDEAS",
+      "title": "Un nuevo color para tus espacios.",
+      "description": "Encuentra pinturas y accesorios para darle un nuevo aire a tu hogar.",
+      "ctaLabel": "Explorar pinturas",
+      "href": "/shop?category=pinturas",
+      "imageUrl": "",
+      "mobileImageUrl": "",
+      "imageAlt": "",
+      "art": "paint"
+    },
+    {
+      "id": "banner-herramientas",
+      "enabled": true,
+      "eyebrow": "PREPARA TU EQUIPO",
+      "title": "Herramientas para hacerlo posible.",
+      "description": "Elige lo que necesitas y agrégalo a tu lista de cotización.",
+      "ctaLabel": "Ver herramientas",
+      "href": "/shop?category=herramientas",
+      "imageUrl": "",
+      "mobileImageUrl": "",
+      "imageAlt": "",
+      "art": "drill"
+    }
+  ],
+  "promotions": [
+    {
+      "id": "campana-proyectos",
+      "enabled": true,
+      "eyebrow": "DE LA IDEA A LA OBRA",
+      "title": "Hagamos realidad lo que tienes en mente.",
+      "description": "Reúne tus materiales y solicita orientación para tu proyecto.",
+      "ctaLabel": "Preparar mi lista",
+      "href": "/shop",
+      "startsAt": "",
+      "endsAt": "",
+      "productIds": []
+    }
+  ],
+  "sections": [
+    {
+      "type": "benefits",
+      "enabled": true,
+      "title": "A tu lado, de principio a fin"
+    },
+    {
+      "type": "categories",
+      "enabled": true,
+      "title": "Una solución para cada proyecto"
+    },
+    {
+      "type": "announcements",
+      "enabled": true,
+      "title": "Encuentra tu próximo proyecto"
+    },
+    {
+      "type": "specials",
+      "enabled": true,
+      "title": "Destacados y ofertas especiales"
+    },
+    {
+      "type": "featured",
+      "enabled": true,
+      "title": "Encuentra lo mejor para tu proyecto"
+    },
+    {
+      "type": "promotions",
+      "enabled": true,
+      "title": "Para tu próximo proyecto"
+    },
+    {
+      "type": "about",
+      "enabled": true,
+      "title": "Construir también es contar con alguien."
+    }
+  ]
+}

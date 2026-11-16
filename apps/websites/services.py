@@ -13,6 +13,7 @@ from .errors import WebsiteError, invalid_document
 from .models import Website, WebsiteDraftMedia, WebsiteMedia, WebsitePageRevision, WebsiteProduct, WebsiteRevisionMedia
 from .permissions import require_website_permission, website_capabilities
 from .selectors import get_company_website
+from .storage_keys import owns_media_key
 
 
 def locked_website(*, user, company_id, website_id, store_id=None, permission="view"):
@@ -57,7 +58,7 @@ def bind_media(website, document, references=None):
         if path not in references and not item[key]:
             continue
         asset = by_id.get(str(references[path])) if path in references else by_url.get(item[key])
-        if asset is None or not asset.url or not asset.storage_key.startswith(f"websites/{website.pk}/media/"):
+        if asset is None or not asset.url or not owns_media_key(website, asset.storage_key):
             errors[error_path] = "Selecciona un medio activo del mismo website."
             continue
         item[key] = asset.url
@@ -121,7 +122,7 @@ def create_revision(website, page, document, references, actor, operation, sourc
     revision = WebsitePageRevision.objects.create(
         page=page, version=version, operation=operation, editorial_revision=website.editorial_revision,
         source_revision=source_revision, created_by=actor,
-        snapshot={"schemaVersion": 3, "templateKey": website.template_key, "templateSchemaVersion": website.template_schema_version, "document": deepcopy(document), "mediaReferences": deepcopy(references)},
+        snapshot={"locale": website.default_locale, "currency": website.currency, "schemaVersion": 3, "templateKey": website.template_key, "templateSchemaVersion": website.template_schema_version, "document": deepcopy(document), "mediaReferences": deepcopy(references)},
     )
     WebsiteRevisionMedia.objects.bulk_create([
         WebsiteRevisionMedia(revision=revision, media_id=media_id) for media_id in set(references.values())

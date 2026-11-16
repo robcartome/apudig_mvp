@@ -19,6 +19,7 @@ from .editorial_adapter import EDITORIAL_BLOCKS
 from .models import Website, WebsiteMedia, WebsitePageRevision, WebsiteSection, WebsiteSettings
 from .permissions import require_website_permission
 from .selectors import get_company_website
+from .storage_keys import build_website_media_key, website_storage_prefix
 
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,10 @@ def upload_media(*, user, company_id, website_id, uploaded_file, kind="IMAGE", a
             if existing:
                 return existing, False
             media_id = uuid.uuid4()
-            key = f"websites/{website.pk}/media/{media_id}"
+            if not website.storage_prefix:
+                website.storage_prefix = website_storage_prefix(website)
+                website.save(update_fields=("storage_prefix",))
+            key = build_website_media_key(website, kind, media_id)
             try:
                 client = create_r2_client()
                 for object_key, body in ((key + ".webp", image_body), (key + "-thumbnail.webp", thumbnail_body)):

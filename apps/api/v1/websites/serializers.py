@@ -37,7 +37,7 @@ class RestoreRevisionSerializer(StrictSerializer):
 
 class UploadMediaSerializer(StrictSerializer):
     file = serializers.FileField()
-    kind = serializers.ChoiceField(choices=("IMAGE", "LOGO", "FAVICON"), default="IMAGE")
+    kind = serializers.ChoiceField(choices=("IMAGE", "LOGO", "FAVICON", "BANNER", "PROMOTION", "SECTION"), default="IMAGE")
     altText = serializers.CharField(max_length=180, required=False, default="", allow_blank=True)
 
 
@@ -90,4 +90,20 @@ class MediaPageSerializer(serializers.Serializer):
 class WebsitePreviewSerializer(serializers.Serializer):
     websiteId = serializers.UUIDField()
     revision = serializers.IntegerField()
+    content = serializers.JSONField()
+
+
+class PublicWebsiteContextSerializer(serializers.Serializer):
+    websiteId = serializers.UUIDField()
+    hostname = serializers.CharField()
+    canonicalHostname = serializers.CharField()
+    templateKey = serializers.CharField()
+    locale = serializers.CharField()
+    currency = serializers.CharField()
+    revision = serializers.IntegerField()
+
+
+class PublicWebsiteContentSerializer(PublicWebsiteContextSerializer):
+    publishedAt = serializers.DateTimeField()
+    commerceEnabled = serializers.BooleanField()
     content = serializers.JSONField()

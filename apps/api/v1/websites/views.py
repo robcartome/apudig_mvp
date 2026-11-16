@@ -10,13 +10,15 @@ from rest_framework.views import APIView
 from apps.api.v1.authentication import JWTAuthentication
 from apps.websites import media_storage, services
 from apps.websites.errors import WebsiteError
-from apps.websites.models import WebsiteMedia, WebsitePageRevision
+from apps.websites.models import WebsiteMedia, WebsitePageRevision, WebsiteDomain, normalize_hostname
+from apps.websites.public_content import published_content
+from django.core.exceptions import ValidationError
 from apps.websites.permissions import WebsiteAccessDenied, website_capabilities, require_website_permission
 from apps.websites.selectors import get_company_website
 
 from .parsers import WebsiteJSONParser, WebsiteMultipartParser
 from .serializers import (
-    CurrentWebsiteSerializer, EditorRecordSerializer, MediaPageSerializer,
+    PublicWebsiteContextSerializer, PublicWebsiteContentSerializer, CurrentWebsiteSerializer, EditorRecordSerializer, MediaPageSerializer,
     RestoreRevisionSerializer, RevisionsPageSerializer, SaveDraftSerializer,
     UploadMediaSerializer, WebsiteMediaSerializer, WebsitePreviewSerializer,
 )
@@ -114,6 +116,14 @@ class CurrentWebsiteAPIView(WebsiteReadOnlyAPIView):
         context = self.context()
         _, capabilities = website_capabilities(**context)
         website = get_company_website(**context)
+        hostname = request.query_params.get("hostname")
+        if hostname:
+            try:
+                domain = normalize_hostname(hostname)
+            except ValidationError:
+                domain = None
+            if domain and WebsiteDomain.objects.filter(hostname=domain).exclude(website=website).exists():
+                raise WebsiteError("El dominio pertenece a otra empresa. Cambia de empresa o abre la administración central.", code="DOMAIN_COMPANY_MISMATCH", status=403)
         return Response(CurrentWebsiteSerializer({
             "id": website.id, "company_id": website.company_id,
             "template_key": website.template_key, "documentSchemaVersion": 3,
@@ -219,3 +229,20 @@ class WebsiteMediaDetailAPIView(WebsiteAPIView):
     def delete(self, request, website_id, media_id):
         media_storage.deactivate_media(**self.context(), website_id=website_id, media_id=media_id)
         return Response(status=204)
+
+
+class PublicWebsiteAPIView(WebsiteReadOnlyAPIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(tags=["Storefront"], auth=[], responses=PublicWebsiteContentSerializer)
+    def get(self, request, hostname=None):
+        data = published_content(hostname if hostname is not None else request.query_params.get("hostname", ""))
+        return Response(data)
+
+
+class PublicWebsiteResolveAPIView(PublicWebsiteAPIView):
+    @extend_schema(tags=["Storefront"], auth=[], parameters=[OpenApiParameter(name="hostname", type=str, required=True)], responses=PublicWebsiteContextSerializer)
+    def get(self, request):
+        data = published_content(request.query_params.get("hostname", ""))
+        return Response({key: data[key] for key in ("websiteId", "hostname", "canonicalHostname", "templateKey", "locale", "currency", "revision")})

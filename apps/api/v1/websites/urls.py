@@ -1,13 +1,15 @@
 from django.urls import path
 
 from .views import (
-    CurrentWebsiteAPIView, WebsiteDraftAPIView, WebsiteEditorAPIView,
+    PublicWebsiteResolveAPIView, PublicWebsiteAPIView, CurrentWebsiteAPIView, WebsiteDraftAPIView, WebsiteEditorAPIView,
     WebsiteMediaAPIView, WebsiteMediaDetailAPIView, WebsitePreviewAPIView,
     WebsitePublishAPIView, WebsiteRestoreAPIView, WebsiteRevisionsAPIView,
 )
 
 
 urlpatterns = [
+    path("storefront/resolve/", PublicWebsiteResolveAPIView.as_view(), name="api_v1_storefront_resolve"),
+    path("storefront/sites/<str:hostname>/content/", PublicWebsiteAPIView.as_view(), name="api_v1_storefront_content"),
     path("websites/current/", CurrentWebsiteAPIView.as_view(), name="api_v1_current_website"),
     path("websites/<uuid:website_id>/editor/", WebsiteEditorAPIView.as_view(), name="api_v1_website_editor"),
     path("websites/<uuid:website_id>/draft/", WebsiteDraftAPIView.as_view(), name="api_v1_website_draft"),

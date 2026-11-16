@@ -1,0 +1,15 @@
+{
+  "nodeTests": 43,
+  "nodeFailures": 0,
+  "lintExitCode": 0,
+  "buildExitCode": 0,
+  "routeSmokeCases": 16,
+  "httpIntegration": "real Next/Django/PostgreSQL; synthetic tenants A/B",
+  "browserUI": "blocked by Computer Use URL verification on Windows",
+  "R2": "mocked by explicit user instruction",
+  "versions": {
+    "node": "22.20.0",
+    "next": "16.0.10",
+    "react": "19.1.0"
+  }
+}

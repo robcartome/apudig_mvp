@@ -1,0 +1,19 @@
+{
+  "engine": "postgresql",
+  "compatible": true,
+  "issues": [],
+  "tableCount": 14,
+  "websiteMigrations": [
+    "0001_initial",
+    "0002_website_foundations",
+    "0003_cms_pages_phase_2",
+    "0003_website_pages_sections_and_revisions",
+    "0004_theme_media_menus_seo_phase_3",
+    "0004_website_theme_media_menus_and_seo",
+    "0005_websitecatalogsettings_websiteproduct",
+    "0006_website_template",
+    "0007_website_editorial_revision_and_more",
+    "0008_editorial_documents_revisions_and_media",
+    "0009_website_storage_namespace"
+  ]
+}

@@ -218,6 +218,14 @@
 
 {# ── Tab: Roles y Accesos ── #}
 {% if detail_tab == 'roles' %}
+<div class="alert alert-info">
+  <strong>Permisos Website por empresa</strong><br>
+  Asigna un rol con los permisos que necesite este usuario: <code>read.website</code> (consultar),
+  <code>manage.website</code> (editar), <code>publish.website</code> (publicar),
+  <code>manage.website.media</code> (imágenes) y <code>manage.website.domains</code> (dominios).
+  El usuario debe conservar acceso a la empresa seleccionada. Los roles ADMIN ya tienen estas capacidades.
+  {% if request.user.is_superuser %}<a href="{% url 'users:role_list' %}">Configurar permisos del rol</a>{% endif %}
+</div>
 {% if active_company %}
 <form method="post" novalidate>
   {% csrf_token %}
