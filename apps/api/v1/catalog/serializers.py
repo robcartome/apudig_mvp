@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.inventory.models import Product
+from .access import redact_foreign_relations
 
 
 class ProductImageSerializerMixin(serializers.Serializer):
@@ -59,8 +60,9 @@ class CatalogProductListSerializer(ProductImageSerializerMixin, serializers.Mode
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not self.context.get("include_purchase_price"):
-            data.pop("price_purchase", None)
-        return data
+            for field in ("price_purchase", "supplier_codes", "price_list", "stock_by_warehouse"):
+                data.pop(field, None)
+        return redact_foreign_relations(data, instance, self.context.get("catalog_access"))
 
 
 class CatalogProductPriceListSerializer(serializers.Serializer):
@@ -112,19 +114,20 @@ class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.Mo
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not self.context.get("include_purchase_price"):
-            data.pop("price_purchase", None)
-        return data
+            for field in ("price_purchase", "supplier_codes", "price_list", "stock_by_warehouse"):
+                data.pop(field, None)
+        return redact_foreign_relations(data, instance, self.context.get("catalog_access"))
 
     def get_price_list(self, obj):
-        prices = obj.prices.filter(active=True, price_list__active=True).select_related("price_list").order_by("price_list__name")
+        prices = getattr(obj, "catalog_prices", [])
         return CatalogProductPriceListSerializer(prices, many=True).data
 
     def get_stock_total(self, obj):
-        total = sum((row.quantity or 0) for row in obj.stocks.all())
+        total = getattr(obj, "stock", 0)
         return float(total)
 
     def get_stock_by_warehouse(self, obj):
-        rows = obj.stocks.select_related("warehouse").order_by("warehouse__name")
+        rows = getattr(obj, "catalog_stocks", [])
         return [
             {
                 "warehouse_name": row.warehouse.name if row.warehouse else "",
@@ -133,3 +136,13 @@ class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.Mo
             }
             for row in rows
         ]
+
+
+class BasicCatalogProductListSerializer(CatalogProductListSerializer):
+    class Meta(CatalogProductListSerializer.Meta):
+        fields = tuple(field for field in CatalogProductListSerializer.Meta.fields if field not in ("price_purchase", "supplier_codes"))
+
+
+class BasicCatalogProductDetailSerializer(CatalogProductDetailSerializer):
+    class Meta(CatalogProductDetailSerializer.Meta):
+        fields = tuple(field for field in CatalogProductDetailSerializer.Meta.fields if field not in ("price_purchase", "supplier_codes", "price_list", "stock_by_warehouse"))

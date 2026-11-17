@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-16",
+  "authenticatedSession": false,
+  "checks": [
+    {
+      "name": "django-login",
+      "status": 200,
+      "location": null
+    },
+    {
+      "name": "management-unauthenticated",
+      "status": 302,
+      "location": "/login/?next=/management/websites/"
+    },
+    {
+      "name": "pending-domain",
+      "status": 404,
+      "location": null
+    },
+    {
+      "name": "unknown-domain",
+      "status": 404,
+      "location": null
+    },
+    {
+      "name": "next-home",
+      "status": 404,
+      "location": null
+    },
+    {
+      "name": "next-login",
+      "status": 200,
+      "location": null
+    },
+    {
+      "name": "next-admin-shell",
+      "status": 200,
+      "location": null
+    },
+    {
+      "name": "legacy-catalog-shell",
+      "status": 200,
+      "location": null
+    }
+  ],
+  "browser": false
+}

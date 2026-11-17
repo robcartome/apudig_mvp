@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-16",
+  "backendBranch": "websites_backend",
+  "backendHead": "9e9eaf5",
+  "database": "test_apudig_b3a_audit",
+  "engine": "PostgreSQL",
+  "tests": 133,
+  "failures": [],
+  "errors": [],
+  "runnerOverrides": [
+    "StaticFilesStorage",
+    "MD5PasswordHasher"
+  ],
+  "realR2": false,
+  "browserValidation": false
+}

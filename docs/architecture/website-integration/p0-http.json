@@ -1,0 +1,42 @@
+[
+  {
+    "path": "/api/v1/catalog/products/",
+    "anonymousStatus": 401,
+    "cacheControl": "private, no-store"
+  },
+  {
+    "path": "/api/v1/catalog/products/00000000-0000-0000-0000-000000000001/detail/",
+    "anonymousStatus": 401,
+    "cacheControl": "private, no-store"
+  },
+  {
+    "path": "/api/v1/catalog/private/products/",
+    "anonymousStatus": 401,
+    "cacheControl": "private, no-store"
+  },
+  {
+    "path": "/api/v1/catalog/private/products/00000000-0000-0000-0000-000000000001/detail/",
+    "anonymousStatus": 401,
+    "cacheControl": "private, no-store"
+  },
+  {
+    "path": "/api/v1/products/",
+    "anonymousStatus": 401,
+    "cacheControl": "private, no-store"
+  },
+  {
+    "path": "/api/v1/products/00000000-0000-0000-0000-000000000001/",
+    "anonymousStatus": 401,
+    "cacheControl": "private, no-store"
+  },
+  {
+    "host": "demo.localhost",
+    "path": "/",
+    "status": 200
+  },
+  {
+    "host": "unknown-p0.localhost",
+    "path": "/",
+    "status": 404
+  }
+]

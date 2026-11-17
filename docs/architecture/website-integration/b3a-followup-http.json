@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-16",
+  "operatorDomainActivationObserved": true,
+  "authenticatedBrowser": false,
+  "commerceEnabled": false,
+  "publicSchema": 3,
+  "checks": [
+    {
+      "name": "django-public",
+      "status": 200,
+      "error": null,
+      "cache": "private, no-store",
+      "location": null
+    },
+    {
+      "name": "localhost-home",
+      "status": 200,
+      "error": null,
+      "cache": "no-store, must-revalidate",
+      "location": null,
+      "publishedIdentityInHtml": true,
+      "publishedSeoTitleInHtml": true
+    },
+    {
+      "name": "domain-home",
+      "status": 200,
+      "error": null,
+      "cache": "no-store, must-revalidate",
+      "location": null,
+      "publishedIdentityInHtml": true,
+      "publishedSeoTitleInHtml": true
+    },
+    {
+      "name": "unknown-domain",
+      "status": 404,
+      "error": null,
+      "cache": "no-store, must-revalidate",
+      "location": null
+    },
+    {
+      "name": "management-anonymous",
+      "status": 302,
+      "error": null,
+      "cache": null,
+      "location": "/login/?next=/management/websites/"
+    }
+  ],
+  "domainVerificationAuditRecorded": true,
+  "domainActivationAuditRecorded": true
+}

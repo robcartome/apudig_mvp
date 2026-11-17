@@ -1,0 +1,15 @@
+{
+  "base": "websites_backend@9e9eaf5",
+  "snapshot": "Pre-edit source snapshot, no .env or credentials",
+  "files": {
+    "apps/api/v1/catalog/views.py": "0775b7340397f5f2b943e542f06f5ac7892c790275606b678b0ec83265fca6f6",
+    "apps/api/v1/catalog/serializers.py": "be3508ff9e08a5d49c69ae57ec0c35282115dabb303b610aa2eaf225bc3384a4",
+    "apps/api/v1/inventory/views.py": "edc55fdc9ce3d6a4fb5a1ffd4ecf5352096ec5fcf206b6df564a5873a15a5f81",
+    "apps/api/v1/inventory/serializers.py": "e33d83131a4835af5dc399a5af932631e10d3db3a70550baa70a0c8d14e7e85d",
+    "apps/inventory/apps.py": "7da2262ab1561b69c432f724e8a12ae09a233ebd8fb869a87f885155b6ff612d",
+    "apps/inventory/tests/test_catalog_api.py": "4358be9aa5eabea26ac75117dd5a7ff52ad4eef9a0b94f02b770158a08f4298b",
+    "apps/api/v1/authentication.py": "f09d0831b428d113754d0297a6a244fba24529b061ce1e2131a3b858e8ac4742",
+    "apps/users/permissions.py": "c6d528beb0ab2bba8fd9a4977d58adb0aa2ff41dae61b2812b19efade34d265f",
+    "apps/inventory/selectors.py": "734e48afc3bd34292005a6b3d54c051bbc64a069996aaae7373f2cf53b92a609"
+  }
+}

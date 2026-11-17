@@ -1,4 +1,4 @@
-from django.db.models import Sum
+from apps.api.v1.catalog.access import redact_foreign_relations
 from rest_framework import serializers
 
 from apps.inventory.models import Brand, Category, Product, ProductPrice, StockByWarehouse
@@ -86,19 +86,19 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        request = self.context.get("request")
-        if not request or not request.user or not request.user.is_authenticated:
-            data.pop("price_purchase", None)
-        return data
+        if not self.context.get("include_private_fields"):
+            for field in ("price_purchase", "price_list", "stock_by_warehouse"):
+                data.pop(field, None)
+        return redact_foreign_relations(data, instance, self.context.get("catalog_access"))
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     unit = serializers.CharField(source="unit.code", read_only=True)
     brand = serializers.CharField(source="brand.name", read_only=True)
     category = serializers.CharField(source="category.name", read_only=True)
-    price_list = ProductPriceSerializer(source="prices", many=True, read_only=True)
+    price_list = serializers.SerializerMethodField()
     stock_total = serializers.SerializerMethodField()
-    stock_by_warehouse = StockByWarehouseSerializer(source="stocks", many=True, read_only=True)
+    stock_by_warehouse = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -118,13 +118,18 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "stock_by_warehouse",
         )
 
+    def get_price_list(self, obj):
+        return ProductPriceSerializer(getattr(obj, "catalog_prices", []), many=True).data
+
+    def get_stock_by_warehouse(self, obj):
+        return StockByWarehouseSerializer(getattr(obj, "catalog_stocks", []), many=True).data
+
     def get_stock_total(self, obj):
-        total = obj.stocks.aggregate(total=Sum("quantity")).get("total")
-        return total or 0
+        return getattr(obj, "stock", 0)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        request = self.context.get("request")
-        if not request or not request.user or not request.user.is_authenticated:
-            data.pop("price_purchase", None)
-        return data
+        if not self.context.get("include_private_fields"):
+            for field in ("price_purchase", "price_list", "stock_by_warehouse"):
+                data.pop(field, None)
+        return redact_foreign_relations(data, instance, self.context.get("catalog_access"))

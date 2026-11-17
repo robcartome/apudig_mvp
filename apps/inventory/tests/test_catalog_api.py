@@ -19,17 +19,17 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.partners.models import Supplier
-from apps.users.models import User
+from apps.users.models import User, Role, UserRole, RolePermission, Permission
 
 
-def _make_employee_token(company_id):
+def _make_employee_token(company_id, user_id, store_id=None):
     """Issue a valid employee JWT for tests."""
     now = datetime.datetime.now(datetime.timezone.utc)
     payload = {
-        "sub": "00000000-0000-0000-0000-000000000001",
+        "sub": str(user_id),
         "email": "emp@test.com",
         "company_id": str(company_id),
-        "store_id": None,
+        "store_id": str(store_id) if store_id else None,
         "type": "access",
         "iat": now,
         "exp": now + datetime.timedelta(hours=1),
@@ -79,12 +79,22 @@ class CatalogApiTest(TestCase):
 
         # Employee user linked to company
         self.user = User.objects.create_user(email="emp@test.com", password="pass")
-        UserCompanyAccess.objects.create(user=self.user, company=self.company, store=self.store, is_default=True)
-        self.employee_token = _make_employee_token(self.company.pk)
+        UserCompanyAccess.objects.create(user=self.user, company=self.company, store=None, is_default=True)
+        read, _ = Permission.objects.get_or_create(code="read.inventory.products", defaults={"action_name": "read", "module": "inventory.products"})
+        role = Role.objects.create(name="Catalog compatibility reader")
+        RolePermission.objects.create(role=role, permission=read)
+        UserRole.objects.create(user=self.user, company=self.company, role=role)
+        self.employee_token = _make_employee_token(self.company.pk, self.user.pk)
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {self.employee_token}"
+        self.admin = User.objects.create_user(email="catalog-admin@test.com")
+        UserCompanyAccess.objects.create(user=self.admin, company=self.company)
+        admin_role, _ = Role.objects.get_or_create(name="ADMIN")
+        UserRole.objects.create(user=self.admin, company=self.company, role=admin_role)
+        self.admin_token = _make_employee_token(self.company.pk, self.admin.pk)
 
     def test_catalog_products_returns_paginated_payload(self):
         # ── Public access: price_purchase NOT returned ─────────────────────
-        resp = self.client.get("/catalog/products", {"search": "tala", "limit": 10, "offset": 0})
+        resp = self.client.get("/api/v1/catalog/products/", {"search": "tala", "limit": 10, "offset": 0})
 
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -103,7 +113,7 @@ class CatalogApiTest(TestCase):
         self.assertEqual(item["category"], "Ferreteria")
         self.assertEqual(item["price_sale"], "160.00")
         self.assertEqual(item["stock"], 8.5)
-        self.assertNotIn("price_purchase", item)  # hidden for public
+        self.assertNotIn("price_purchase", item)  # absent from the worker projection
         self.assertEqual(item["image"], "")
 
     def test_v1_public_catalog_returns_product_image_url(self):
@@ -124,8 +134,9 @@ class CatalogApiTest(TestCase):
         self.assertEqual(item["thumbnails"], item["images"])
 
     def test_v1_catalog_searches_by_supplier_code_and_returns_codes(self):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {self.admin_token}"
         response = self.client.get(
-            "/api/v1/catalog/products/", {"search": "P001", "limit": 10}
+            "/api/v1/catalog/private/products/", {"search": "P001", "limit": 10}
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -137,15 +148,17 @@ class CatalogApiTest(TestCase):
         relation = self.product.supplier_relations.get()
         relation.active = False
         relation.save(update_fields=["active", "updated_at"])
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {self.admin_token}"
         response = self.client.get(
-            "/api/v1/catalog/products/", {"search": "P001", "limit": 10}
+            "/api/v1/catalog/private/products/", {"search": "P001", "limit": 10}
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["total"], 0)
 
     def test_v1_catalog_detail_returns_active_supplier_codes(self):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {self.admin_token}"
         response = self.client.get(
-            f"/api/v1/catalog/products/{self.product.pk}/detail/"
+            f"/api/v1/catalog/private/products/{self.product.pk}/detail/"
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["supplier_codes"], ["P001"])
@@ -156,7 +169,7 @@ class CatalogApiTest(TestCase):
         response = self.client.get(
             "/api/v1/catalog/private/products/",
             {"limit": 10},
-            HTTP_AUTHORIZATION=f"Bearer {self.employee_token}",
+            HTTP_AUTHORIZATION=f"Bearer {self.admin_token}",
         )
         self.assertEqual(response.status_code, 200)
         item = response.json()["results"][0]
@@ -164,12 +177,12 @@ class CatalogApiTest(TestCase):
         self.assertEqual(item["images"], [f"https://media.apudig.com/{self.product.image_key}"])
         self.assertEqual(item["price_purchase"], "120.00")
 
-    def test_catalog_products_employee_sees_price_purchase(self):
+    def test_private_catalog_administrator_sees_price_purchase(self):
         # ── Employee access: price_purchase IS returned ───────────────────
         resp = self.client.get(
-            "/catalog/products",
+            "/api/v1/catalog/private/products/",
             {"search": "tala", "limit": 10, "offset": 0},
-            HTTP_AUTHORIZATION=f"Bearer {self.employee_token}",
+            HTTP_AUTHORIZATION=f"Bearer {self.admin_token}",
         )
 
         self.assertEqual(resp.status_code, 200)
@@ -179,7 +192,7 @@ class CatalogApiTest(TestCase):
 
     def test_catalog_product_detail_returns_expected_shape(self):
         # ── Public: price_purchase absent ────────────────────────────────
-        resp = self.client.get(f"/catalog/products/{self.product.pk}/detail")
+        resp = self.client.get(f"/api/v1/catalog/products/{self.product.pk}/detail/")
 
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -190,21 +203,17 @@ class CatalogApiTest(TestCase):
         self.assertEqual(data["brand"], "Marca A")
         self.assertEqual(data["category"], "Ferreteria")
         self.assertEqual(data["price_sale"], "160.00")
-        self.assertNotIn("price_purchase", data)  # hidden for public
+        self.assertNotIn("price_purchase", data)  # absent from the worker projection
         self.assertEqual(data["stock_total"], 8.5)
-        self.assertEqual(len(data["price_list"]), 1)
-        self.assertEqual(data["price_list"][0]["price_list_name"], "Mayorista")
-        self.assertEqual(data["price_list"][0]["amount"], "150.00")
-        self.assertEqual(data["price_list"][0]["currency"], "PEN")
-        self.assertEqual(len(data["stock_by_warehouse"]), 1)
-        self.assertEqual(data["stock_by_warehouse"][0]["warehouse_name"], "Almacen Principal")
-        self.assertEqual(data["stock_by_warehouse"][0]["quantity"], 8.5)
+        self.assertNotIn("price_list", data)
+        self.assertNotIn("stock_by_warehouse", data)
+        self.assertNotIn("supplier_codes", data)
 
-    def test_catalog_product_detail_employee_sees_price_purchase(self):
+    def test_private_catalog_detail_administrator_sees_price_purchase(self):
         # ── Employee: price_purchase present ─────────────────────────────
         resp = self.client.get(
-            f"/catalog/products/{self.product.pk}/detail",
-            HTTP_AUTHORIZATION=f"Bearer {self.employee_token}",
+            f"/api/v1/catalog/private/products/{self.product.pk}/detail/",
+            HTTP_AUTHORIZATION=f"Bearer {self.admin_token}",
         )
 
         self.assertEqual(resp.status_code, 200)
@@ -212,5 +221,5 @@ class CatalogApiTest(TestCase):
         self.assertEqual(data["price_purchase"], "120.00")
 
     def test_catalog_product_detail_not_found(self):
-        resp = self.client.get("/catalog/products/11111111-1111-1111-1111-111111111111/detail")
+        resp = self.client.get("/api/v1/catalog/products/11111111-1111-1111-1111-111111111111/detail/")
         self.assertEqual(resp.status_code, 404)

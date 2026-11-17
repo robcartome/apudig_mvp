@@ -1,64 +1,31 @@
-from decimal import Decimal
-
-from django.db.models import DecimalField, OuterRef, Prefetch, Subquery, Sum
-from django.db.models.functions import Coalesce
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, permissions
-
 from apps.api.v1.base import BaseCompanyAPIView
-from apps.api.v1.catalog.pagination import CatalogLegacyPagination
-from apps.api.v1.catalog.serializers import (
+from .access import CatalogAccessMixin
+from .selectors import catalog_products, filter_catalog_products
+from .pagination import CatalogLegacyPagination
+from .serializers import (
+    BasicCatalogProductDetailSerializer,
+    BasicCatalogProductListSerializer,
     CatalogProductDetailSerializer,
     CatalogProductListSerializer,
 )
-from apps.inventory import selectors as inventory_selectors
-from apps.inventory.models import ProductSupplier, StockByWarehouse
 
 
-def _active_supplier_codes_prefetch():
-    return Prefetch(
-        "supplier_relations",
-        queryset=(
-            ProductSupplier.objects.filter(active=True)
-            .exclude(supplier_code="")
-            .only("product_id", "supplier_code")
-            .order_by("supplier_code")
-        ),
-        to_attr="active_supplier_code_relations",
-    )
-
-
-class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
-    serializer_class = CatalogProductListSerializer
-    permission_classes = [permissions.AllowAny]
+class CatalogProductListAPIView(CatalogAccessMixin, BaseCompanyAPIView, generics.ListAPIView):
+    require_product_permission = False
+    serializer_class = BasicCatalogProductListSerializer
+    permission_classes = [permissions.IsAuthenticated]
     pagination_class = CatalogLegacyPagination
-    company_required = False
+    company_required = True
 
     def get_queryset(self):
-        company_id = self.get_company_id()
         search = (self.request.query_params.get("search") or "").strip()
         brand = (self.request.query_params.get("brand") or "").strip()
         category = (self.request.query_params.get("category") or "").strip()
 
-        qs = inventory_selectors.search_products(
-            search, company_id=company_id, active_only=True
-        ).prefetch_related(_active_supplier_codes_prefetch())
-        if brand:
-            qs = qs.filter(brand_id=brand)
-        if category:
-            qs = qs.filter(category_id=category)
-
-        stock_subquery = Subquery(
-            StockByWarehouse.objects
-            .filter(product=OuterRef("pk"))
-            .values("product")
-            .annotate(total=Sum("quantity"))
-            .values("total")[:1],
-            output_field=DecimalField(max_digits=14, decimal_places=3),
-        )
-        return qs.annotate(
-            stock=Coalesce(stock_subquery, Decimal("0"), output_field=DecimalField(max_digits=14, decimal_places=3))
-        )
+        qs = catalog_products(self.catalog_access, search, include_private=self.private_catalog)
+        return filter_catalog_products(qs, self.catalog_access, brand=brand, category=category)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -67,12 +34,12 @@ class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
 
     @extend_schema(
         tags=["Catalog"],
-        summary="Public product catalog",
-        description="Public catalog searchable by internal or active supplier product codes. price_purchase is omitted unless the request is authenticated.",
+        summary="Authenticated worker product catalog",
+        description="Company-scoped worker catalog. Private fields require the private endpoint and company administration.",
         parameters=[
             OpenApiParameter(
                 name="search", required=False, type=str,
-                description="Search by name, SKU, barcode, model, supplier code or supplier product name.",
+                description="Search by name, SKU, barcode or model. Supplier search is available only on the private endpoint.",
             ),
             OpenApiParameter(name="brand", required=False, type=str),
             OpenApiParameter(name="category", required=False, type=str),
@@ -84,21 +51,14 @@ class CatalogProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
         return super().list(request, *args, **kwargs)
 
 
-class CatalogProductDetailAPIView(BaseCompanyAPIView, generics.RetrieveAPIView):
-    serializer_class = CatalogProductDetailSerializer
-    permission_classes = [permissions.AllowAny]
-    company_required = False
+class CatalogProductDetailAPIView(CatalogAccessMixin, BaseCompanyAPIView, generics.RetrieveAPIView):
+    require_product_permission = False
+    serializer_class = BasicCatalogProductDetailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    company_required = True
 
     def get_queryset(self):
-        company_id = self.get_company_id()
-        qs = inventory_selectors.get_products(
-            company_id=company_id, active_only=True
-        ).prefetch_related(
-            "prices__price_list",
-            "stocks__warehouse",
-            _active_supplier_codes_prefetch(),
-        )
-        return qs
+        return catalog_products(self.catalog_access, include_private=self.private_catalog)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -107,14 +67,16 @@ class CatalogProductDetailAPIView(BaseCompanyAPIView, generics.RetrieveAPIView):
 
     @extend_schema(
         tags=["Catalog"],
-        summary="Public product detail",
-        description="Product detail including active supplier codes. price_purchase is omitted unless the request is authenticated.",
+        summary="Authenticated worker product detail",
+        description="Company-scoped basic product detail without internal lists, suppliers or warehouse details.",
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
 
 class PrivateCatalogProductListAPIView(CatalogProductListAPIView):
+    serializer_class = CatalogProductListSerializer
+    private_catalog = True
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_context(self):
@@ -124,6 +86,8 @@ class PrivateCatalogProductListAPIView(CatalogProductListAPIView):
 
 
 class PrivateCatalogProductDetailAPIView(CatalogProductDetailAPIView):
+    serializer_class = CatalogProductDetailSerializer
+    private_catalog = True
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_context(self):

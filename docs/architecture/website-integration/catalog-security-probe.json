@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-16",
+  "database": "test_apudig_catalog_security_audit",
+  "engine": "PostgreSQL",
+  "syntheticFixturesOnly": true,
+  "diagnosticErrors": 0,
+  "observedSecurityViolations": {
+    "anonymousGlobalProducts": true,
+    "anonymousInternalPriceLists": true,
+    "anonymousWarehouseDetails": true,
+    "revokedMembershipStillReadsCosts": true,
+    "inactiveCompanyStillReadable": true
+  },
+  "securityAccepted": false
+}

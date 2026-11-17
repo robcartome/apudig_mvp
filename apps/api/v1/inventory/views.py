@@ -5,6 +5,8 @@ from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 
 from apps.api.v1.base import BaseCompanyAPIView
+from apps.api.v1.catalog.access import CatalogAccessMixin
+from apps.api.v1.catalog.selectors import catalog_products, filter_catalog_products
 from apps.api.v1.inventory.serializers import (
     CategorySerializer,
     BrandSerializer,
@@ -36,9 +38,9 @@ def _get_store_id_from_request(request):
     return None
 
 
-class ProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
+class ProductListAPIView(CatalogAccessMixin, BaseCompanyAPIView, generics.ListAPIView):
     serializer_class = ProductListSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["Inventory"],
@@ -57,44 +59,21 @@ class ProductListAPIView(BaseCompanyAPIView, generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        company_id = self.get_company_id()
         search = (self.request.query_params.get("search") or "").strip()
         brand = (self.request.query_params.get("brand") or "").strip()
         category = (self.request.query_params.get("category") or "").strip()
 
-        qs = inventory_selectors.get_products(company_id=company_id, active_only=True)
-        if search:
-            qs = qs.filter(Q(name__icontains=search) | Q(sku__icontains=search))
-        if brand:
-            qs = qs.filter(brand_id=brand)
-        if category:
-            qs = qs.filter(category_id=category)
-
-        return qs.annotate(
-            stock=Coalesce(Sum("stocks__quantity"), 0, output_field=DecimalField(max_digits=14, decimal_places=3))
-        )
+        qs = catalog_products(self.catalog_access, search, include_private=self.catalog_access.can_view_private)
+        return filter_catalog_products(qs, self.catalog_access, brand=brand, category=category)
 
 
-class ProductDetailAPIView(BaseCompanyAPIView, generics.RetrieveAPIView):
+class ProductDetailAPIView(CatalogAccessMixin, BaseCompanyAPIView, generics.RetrieveAPIView):
     serializer_class = ProductDetailSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     lookup_field = "pk"
 
-    @extend_schema(
-        tags=["Inventory"],
-        summary="Retrieve product",
-        description="Retrieve a single product including price-list values and stock by warehouse.",
-        responses={200: ProductDetailSerializer},
-    )
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-
     def get_queryset(self):
-        company_id = self.get_company_id()
-        return (
-            inventory_selectors.get_products(company_id=company_id, active_only=True)
-            .prefetch_related("prices__price_list", "stocks__warehouse")
-        )
+        return catalog_products(self.catalog_access, include_private=self.catalog_access.can_view_private)
 
 
 class CategoryListAPIView(BaseCompanyAPIView, generics.ListAPIView):

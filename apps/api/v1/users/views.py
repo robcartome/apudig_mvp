@@ -221,6 +221,7 @@ class AuthMeAPIView(APIView):
             "id": str(user.id),
             "email": user.email,
             "name": user.display_name,
+            "is_superuser": user.is_superuser,
             "company": _serialize_company(access_obj),
         }
         return Response(data, status=status.HTTP_200_OK)
