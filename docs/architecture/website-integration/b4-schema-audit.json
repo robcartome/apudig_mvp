@@ -1,0 +1,37 @@
+{
+  "newPaths": {
+    "/api/v1/storefront/sites/{hostname}/brands/": [
+      "get"
+    ],
+    "/api/v1/storefront/sites/{hostname}/categories/": [
+      "get"
+    ],
+    "/api/v1/storefront/sites/{hostname}/products/": [
+      "get"
+    ],
+    "/api/v1/storefront/sites/{hostname}/products/{product_id}/": [
+      "get"
+    ],
+    "/api/v1/websites/{website_id}/catalog-product-options/": [
+      "get"
+    ],
+    "/api/v1/websites/{website_id}/catalog-settings/": [
+      "get",
+      "patch"
+    ],
+    "/api/v1/websites/{website_id}/products/": [
+      "get",
+      "post"
+    ],
+    "/api/v1/websites/{website_id}/products/{publication_id}/": [
+      "patch",
+      "delete"
+    ]
+  },
+  "contractsValidated": 8,
+  "publicAuthentication": "none",
+  "adminAuthentication": "existing Bearer JWT",
+  "commercialIfMatchDocumented": true,
+  "privateFieldsAbsent": true,
+  "globalSchema": "97 warnings / 113 errors in existing ERP schema; not globally approved"
+}

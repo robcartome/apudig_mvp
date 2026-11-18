@@ -58,7 +58,7 @@ class CatalogProductDetailAPIView(CatalogAccessMixin, BaseCompanyAPIView, generi
     company_required = True
 
     def get_queryset(self):
-        return catalog_products(self.catalog_access, include_private=self.private_catalog)
+        return catalog_products(self.catalog_access, include_private=self.private_catalog, include_sales_details=True)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -68,7 +68,7 @@ class CatalogProductDetailAPIView(CatalogAccessMixin, BaseCompanyAPIView, generi
     @extend_schema(
         tags=["Catalog"],
         summary="Authenticated worker product detail",
-        description="Company-scoped basic product detail without internal lists, suppliers or warehouse details.",
+        description="Authenticated company members can read active sales price lists and scoped warehouse stock. Purchase prices and supplier codes remain restricted to company administration.",
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)

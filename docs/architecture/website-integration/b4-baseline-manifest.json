@@ -1,0 +1,16 @@
+{
+  "base": "websites_backend@e3f479f",
+  "source": "pre-edit snapshot, excludes .env and credentials",
+  "sha256": {
+    "apps/api/v1/urls.py": "fc3540b6fed62f367b00b00b8f08ae648d433b03257e510278bd9692c11122b7",
+    "apps/websites/apps.py": "ebb09b34d10eeda31445805ccce5fd4dc2fc6a2dcece1544cb49195963896359",
+    "apps/websites/models.py": "7880211ea9f4ca25fe08b93c81b49c8a1527b88d74ce363cac23a9e514e4caad",
+    "apps/websites/permissions.py": "26aa878a8acf98b573e8e47be1509dd703e919b7a9efe9c5876f6d7f25a3a782",
+    "apps/websites/services.py": "6f423078a38e4ed142f388cdab887db6d9f0ee864a6b83ec15a6eda7f693994c",
+    "apps/websites/tests/test_api.py": "0d314c288c314c9c23463367e61d44707ee24db003ed2cdd43bf5b195610b6c8",
+    "apps/api/v1/catalog/access.py": "e42f2da49ae2764916f3603e740fb6460b918ceb6620b8b623477756741eec76",
+    "apps/api/v1/catalog/views.py": "179872a2cdb1db07cb2878667b1326bed75628175ce5c665f4fd9909da3451d8",
+    "apps/partners/models.py": "2d4f2fc37cecb99efc3ba87195a8a8e102d5230a8fbf84f8cbb3ed12f46d490e",
+    "apps/users/models.py": "6052c3f9718023d16ee233839e5f60366966bfe4ff8474356c1318588de394ae"
+  }
+}

@@ -114,7 +114,7 @@ class CatalogProductDetailSerializer(ProductImageSerializerMixin, serializers.Mo
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not self.context.get("include_purchase_price"):
-            for field in ("price_purchase", "supplier_codes", "price_list", "stock_by_warehouse"):
+            for field in ("price_purchase", "supplier_codes"):
                 data.pop(field, None)
         return redact_foreign_relations(data, instance, self.context.get("catalog_access"))
 
@@ -145,4 +145,4 @@ class BasicCatalogProductListSerializer(CatalogProductListSerializer):
 
 class BasicCatalogProductDetailSerializer(CatalogProductDetailSerializer):
     class Meta(CatalogProductDetailSerializer.Meta):
-        fields = tuple(field for field in CatalogProductDetailSerializer.Meta.fields if field not in ("price_purchase", "supplier_codes", "price_list", "stock_by_warehouse"))
+        fields = tuple(field for field in CatalogProductDetailSerializer.Meta.fields if field not in ("price_purchase", "supplier_codes"))

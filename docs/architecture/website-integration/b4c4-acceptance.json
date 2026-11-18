@@ -1,0 +1,30 @@
+﻿{
+    "date":  "2026-11-18",
+    "status":  "CONDITIONAL_ACCEPTANCE",
+    "frontendBase":  "mvp_website@856b711",
+    "backendBase":  "websites_backend@e3f479f",
+    "nodeTests":  64,
+    "scopedPostgreSQLTests":  186,
+    "isolatedHttpChecks":  24,
+    "realBrowserCmsSaveAndPublish":  true,
+    "browserDraftRevision":  6,
+    "browserPreviousPublicRevision":  3,
+    "browserPublishedRevision":  7,
+    "visualCoverage":  "partial: desktop, mobile 360x800, tablet 768x1024, public cards/detail/filter dialog, CMS login/company/editor/save/publish",
+    "realR2Validated":  false,
+    "commerceEnabled":  false,
+    "fullERP":  {
+                    "newFailingCases":  0,
+                    "approved":  false,
+                    "errors":  35,
+                    "tests":  727,
+                    "failures":  78
+                },
+    "habitualWebsiteRevisionUnchanged":  17,
+    "habitualCatalogPublishedProducts":  0,
+    "integrationCredentialsRemoved":  true,
+    "habitualDatabaseWrites":  false,
+    "commits":  false,
+    "deployments":  false,
+    "nextStage":  "B4-D proposal only; do not implement before pilot review"
+}

@@ -1,0 +1,17 @@
+{
+  "database": "test_apudig_b4c_http",
+  "results": [
+    {
+      "name": "Home renders real featured products and each company published visual identity",
+      "passed": true
+    },
+    {
+      "name": "live ERP price changes reach K1 and SSR Home without CMS republication",
+      "passed": true
+    },
+    {
+      "name": "withdrawing a featured publication removes it immediately from Home without CMS change",
+      "passed": true
+    }
+  ]
+}

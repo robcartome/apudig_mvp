@@ -1,0 +1,127 @@
+{
+  "type": "read-only existing local services",
+  "checkedAt": "2026-11-18T16:34:27.782Z",
+  "results": [
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "MI EMPRESA S.A.C."
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/shop",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "Productos de la tienda | FERRETERIA DEMO S.A.C."
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/admin",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "Administración web | APUDIG"
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/admin/website",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "Gestión de página web | APUDIG"
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/catalog",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "ApuDig"
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/login",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "ApuDig"
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/contact",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "Contacto | FERRETERIA DEMO S.A.C."
+    },
+    {
+      "port": 3000,
+      "hostname": "demo.localhost",
+      "route": "/admin/catalog_admin",
+      "status": 200,
+      "cacheControl": "no-store, must-revalidate",
+      "hasOperationalWhatsApp": false,
+      "hasPrivatePurchaseField": false,
+      "title": "Administración web | APUDIG"
+    },
+    {
+      "port": 3000,
+      "hostname": "localhost",
+      "route": "/",
+      "status": 200
+    },
+    {
+      "port": 3000,
+      "hostname": "unknown.b4c4.localhost",
+      "route": "/",
+      "status": 404
+    },
+    {
+      "port": 8000,
+      "route": "/api/v1/storefront/sites/demo.localhost/content/",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "commerceEnabled": false,
+      "revision": 17,
+      "identityHash": "9b80e45b81a57229658957d795312ef22ed0b7c06fbeb742e0f935aae4cd6d61"
+    },
+    {
+      "port": 3000,
+      "route": "/shop/[publishedProductId]",
+      "status": "PENDING_NO_PUBLISHED_PRODUCTS"
+    },
+    {
+      "port": 8000,
+      "route": "/api/v1/storefront/sites/demo.localhost/products/?limit=1",
+      "status": 200,
+      "cacheControl": "private, no-store",
+      "count": 0
+    },
+    {
+      "port": 8000,
+      "route": "/api/v1/catalog/products/",
+      "status": 401,
+      "cacheControl": "private, no-store"
+    }
+  ],
+  "databaseWrites": false,
+  "authenticatedBrowserVerified": false
+}

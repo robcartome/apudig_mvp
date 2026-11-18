@@ -1,0 +1,21 @@
+{
+  "database": "test_apudig_b4c_http",
+  "results": [
+    {
+      "name": "JWT and current company permissions protect commercial administration",
+      "passed": true
+    },
+    {
+      "name": "CMS cannot read or change lists, warehouses or overrides",
+      "passed": true
+    },
+    {
+      "name": "real concurrent edits reject stale or absent ETags and preserve editorial revision",
+      "passed": true
+    },
+    {
+      "name": "policy is authorized and tenant foreign references are rejected",
+      "passed": true
+    }
+  ]
+}

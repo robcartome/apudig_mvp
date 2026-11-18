@@ -1,5 +1,7 @@
 # Política comercial y contratos preparados para B4-B
 
+Actualización de implementación17/11/2026: [19](19-decisiones-b4-b.md) registra decisiones aprobadas; [21](21-entrega-b4-b.md) entrega K0–K7 y sus pruebas. Solo ADMIN de empresa/superusuario autoriza listas, overrides y almacenes; campos/opciones sensibles se omiten para CMS. K0 usa productsPerPage como limit predeterminado cuando existe configuración (24 si falta). Commerce permanece false; activación, Next B4-C, cuentas y WhatsApp no se implementaron. La propuesta histórica siguiente debe leerse con esas conciliaciones.
+
 Actualización 17/11/2026: la seguridad del catálogo laboral se implementó separadamente en [17](17-remediacion-p0-catalogos.md), tras aprobación del login obligatorio y del acceso privado de administradores de empresa. Esto no aprueba ni implementa la política comercial o los contratos K0–K7 de este documento. Commerce sigue deshabilitado.
 
 Fecha: 16/11/2026. Propuesta técnica consolidada para revisión, **no contratos implementados**. Conserva rutas/nombres del informe14 y los distingue del parche P0 del informe15. Ningún cambio de precio/stock, vínculo comercial, flag, modelo o migración se ejecuta en esta entrega.

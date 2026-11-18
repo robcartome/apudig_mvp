@@ -1,0 +1,13 @@
+﻿{
+    "baselineTests":  724,
+    "currentTests":  727,
+    "failures":  78,
+    "errors":  35,
+    "newFailingCases":  [
+
+                        ],
+    "resolvedCases":  [
+
+                      ],
+    "globalApproved":  false
+}

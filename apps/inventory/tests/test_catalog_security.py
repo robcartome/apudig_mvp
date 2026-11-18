@@ -105,8 +105,10 @@ class CatalogSecurityTest(TestCase):
                 self.assertEqual([row["id"] for row in response.json()["results"]], [str(self.product.pk)])
                 detail = self.get(f"/api/v1/catalog/products/{self.product.pk}/detail/", token)
                 self.assertEqual(detail.status_code, 200)
-                for field in ("price_purchase", "supplier_codes", "price_list", "stock_by_warehouse"):
+                for field in ("price_purchase", "supplier_codes"):
                     self.assertNotIn(field, detail.json())
+                self.assertEqual([price["price_list_name"] for price in detail.json()["price_list"]], ["Internal A"])
+                self.assertEqual([row["warehouse_name"] for row in detail.json()["stock_by_warehouse"]], ["Warehouse A"])
                 self.assertEqual(self.get("/api/v1/catalog/private/products/", token).status_code, 403)
                 self.assertEqual(self.get(f"/api/v1/catalog/products/{self.foreign.pk}/detail/", token).status_code, 404)
         UserCompanyAccess.objects.filter(user=self.reader).delete()
@@ -123,8 +125,11 @@ class CatalogSecurityTest(TestCase):
         self.assertEqual(page["results"][0]["stock"], 6.0)
         for path in (f"catalog/products/{self.product.pk}/detail/", f"products/{self.product.pk}/"):
             detail = self.get("/api/v1/" + path).json()
-            for field in ("price_purchase", "price_list", "stock_by_warehouse", "supplier_codes"):
+            for field in ("price_purchase", "supplier_codes"):
                 self.assertNotIn(field, detail)
+            if path.startswith("products/"):
+                self.assertNotIn("price_list", detail)
+                self.assertNotIn("stock_by_warehouse", detail)
         self.assertEqual(self.get("/api/v1/catalog/products/", search="PRIVATE-A").json()["total"], 0)
 
     def test_private_endpoint_requires_company_administration(self):
@@ -137,6 +142,40 @@ class CatalogSecurityTest(TestCase):
             self.assertEqual([p["price_list_name"] for p in data["price_list"]], ["Internal A"])
             self.assertEqual([w["warehouse_name"] for w in data["stock_by_warehouse"]], ["Warehouse A"])
             self.assertEqual(data["supplier_codes"], ["PRIVATE-A"])
+
+    def test_worker_detail_matches_administrative_sales_data_without_purchase_price(self):
+        path = f"/api/v1/catalog/products/{self.product.pk}/detail/"
+        for user in (self.reader, self.administrator, self.root):
+            basic = self.get(path, self.token(user)).json()
+            private = self.get(f"/api/v1/catalog/private/products/{self.product.pk}/detail/", self.token(self.administrator)).json()
+            for field in ("price_sale", "price_list", "stock_by_warehouse", "stock_total", "unit", "description", "images"):
+                self.assertEqual(basic[field], private[field], field)
+            for field in ("brand", "category"):
+                self.assertEqual(basic.get(field), private.get(field), field)
+            self.assertNotIn("price_purchase", basic)
+            self.assertNotIn("supplier_codes", basic)
+            self.assertEqual(basic["price_list"][0]["amount"], "11.00")
+            self.assertEqual(basic["stock_by_warehouse"][0]["quantity"], 6.0)
+
+    def test_worker_sales_details_exclude_inactive_lists_prices_stores_and_foreign_relations(self):
+        inactive_list = PriceList.objects.create(company=self.a, name="Inactive list", active=False)
+        ProductPrice.objects.create(product=self.product, price_list=inactive_list, amount="123.00")
+        ProductPrice.objects.filter(product=self.product, price_list=self.price_list).update(active=False)
+        self.store.active = False
+        self.store.save(update_fields=["active"])
+        response = self.get(f"/api/v1/catalog/products/{self.product.pk}/detail/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["price_list"], [])
+        self.assertEqual(response.json()["stock_by_warehouse"], [])
+
+    def test_worker_warehouse_details_follow_authorized_store_context(self):
+        second_store = Store.objects.create(company=self.a, name="Other own store")
+        warehouse = Warehouse.objects.create(store=second_store, name="Other own warehouse")
+        StockByWarehouse.objects.create(product=self.product, warehouse=warehouse, quantity="4.000")
+        UserStore.objects.create(user=self.reader, store=self.store, role="SELLER")
+        response = self.get(f"/api/v1/catalog/products/{self.product.pk}/detail/", self.token(store_id=str(self.store.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["warehouse_name"] for row in response.json()["stock_by_warehouse"]], ["Warehouse A"])
 
     def test_foreign_detail_and_store_claim_are_rejected(self):
         for path in (f"catalog/products/{self.foreign.pk}/detail/", f"products/{self.foreign.pk}/"):

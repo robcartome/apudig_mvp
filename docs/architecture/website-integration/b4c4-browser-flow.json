@@ -1,0 +1,33 @@
+{
+  "database": "test_apudig_b4c_http",
+  "stages": [
+    {
+      "stage": "draft",
+      "browserRole": "CMS editor",
+      "browserAction": "Guardar borrador",
+      "verifiedAt": "2026-11-18T16:26:14.316Z",
+      "draftRevision": 6,
+      "publicRevision": 3,
+      "draftTitleMatches": true,
+      "publicTitleMatches": false,
+      "publicHtmlMatches": false,
+      "tenantBIsolated": true,
+      "commerceEnabled": false,
+      "cmsWritesFromThisScript": false
+    },
+    {
+      "stage": "published",
+      "browserRole": "CMS editor",
+      "browserAction": "Publicar revision",
+      "verifiedAt": "2026-11-18T16:27:54.474Z",
+      "draftRevision": 7,
+      "publicRevision": 7,
+      "draftTitleMatches": true,
+      "publicTitleMatches": true,
+      "publicHtmlMatches": true,
+      "tenantBIsolated": true,
+      "commerceEnabled": false,
+      "cmsWritesFromThisScript": false
+    }
+  ]
+}

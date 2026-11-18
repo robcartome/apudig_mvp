@@ -2,12 +2,11 @@ import datetime
 
 from django.conf import settings
 from django.test import TestCase
-from django.urls import Resolver404, resolve
 
 from apps.api.v1.auth.tokens import build_token
 from apps.companies.models import Company, Store, UserCompanyAccess
 from apps.users.models import Permission, Role, RolePermission, User, UserRole, UserStore
-from apps.websites.models import Website
+from apps.websites.models import Website, WebsiteCatalogSettings
 from apps.websites.permissions import WebsiteAccessDenied, website_capabilities
 from apps.websites.selectors import get_company_website
 
@@ -168,9 +167,14 @@ class WebsiteDiscoveryTest(TestCase):
         with self.assertRaises(WebsiteAccessDenied):
             website_capabilities(self.user, None)
 
-    def test_discovery_is_read_only_and_commercial_routes_are_not_exposed(self):
+    def test_discovery_is_read_only_and_commercial_routes_remain_authorized(self):
         response = self.client.post(self.url, {}, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token()}")
         self.assertEqual(response.status_code, 405)
-        for suffix in (f"websites/{self.website.pk}/catalog-settings/", "storefront/sites/a.example.com/products/"):
-            with self.subTest(path=suffix), self.assertRaises(Resolver404):
-                resolve("/api/v1/" + suffix)
+        # B4-B now exposes these routes: read-only discovery must not bootstrap
+        # settings, grant policy management or expose an unpublished website.
+        configuration = self.client.get(f"/api/v1/websites/{self.website.pk}/catalog-settings/", HTTP_AUTHORIZATION=f"Bearer {self.token()}")
+        self.assertEqual(configuration.status_code, 200)
+        self.assertFalse(configuration.json()["canManagePolicy"])
+        self.assertNotIn("priceListOptions", configuration.json())
+        self.assertFalse(WebsiteCatalogSettings.objects.filter(website=self.website).exists())
+        self.assertEqual(self.client.get("/api/v1/storefront/sites/a.example.com/products/").status_code, 404)

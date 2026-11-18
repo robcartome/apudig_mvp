@@ -1,0 +1,56 @@
+{
+  "database": "test_apudig_b4c_http",
+  "backend": "http://127.0.0.1:8770/api/v1",
+  "phases": [
+    "C1"
+  ],
+  "results": [
+    {
+      "name": "SSR catalog uses authorized A products, server total and no private fields",
+      "passed": true
+    },
+    {
+      "name": "real pagination reads a second backend page, without local slicing",
+      "passed": true
+    },
+    {
+      "name": "repeated filters and server facets remain consistent",
+      "passed": true
+    },
+    {
+      "name": "A and B HTML and metadata are isolated by host",
+      "passed": true
+    },
+    {
+      "name": "unverified, disabled, unknown and unpublished domains are 404",
+      "passed": true
+    },
+    {
+      "name": "unpublished and foreign product details are 404",
+      "passed": true
+    },
+    {
+      "name": "real detail contains authorized units, currency and product metadata",
+      "passed": true
+    },
+    {
+      "name": "authorized zero and missing price are distinct",
+      "passed": true
+    },
+    {
+      "name": "cart/orders remain disabled and worker catalog remains protected",
+      "passed": true
+    },
+    {
+      "name": "Home never invites quotation or labels real published banners as demo while commerce is disabled",
+      "passed": true
+    },
+    {
+      "name": "RSC includes only authorized public product data",
+      "passed": true
+    }
+  ],
+  "mocks": false,
+  "frontend": "Next production build; public SSR/RSC",
+  "visualValidated": false
+}

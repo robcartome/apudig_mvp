@@ -1,0 +1,34 @@
+﻿{
+    "backendBase":  "websites_backend@e3f479f",
+    "frontendBase":  "mvp_website@856b711",
+    "baseline":  {
+                     "total":  723,
+                     "failures":  79,
+                     "errors":  36
+                 },
+    "current":  {
+                    "total":  724,
+                    "failures":  78,
+                    "errors":  35
+                },
+    "newFailingCases":  [
+
+                        ],
+    "notReproduced":  [
+                          "apps.pos.tests.test_cash_session_views.CashSessionHistoryViewTest.test_daily_consult_filters_closures_to_selected_day",
+                          "apps.sales.tests.test_documents.SalesDocumentServiceTest.test_void_reverses_inventory_exit"
+                      ],
+    "changedClassification":  [
+
+                              ],
+    "globalERPApproved":  false,
+    "commerceEnabled":  false,
+    "frontendNodeTests":  59,
+    "realHttpChecks":  17,
+    "visualQA":  "pending: browser URL could not be verified by Computer Use",
+    "realR2":  "pending",
+    "habitualDatabaseWrites":  false,
+    "migrationsCreated":  [
+
+                          ]
+}

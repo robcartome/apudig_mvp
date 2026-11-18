@@ -205,8 +205,8 @@ class CatalogApiTest(TestCase):
         self.assertEqual(data["price_sale"], "160.00")
         self.assertNotIn("price_purchase", data)  # absent from the worker projection
         self.assertEqual(data["stock_total"], 8.5)
-        self.assertNotIn("price_list", data)
-        self.assertNotIn("stock_by_warehouse", data)
+        self.assertIn("price_list", data)
+        self.assertEqual([row["warehouse_name"] for row in data["stock_by_warehouse"]], ["Almacen Principal"])
         self.assertNotIn("supplier_codes", data)
 
     def test_private_catalog_detail_administrator_sees_price_purchase(self):

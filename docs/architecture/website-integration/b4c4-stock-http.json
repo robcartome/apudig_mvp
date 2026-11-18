@@ -1,0 +1,12 @@
+{
+  "database": "test_apudig_b4c_http",
+  "mode": "stock",
+  "results": [
+    {
+      "name": "live stock change respects base/pack units and leaves CMS revision unchanged",
+      "passed": true
+    }
+  ],
+  "mocks": false,
+  "browserInteraction": false
+}

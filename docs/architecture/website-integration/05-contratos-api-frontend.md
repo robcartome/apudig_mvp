@@ -1,5 +1,7 @@
 # 05 — Contratos API y matriz de integración frontend
 
+Actualización B4-B (17/11/2026): K0–K7 implementados en [21](21-entrega-b4-b.md), con decisiones19 y [OpenAPI](b4-openapi.json). Commerce sigue false y Next no está conectado a esos endpoints. Los textos históricos que siguen conservan el estado de sus respectivas entregas; registro comercial y WhatsApp aún son diseño.
+
 Estado B3: [integracion backend/Next y pruebas HTTP](11-entrega-b3.md) implementadas. R2 real y validacion visual en navegador siguen pendientes; no implica aceptacion integral ni habilita B4.
 
 Fecha: 15/11/2026. Todos los contratos de integración de este archivo son **propuestos**, salvo los marcados existentes en develop o recuperables en websites_v0. No hay endpoints nuevos implementados por esta entrega.

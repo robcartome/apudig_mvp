@@ -1,0 +1,28 @@
+{
+  "database": "test_apudig_b4c_http",
+  "mode": "editorial",
+  "results": [
+    {
+      "name": "existing login, company selection and refresh preserve current authorization",
+      "passed": true
+    },
+    {
+      "name": "draft and preview remain private; publishing updates real SSR banner and metadata",
+      "passed": true
+    },
+    {
+      "name": "commercial 412/428 retain both client drafts and do not overwrite server data",
+      "passed": true
+    },
+    {
+      "name": "CMS publishes and withdraws the existing ERP link; basic workers cannot edit",
+      "passed": true
+    },
+    {
+      "name": "switching A to B drops CMS grants and old Website references are rejected",
+      "passed": true
+    }
+  ],
+  "mocks": false,
+  "browserInteraction": false
+}

@@ -1,0 +1,10 @@
+{
+  "database": {
+    "engine": "postgresql",
+    "name": "test_apudig_catalog_p0_tests",
+    "version": "18.1"
+  },
+  "total": 167,
+  "failures": [],
+  "errors": []
+}

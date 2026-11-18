@@ -6,5 +6,6 @@ class WebsitesConfig(AppConfig):
     name = "apps.websites"
 
     def ready(self):
-        # Register API documentation only; no bootstrap/publication signals.
+        # Documentation and fail-closed commercial cleanup; never bootstrap or publish.
         from apps.api.v1.websites import schema  # noqa: F401
+        from apps.websites.catalog import signals  # noqa: F401
