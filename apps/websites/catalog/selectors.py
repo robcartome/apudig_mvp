@@ -30,12 +30,18 @@ def configured_warehouses(website, configuration):
     return configuration.warehouses.filter(active=True, store__active=True, store__company_id=website.company_id)
 
 
-def catalog_offers(website, *, detail=False, configuration=_UNSET_CONFIGURATION):
+def catalog_offers(website, *, detail=False, configuration=_UNSET_CONFIGURATION, customer_price_list=None):
     if configuration is _UNSET_CONFIGURATION:
         configuration = WebsiteCatalogSettings.objects.filter(website=website).first()
     warehouses = configured_warehouses(website, configuration)
     has_warehouses = warehouses.exists()
     default_list_id = configuration.default_price_list_id if configuration else None
+    # The account service supplies this list only after current approval and
+    # contact checks. It takes precedence over public product overrides.
+    if customer_price_list is not None:
+        from apps.websites.errors import WebsiteError
+        if customer_price_list.company_id != website.company_id or not customer_price_list.active:
+            raise WebsiteError("Lista comercial no autorizada.", code="CUSTOMER_PRICE_UNAVAILABLE", status=409)
     prices = ProductPrice.objects.filter(
         product_id=OuterRef("product_id"), price_list_id=OuterRef("offer_list_id"),
         active=True, price_list__active=True, price_list__company_id=website.company_id,
@@ -53,7 +59,7 @@ def catalog_offers(website, *, detail=False, configuration=_UNSET_CONFIGURATION)
         website=website, is_published=True, product__active=True, product__company_id=website.company_id,
     ).select_related("product__unit", "product__category", "product__brand").annotate(
         offer_name=Coalesce(NullIf(F("commercial_title"), Value("")), F("product__name")),
-        offer_list_id=Coalesce(F("price_list_id"), Value(default_list_id, output_field=UUIDField()), output_field=UUIDField()),
+        offer_list_id=Value(customer_price_list.pk, output_field=UUIDField()) if customer_price_list is not None else Coalesce(F("price_list_id"), Value(default_list_id, output_field=UUIDField()), output_field=UUIDField()),
         offer_factor=Coalesce(Subquery(default_unit.values("conversion_factor")[:1]), Value(Decimal("1")), output_field=FACTOR_FIELD),
         offer_unit_id=Coalesce(Subquery(default_unit.values("unit_id")[:1]), F("product__unit_id"), output_field=UUIDField()),
         offer_unit=Coalesce(Subquery(default_unit.values("unit__name")[:1]), F("product__unit__name")),

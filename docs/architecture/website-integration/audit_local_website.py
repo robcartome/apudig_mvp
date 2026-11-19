@@ -1,11 +1,16 @@
 """Read-only local Website audit; never print storage credentials or connection strings."""
+import argparse
 import json
 import os
 from pathlib import Path
 import sys
 
-if sys.argv[1:] not in ([], ["--final"]):
-    raise SystemExit("Usage: audit_local_website.py [--final]")
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--final", action="store_true")
+parser.add_argument("--report", help="JSON filename in the architecture evidence directory")
+arguments = parser.parse_args()
+if arguments.report and (Path(arguments.report).name != arguments.report or not arguments.report.endswith(".json")):
+    parser.error("--report must be a JSON filename without directories")
 
 repository = Path(__file__).resolve().parents[3]
 os.chdir(repository)
@@ -44,7 +49,7 @@ with transaction.atomic():
         "storageNetworkAccess": False,
         "habitualDatabaseWrites": False,
     }
-filename = "b4c4-local-environment-final.json" if sys.argv[1:] else "b4c4-local-environment.json"
+filename = arguments.report or ("b4c4-local-environment-final.json" if arguments.final else "b4c4-local-environment.json")
 report = repository / "docs/architecture/website-integration" / filename
 report.write_text(json.dumps(result, indent=2), encoding="utf-8")
 print(json.dumps(result, indent=2))

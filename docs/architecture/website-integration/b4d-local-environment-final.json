@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-11-19T12:42:19.002078+00:00",
+  "database": {
+    "engine": "postgresql",
+    "name": "apudig_mvp",
+    "version": "18.1",
+    "transaction": "READ ONLY"
+  },
+  "migrations": {
+    "consistent": true,
+    "pending": [
+      "websites.0010_commercial_accounts_and_email_challenges"
+    ]
+  },
+  "domain": {
+    "hostname": "demo.localhost",
+    "status": "ACTIVE",
+    "verified": true,
+    "websiteStatus": "PUBLISHED",
+    "companyActive": true,
+    "hasPublishedRevision": true,
+    "editorialRevision": 17
+  },
+  "catalog": {
+    "links": 0,
+    "published": 0,
+    "hasSettings": false,
+    "hasDefaultPriceList": false,
+    "authorizedWarehouses": 0
+  },
+  "media": {
+    "activeRecords": 0,
+    "hasPersistentPrefix": false
+  },
+  "storageConfigurationPresent": {
+    "R2_ENDPOINT_URL": false,
+    "R2_ACCOUNT_ID": false,
+    "R2_ACCESS_KEY_ID": false,
+    "R2_SECRET_ACCESS_KEY": false,
+    "R2_BUCKET_NAME": false,
+    "R2_PUBLIC_BASE_URL": true
+  },
+  "storageNetworkAccess": false,
+  "habitualDatabaseWrites": false
+}

@@ -1,4 +1,5 @@
 from django.urls import path
+from .store_access import MyAccessibleStoresAPIView
 
 from apps.api.v1.users.views import (
     AssignRoleAPIView,
@@ -16,6 +17,7 @@ from apps.api.v1.users.views import (
 )
 
 urlpatterns = [
+    path("auth/store-access/stores/me/", MyAccessibleStoresAPIView.as_view(), name="api_v1_my_accessible_stores"),
     path("auth/token/", TokenObtainAPIView.as_view(), name="api_v1_token_obtain"),
     path("auth/refresh/", TokenRefreshAPIView.as_view(), name="api_v1_token_refresh"),
     path("auth/me/", AuthMeAPIView.as_view(), name="api_v1_auth_me"),

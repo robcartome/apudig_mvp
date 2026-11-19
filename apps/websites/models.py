@@ -755,3 +755,52 @@ class WebsiteProduct(TimeStampedModel):
 
     def __str__(self):
         return f"{self.website}: {self.product}"
+
+
+class CommercialAccount(TimeStampedModel):
+    """Commercial authorization, independent from employee membership."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Activa"
+        SUSPENDED = "SUSPENDED", "Suspendida"
+        REVOKED = "REVOKED", "Revocada"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey("companies.Company", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    customer = models.ForeignKey("partners.Customer", on_delete=models.PROTECT)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    verified_email = models.EmailField(blank=True, editable=False)
+    verified_at = models.DateTimeField(null=True, blank=True, editable=False)
+    wholesale_approved_at = models.DateTimeField(null=True, blank=True, editable=False)
+    wholesale_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="approved_commercial_accounts", editable=False,
+    )
+
+    class Meta:
+        db_table = "website_commercial_accounts"
+        constraints = [models.UniqueConstraint(fields=("user", "company"), name="uniq_commercial_user_company")]
+
+    def clean(self):
+        super().clean()
+        if self.customer_id and self.customer.company_id != self.company_id:
+            raise ValidationError({"customer": "El cliente debe pertenecer a la misma empresa."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class CommercialEmailChallenge(TimeStampedModel):
+    """One-use email proof. Delivery is intentionally not implemented here."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    account = models.ForeignKey(CommercialAccount, on_delete=models.CASCADE, related_name="email_challenges")
+    email = models.EmailField()
+    token_digest = models.CharField(max_length=64, unique=True, editable=False)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        db_table = "website_commercial_email_challenges"

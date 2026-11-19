@@ -1,5 +1,7 @@
 # Cuentas comerciales y solicitudes WhatsApp: auditoría y propuesta
 
+Actualización19/11/2026: el usuario autoriza continuar B4 y confirma contacto verificado para pedidos básicos, aprobación ADMIN solo para mayoristas y registro público deshabilitado mientras no haya proveedor. Se implementó parcialmente el núcleo de cuentas/pruebas de correo, autorización mayorista y recálculo interno; ver [24-avance-b4-d.md](24-avance-b4-d.md). Las propuestas siguientes son antecedentes: registro, sesión comercial, solicitud persistida y WhatsApp siguen pendientes; no se ha activado comercio ni aplicado0010 en la base habitual.
+
 17/11/2026. **Diseño únicamente**: no hay nuevos modelos, migraciones, endpoints de registro, rutas, carrito o envío WhatsApp. Continúa16/18 y `ad_frontend/docs/dashboard-y-registro-clientes.md`. Las propuestas siguientes requieren revisión antes de implementarse.
 
 ## Lo que existe realmente
