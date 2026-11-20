@@ -409,7 +409,7 @@ class WebsiteCatalogTest(CommercialCatalogFixture, TestCase):
 
     def test_foreign_policy_references_are_atomic_and_do_not_modify_erp(self):
         original = self.etag()
-        for payload in ({"defaultPriceListId": str(self.foreign_list.pk)}, {"warehouseIds": [str(self.foreign_warehouse.pk)]}, {"warehouseIds": [str(self.warehouse.pk)] * 2}, {"productsPerPage": 0}, {"commerceEnabled": True}):
+        for payload in ({"defaultPriceListId": str(self.foreign_list.pk)}, {"warehouseIds": [str(self.foreign_warehouse.pk)]}, {"warehouseIds": [str(self.warehouse.pk)] * 2}, {"productsPerPage": 0}, {"commerceEnabled": "true"}):
             result = self.patch_settings(payload, etag=original)
             self.assertEqual(result.status_code, 400, result.content)
             if "defaultPriceListId" in payload:

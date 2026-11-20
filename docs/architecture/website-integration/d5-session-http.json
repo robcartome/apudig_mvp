@@ -1,0 +1,49 @@
+{
+  "database": "test_apudig_b4c_http",
+  "type": "real isolated HTTP; synthetic verification only, no email delivery",
+  "results": [
+    {
+      "name": "SSR account routes contain no customer PII or JWT and unknown hosts remain 404",
+      "passed": true
+    },
+    {
+      "name": "customer without employee membership enters real account A",
+      "passed": true
+    },
+    {
+      "name": "commercial tokens cannot access labor catalog, CMS or company selection",
+      "passed": true
+    },
+    {
+      "name": "A and B are independent; cross-domain refresh and profile are denied",
+      "passed": true
+    },
+    {
+      "name": "real refresh preserves commercial purpose and hostname",
+      "passed": true
+    },
+    {
+      "name": "admin approval/revocation is live with ETag; CMS cannot administer accounts",
+      "passed": true
+    },
+    {
+      "name": "existing worker login/catalog/CMS contracts still work",
+      "passed": true
+    },
+    {
+      "name": "real CORS allowlist distinguishes local integration from unknown origin",
+      "passed": true
+    },
+    {
+      "name": "server logout invalidates A access and refresh while B remains authorized",
+      "passed": true
+    },
+    {
+      "name": "registration and commerce remain disabled without creating requests",
+      "passed": true
+    }
+  ],
+  "total": 10,
+  "realRegistration": false,
+  "commerceEnabled": false
+}

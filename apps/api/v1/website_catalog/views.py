@@ -76,7 +76,7 @@ class PublicProductListAPIView(PublicCatalogAPIView):
     @catalog_schema(operation_id="website_catalog_products_list", tags=["Website catalog"], auth=[], parameters=PRODUCT_PARAMS, responses=PublicProductsPageSerializer)
     def get(self, request, hostname):
         website = selectors.public_website(hostname)
-        configuration = WebsiteCatalogSettings.objects.filter(website=website).first()
+        configuration = WebsiteCatalogSettings.objects.defer("commerce_enabled").filter(website=website).first()
         query = query_values(request, ProductQuerySerializer, default_limit=configuration.products_per_page if configuration else 24)
         offers = selectors.catalog_offers(website, configuration=configuration)
         results = selectors.order_offers(selectors.filter_offers(offers, query), query["ordering"])

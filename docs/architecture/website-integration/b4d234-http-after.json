@@ -1,0 +1,12 @@
+{
+  "database": "test_apudig_b4c_http",
+  "results": [
+    {
+      "name": "live ERP price change invalidates prior confirmation without republishing CMS",
+      "passed": true
+    }
+  ],
+  "total": 1,
+  "emailDelivery": "not attempted; disabled",
+  "ordersEnabled": false
+}

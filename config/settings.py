@@ -198,6 +198,24 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "apps.api.v1.pagination.DefaultLimitOffsetPagination",
 }
 
+# Website registration is independent from commerce activation. No delivery or
+# public registration is enabled by merely publishing a privacy notice.
+WEBSITE_REGISTRATION_ENABLED = os.getenv("WEBSITE_REGISTRATION_ENABLED", "0") == "1"
+WEBSITE_REGISTRATION_IP_LIMIT = int(os.getenv("WEBSITE_REGISTRATION_IP_LIMIT", "20"))
+WEBSITE_REGISTRATION_EMAIL_LIMIT = int(os.getenv("WEBSITE_REGISTRATION_EMAIL_LIMIT", "3"))
+WEBSITE_REGISTRATION_DOMAIN_LIMIT = int(os.getenv("WEBSITE_REGISTRATION_DOMAIN_LIMIT", "200"))
+WEBSITE_REGISTRATION_GLOBAL_LIMIT = int(os.getenv("WEBSITE_REGISTRATION_GLOBAL_LIMIT", "1000"))
+WEBSITE_TRUSTED_PROXY_CIDRS = tuple(value.strip() for value in os.getenv("WEBSITE_TRUSTED_PROXY_CIDRS", "").split(",") if value.strip())
+WEBSITE_EMAIL_BACKEND = os.getenv("WEBSITE_EMAIL_BACKEND", "disabled")
+WEBSITE_EMAIL_FROM = os.getenv("WEBSITE_EMAIL_FROM", "")
+WEBSITE_SMTP_HOST = os.getenv("WEBSITE_SMTP_HOST", "")
+WEBSITE_SMTP_PORT = int(os.getenv("WEBSITE_SMTP_PORT", "587"))
+WEBSITE_SMTP_USER = os.getenv("WEBSITE_SMTP_USER", "")
+WEBSITE_SMTP_PASSWORD = os.getenv("WEBSITE_SMTP_PASSWORD", "")
+WEBSITE_SMTP_USE_TLS = os.getenv("WEBSITE_SMTP_USE_TLS", "1") == "1"
+WEBSITE_SMTP_USE_SSL = os.getenv("WEBSITE_SMTP_USE_SSL", "0") == "1"
+WEBSITE_EMAIL_DEV_ORIGIN = os.getenv("WEBSITE_EMAIL_DEV_ORIGIN", "")
+
 
 # ── OpenAPI / Swagger ────────────────────────────────────────────────────────
 SPECTACULAR_SETTINGS = {

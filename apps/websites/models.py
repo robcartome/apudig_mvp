@@ -642,6 +642,7 @@ class WebsiteCatalogSettings(TimeStampedModel):
     """Public catalog policy without copying ERP pricing or stock."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    commerce_enabled = models.BooleanField(default=False, db_default=False)
     website = models.OneToOneField(
         Website, on_delete=models.CASCADE, related_name="catalog_settings"
     )
@@ -804,3 +805,148 @@ class CommercialEmailChallenge(TimeStampedModel):
 
     class Meta:
         db_table = "website_commercial_email_challenges"
+
+
+class CommercialSession(models.Model):
+    """Revocable, hostname-bound commercial JWT session, without ERP grants."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    account = models.ForeignKey(CommercialAccount, on_delete=models.CASCADE, related_name="sessions")
+    website = models.ForeignKey(Website, on_delete=models.CASCADE)
+    customer = models.ForeignKey("partners.Customer", on_delete=models.CASCADE)
+    hostname = models.CharField(max_length=253)
+    auth_hash = models.CharField(max_length=64, editable=False)
+    verified_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "website_commercial_sessions"
+
+
+class WebsitePrivacyNotice(models.Model):
+    """Immutable notice accepted by an applicant; never an invented default."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    website = models.ForeignKey(Website, on_delete=models.CASCADE)
+    version = models.CharField(max_length=40)
+    text = models.TextField()
+    pending_retention_days = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "website_privacy_notices"
+        constraints = [models.UniqueConstraint(fields=("website", "version"), name="uniq_website_privacy_version")]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("Crea una nueva versión del aviso en lugar de modificar evidencias anteriores.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class WebsiteRegistrationPolicy(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    website = models.OneToOneField(Website, on_delete=models.CASCADE, related_name="registration_policy")
+    notice = models.ForeignKey(WebsitePrivacyNotice, on_delete=models.PROTECT)
+    linking_mode = models.CharField(max_length=20, choices=(("REVIEW_ALL", "Revisar todos los vínculos"), ("NEW_OR_REVIEW", "Crear nuevo sin coincidencias")), default="REVIEW_ALL")
+
+    class Meta:
+        db_table = "website_registration_policies"
+
+
+class CommercialRegistration(TimeStampedModel):
+    class Purpose(models.TextChoices):
+        REGISTER = "REGISTER", "Registro"
+        RECOVERY = "RECOVERY", "Recuperación"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pendiente de verificación"
+        REVIEW = "REVIEW", "Revisión de vínculo"
+        COMPLETE = "COMPLETE", "Completada"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    website = models.ForeignKey(Website, on_delete=models.CASCADE)
+    email = models.EmailField()
+    name = models.CharField(max_length=150, blank=True)
+    purpose = models.CharField(max_length=12, choices=Purpose.choices)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    notice = models.ForeignKey(WebsitePrivacyNotice, on_delete=models.PROTECT)
+    consented_at = models.DateTimeField()
+    token_digest = models.CharField(max_length=64, unique=True, null=True, editable=False)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    account = models.ForeignKey(CommercialAccount, on_delete=models.SET_NULL, null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_website_registrations")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "website_commercial_registrations"
+        indexes = [models.Index(fields=("website", "status", "created_at"), name="idx_web_registration_review")]
+
+
+class CommercialConsent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    notice = models.ForeignKey(WebsitePrivacyNotice, on_delete=models.PROTECT)
+    accepted_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "website_commercial_consents"
+        constraints = [models.UniqueConstraint(fields=("user", "notice"), name="uniq_user_website_notice_consent")]
+
+
+class WebsiteEmailOutbox(TimeStampedModel):
+    class Status(models.TextChoices):
+        QUEUED = "QUEUED", "En cola"
+        SENDING = "SENDING", "Enviando"
+        SENT = "SENT", "Enviado"
+        FAILED = "FAILED", "Error"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    registration = models.OneToOneField(CommercialRegistration, on_delete=models.CASCADE)
+    hostname = models.CharField(max_length=253)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.QUEUED)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        db_table = "website_email_outbox"
+
+
+class WebsiteRegistrationQuota(models.Model):
+    """Bounded shared abuse counters, with no raw addresses or emails."""
+    key = models.CharField(max_length=64)
+    window = models.DateTimeField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "website_registration_quotas"
+        constraints = [models.UniqueConstraint(fields=("key", "window"), name="uniq_registration_quota_window")]
+        indexes = [models.Index(fields=("window",), name="idx_registration_quota_window")]
+
+
+class CommercialOrderRequest(models.Model):
+    """An expiring intent, never a sale, reservation or ERP quotation."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    website = models.ForeignKey(Website, on_delete=models.CASCADE)
+    account = models.ForeignKey(CommercialAccount, on_delete=models.CASCADE)
+    customer = models.ForeignKey("partners.Customer", on_delete=models.CASCADE)
+    privacy_notice = models.ForeignKey(WebsitePrivacyNotice, on_delete=models.PROTECT)
+    idempotency_key = models.UUIDField()
+    body_digest = models.CharField(max_length=64)
+    offer = models.JSONField()
+    note = models.CharField(max_length=500, blank=True)
+    destination_phone = models.CharField(max_length=15)
+    editorial_revision = models.PositiveBigIntegerField()
+    share_confirmed = models.BooleanField(default=False)
+    status = models.CharField(max_length=16, choices=(("PREPARED", "Preparada"), ("CANCELLED", "Cancelada")), default="PREPARED")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "website_commercial_order_requests"
+        constraints = [models.UniqueConstraint(fields=("website", "account", "idempotency_key"), name="uniq_commercial_request_key")]

@@ -35,6 +35,12 @@ class ProductQuerySerializer(SearchPageQuerySerializer):
 
 
 class CatalogSettingsPatchSerializer(StrictSerializer):
+    commerceEnabled = serializers.BooleanField(required=False)
+
+    def validate_commerceEnabled(self, value):
+        if type(self.initial_data.get("commerceEnabled")) is not bool:
+            raise serializers.ValidationError("Selecciona expresamente habilitar o deshabilitar solicitudes.")
+        return value
     defaultPriceListId = serializers.UUIDField(allow_null=True, required=False)
     warehouseIds = serializers.ListField(child=serializers.UUIDField(), max_length=100, required=False)
     showOutOfStock = serializers.BooleanField(required=False)
@@ -184,6 +190,8 @@ class CatalogSettingsSerializer(OmitAbsentPolicyFieldsSerializer):
     websiteId = serializers.UUIDField()
     currency = serializers.CharField()
     commerceEnabled = serializers.BooleanField()
+    commerceReady = serializers.BooleanField(required=False)
+    commerceBlockers = serializers.ListField(child=serializers.DictField(child=serializers.CharField()), required=False)
     showOutOfStock = serializers.BooleanField()
     productsPerPage = serializers.IntegerField()
     canManagePolicy = serializers.BooleanField()

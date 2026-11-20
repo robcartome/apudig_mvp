@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-20",
+  "nodeTests": 85,
+  "nodeFailures": 0,
+  "lint": "passed",
+  "buildIsolated": "passed",
+  "buildHabitualRestored": "passed",
+  "qaVisual": "pending",
+  "smtpReal": "not tested, no provider",
+  "smtpSimulation": "explicit locmem external adapter in disposable HTTP environment",
+  "r2Real": "not tested, no authorized credentials",
+  "commerceHabitual": false,
+  "registrationHabitual": false
+}

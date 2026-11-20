@@ -1,0 +1,28 @@
+{
+  "database": "test_apudig_b4c_http",
+  "results": [
+    {
+      "name": "real verified session receives and confirms current offer with orders disabled",
+      "passed": true
+    },
+    {
+      "name": "price and customer tampering fail without altering the selected cart",
+      "passed": true
+    },
+    {
+      "name": "registration is closed and no provider is simulated as real delivery",
+      "passed": true
+    },
+    {
+      "name": "own request history is empty and creation stays blocked without side effects",
+      "passed": true
+    },
+    {
+      "name": "account/cart and registration SSR contain no private account information",
+      "passed": true
+    }
+  ],
+  "total": 5,
+  "emailDelivery": "not attempted; disabled",
+  "ordersEnabled": false
+}

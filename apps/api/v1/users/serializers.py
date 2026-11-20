@@ -28,6 +28,13 @@ class AuthCompanyListItemSerializer(serializers.Serializer):
 class TokenObtainRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(trim_whitespace=False)
+    context = serializers.ChoiceField(choices=("erp", "commercial"), default="erp")
+    hostname = serializers.CharField(max_length=253, required=False)
+
+    def validate(self, attrs):
+        if attrs["context"] == "commercial" and not attrs.get("hostname"):
+            raise serializers.ValidationError({"hostname": "Indica el dominio de la empresa."})
+        return attrs
 
 
 class TokenObtainResponseSerializer(serializers.Serializer):
@@ -43,6 +50,7 @@ class TokenObtainResponseSerializer(serializers.Serializer):
 class TokenRefreshRequestSerializer(serializers.Serializer):
     refresh = serializers.CharField(required=False, allow_blank=True)
     refresh_token = serializers.CharField(required=False, allow_blank=True)
+    hostname = serializers.CharField(max_length=253, required=False)
 
     def validate(self, attrs):
         refresh = attrs.get("refresh") or attrs.get("refresh_token")

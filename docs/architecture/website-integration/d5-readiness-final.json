@@ -1,0 +1,28 @@
+{
+  "hostname": "demo.localhost",
+  "engine": "postgresql",
+  "pendingMigrations": [
+    "websites.0011_commercial_sessions",
+    "websites.0012_registration_privacy_and_email_outbox",
+    "websites.0013_commercial_order_requests",
+    "websites.0014_commerce_opt_in",
+    "websites.0015_registration_abuse_limits"
+  ],
+  "commerceEnabled": false,
+  "commerceBlockers": [
+    {
+      "code": "SCHEMA_PENDING",
+      "message": "Aplica y verifica las migraciones comerciales en el entorno autorizado."
+    },
+    {
+      "code": "PUBLIC_OFFER_UNAVAILABLE",
+      "message": "Publica al menos un producto con precio de una lista autorizada en la moneda del Website."
+    }
+  ],
+  "registrationEnabled": false,
+  "smtpConfigurationValid": false,
+  "smtpDeliveryValidated": false,
+  "r2ConfigurationPresent": false,
+  "r2NetworkTested": false,
+  "writes": false
+}

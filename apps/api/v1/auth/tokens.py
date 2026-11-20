@@ -22,6 +22,8 @@ def decode_token(token: str) -> dict | None:
 
 
 def build_access_from_refresh_payload(payload: dict) -> str:
+    if payload.get("purpose") not in (None, "erp"):
+        raise ValueError("Refresh requires its original authentication context")
     access_payload = {
         "sub": payload["sub"],
         "email": payload["email"],

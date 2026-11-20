@@ -12,6 +12,7 @@ from apps.websites.errors import WebsiteError
 from apps.websites.models import Website, WebsiteCatalogSettings, WebsiteProduct
 from apps.websites.selectors import get_company_website
 from .permissions import require_catalog_permission
+from apps.websites.commerce import commerce_schema_ready, commerce_readiness, require_commerce_ready
 
 
 def authorized_website(*, user, company_id, website_id, store_id=None, operation="read", lock=False):
@@ -25,12 +26,13 @@ def authorized_website(*, user, company_id, website_id, store_id=None, operation
 
 
 def commercial_etag(website):
-    settings = WebsiteCatalogSettings.objects.filter(website=website).first()
+    settings = WebsiteCatalogSettings.objects.defer("commerce_enabled").filter(website=website).first()
     state = {
         "website": str(website.pk), "currency": website.currency,
         "settings": None if settings is None else [
             str(settings.pk), str(settings.default_price_list_id), settings.show_out_of_stock,
             settings.products_per_page, settings.updated_at.isoformat(),
+            WebsiteCatalogSettings.objects.filter(pk=settings.pk).values_list("commerce_enabled", flat=True).get() if commerce_schema_ready() else False,
             list(map(str, settings.warehouses.order_by("pk").values_list("pk", flat=True))),
         ],
         "products": list(WebsiteProduct.objects.filter(website=website).order_by("pk").values(
@@ -57,14 +59,17 @@ def audit_change(user, website, action, before, after):
 
 
 def configuration_data(website, capabilities):
-    configuration = WebsiteCatalogSettings.objects.filter(website=website).first()
+    configuration = WebsiteCatalogSettings.objects.defer("commerce_enabled").filter(website=website).first()
     data = {
-        "websiteId": str(website.pk), "currency": website.currency, "commerceEnabled": False,
+        "websiteId": str(website.pk), "currency": website.currency,
+        "commerceEnabled": bool(configuration and commerce_schema_ready() and WebsiteCatalogSettings.objects.filter(pk=configuration.pk, commerce_enabled=True).exists()),
         "showOutOfStock": configuration.show_out_of_stock if configuration else True,
         "productsPerPage": configuration.products_per_page if configuration else 24,
         "canManagePolicy": capabilities["policy"],
     }
     if capabilities["policy"]:
+        blockers = commerce_readiness(website)
+        data.update(commerceReady=not blockers, commerceBlockers=blockers)
         data.update(
             defaultPriceListId=str(configuration.default_price_list_id) if configuration and configuration.default_price_list_id else None,
             warehouseIds=list(map(str, configuration.warehouses.order_by("pk").values_list("pk", flat=True))) if configuration else [],
@@ -102,6 +107,8 @@ def read_configuration(**context):
 def update_configuration(*, data, expected, **context):
     website, capabilities = authorized_website(**context, operation="policy", lock=True)
     check_precondition(website, expected)
+    if not commerce_schema_ready():
+        raise WebsiteError("Las migraciones comerciales están pendientes.", code="COMMERCE_UNAVAILABLE", status=503)
     if "defaultPriceListId" in data:
         validate_price_list(website, data["defaultPriceListId"], field="defaultPriceListId")
     if "warehouseIds" in data:
@@ -112,7 +119,7 @@ def update_configuration(*, data, expected, **context):
     before = configuration_data(website, {"policy": True})
     if configuration is None:
         configuration = WebsiteCatalogSettings(website=website)
-    for key, field in (("defaultPriceListId", "default_price_list_id"), ("showOutOfStock", "show_out_of_stock"), ("productsPerPage", "products_per_page")):
+    for key, field in (("defaultPriceListId", "default_price_list_id"), ("showOutOfStock", "show_out_of_stock"), ("productsPerPage", "products_per_page"), ("commerceEnabled", "commerce_enabled")):
         if key in data:
             setattr(configuration, field, data[key])
     try:
@@ -121,6 +128,8 @@ def update_configuration(*, data, expected, **context):
         raise WebsiteError("Revisa la configuración comercial.", fields=getattr(exc, "message_dict", {})) from exc
     if "warehouseIds" in data:
         configuration.warehouses.set(data["warehouseIds"])
+    if configuration.commerce_enabled:
+        require_commerce_ready(website)
     after = configuration_data(website, capabilities)
     audit_change(context["user"], website, "WEBSITE_CATALOG_POLICY", before, after)
     return after, commercial_etag(website)

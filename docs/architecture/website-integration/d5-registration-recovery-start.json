@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "scenario": "recovery-start",
+  "database": "test_apudig_b4c_http",
+  "HTTP": "real Django/PostgreSQL; frontend transport",
+  "externalEmail": "locmem SMTP adapter simulation; no real delivery",
+  "whatsapp": "URL only, no message"
+}

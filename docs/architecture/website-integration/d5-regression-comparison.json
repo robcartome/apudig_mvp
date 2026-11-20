@@ -1,0 +1,16 @@
+{
+  "baselineCommit": "a6ac628",
+  "baselineTotal": 752,
+  "currentTotal": 805,
+  "baselineFailures": 78,
+  "baselineErrors": 35,
+  "currentFailures": 78,
+  "currentErrors": 35,
+  "newFailedCases": [],
+  "resolvedComparedToCurrentHead": [],
+  "absentComparedToPriorDate": [
+    "apps.pos.tests.test_cash_session_views.CashSessionHistoryViewTest.test_daily_consult_filters_closures_to_selected_day",
+    "apps.sales.tests.test_documents.SalesDocumentServiceTest.test_void_reverses_inventory_exit"
+  ],
+  "globalSuiteApproved": false
+}

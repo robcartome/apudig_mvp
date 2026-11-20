@@ -1,0 +1,13 @@
+{
+  "database": "test_apudig_b4c_http",
+  "total": 1,
+  "results": [
+    {
+      "name": "admin opt-out closes creation immediately and cancellation/history remain private",
+      "passed": true
+    }
+  ],
+  "externalSMTP": "disabled",
+  "whatsapp": "server URL validated; not opened or sent",
+  "realDataWrites": false
+}

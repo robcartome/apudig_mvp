@@ -1,0 +1,12 @@
+{
+  "nodeTests": 81,
+  "nodeFailures": 0,
+  "lint": "passed",
+  "buildIsolated": "passed",
+  "buildHabitualRestored": "passed",
+  "visualQA": "not executed",
+  "r2Real": "not configured, not tested",
+  "smtpReal": "not configured, not tested",
+  "registrationEnabled": false,
+  "commerceEnabled": false
+}

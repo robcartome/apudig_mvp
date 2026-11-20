@@ -8,6 +8,7 @@ from .documents import normalize_document
 from .errors import WebsiteError
 from .models import Website, WebsiteDomain, WebsitePageRevision, WebsiteProduct
 from .selectors import resolve_public_website
+from .commerce import commerce_enabled
 
 
 def published_content(hostname):
@@ -58,6 +59,6 @@ def published_content(hostname):
         "currency": snapshot.get("currency", "PEN"),
         "revision": revision.editorial_revision or revision.version,
         "publishedAt": revision.created_at,
-        "commerceEnabled": False,
+        "commerceEnabled": commerce_enabled(context.website_id),
         "content": document,
     }

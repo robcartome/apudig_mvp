@@ -1,0 +1,832 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/v1/auth/logout/": {
+      "post": {
+        "operationId": "auth_logout_create",
+        "summary": "Logout current context (commercial sessions are revoked)",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh/": {
+      "post": {
+        "operationId": "auth_refresh_create",
+        "summary": "Refresh access token",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefreshRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefreshRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefreshRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextRefreshResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/auth/token/": {
+      "post": {
+        "operationId": "auth_token_create",
+        "summary": "Obtain JWT token pair",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenObtainRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenObtainRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenObtainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {}
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextTokenResponse"
+                },
+                "examples": {
+                  "TokenResponse": {
+                    "value": {
+                      "access": "eyJ...",
+                      "refresh": "eyJ...",
+                      "user": {
+                        "id": "7d5d4d5a-7e73-4a39-b4a6-3bca21171ccd",
+                        "email": "user@erp.pe",
+                        "name": "Administrador"
+                      },
+                      "company": {
+                        "id": "5c4b6f66-0f08-4f75-a0ba-063d737dae12",
+                        "name": "Ferreteria Demo",
+                        "store_id": "59ed13f0-a503-4ca4-a22b-c2e0d8c2a77e",
+                        "store_name": "Tienda Principal"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/storefront/sites/{hostname}/account/": {
+      "get": {
+        "operationId": "storefront_sites_account_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hostname",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Commercial accounts"
+        ],
+        "security": [
+          {
+            "CommercialBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommercialProfile"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/storefront/sites/{hostname}/account/session/": {
+      "post": {
+        "operationId": "storefront_sites_account_session_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hostname",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Commercial accounts"
+        ],
+        "security": [
+          {
+            "ContextIdentityBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommercialToken"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/commercial-accounts/": {
+      "get": {
+        "operationId": "commercial_accounts_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Commercial accounts administration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrativeAccountsPage"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/websites/{website_id}/commercial-accounts/{account_id}/": {
+      "get": {
+        "operationId": "commercial_account_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Commercial accounts administration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrativeAccount"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "operationId": "commercial_account_approval_update",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "website_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "Commercial accounts administration"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedWholesaleApproval"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrativeAccount"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdministrativeAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/CommercialUser"
+          },
+          "customer": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "contactVerified": {
+            "type": "boolean"
+          },
+          "wholesaleApproved": {
+            "type": "boolean"
+          },
+          "priceList": {
+            "type": "object",
+            "additionalProperties": {},
+            "nullable": true
+          }
+        },
+        "required": [
+          "contactVerified",
+          "customer",
+          "etag",
+          "id",
+          "priceList",
+          "status",
+          "user",
+          "wholesaleApproved"
+        ]
+      },
+      "AdministrativeAccountsPage": {
+        "type": "object",
+        "properties": {
+          "websiteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdministrativeAccount"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "limit",
+          "offset",
+          "results",
+          "websiteId"
+        ]
+      },
+      "AuthCompany": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "store_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "store_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "store_id",
+          "store_name"
+        ]
+      },
+      "AuthCompanyListItem": {
+        "type": "object",
+        "properties": {
+          "company_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "store_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "store_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "company_id",
+          "company_name",
+          "store_id",
+          "store_name"
+        ]
+      },
+      "AuthUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "id",
+          "name"
+        ]
+      },
+      "CommercialProfile": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "string",
+            "default": "commercial"
+          },
+          "websiteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "company": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "user": {
+            "$ref": "#/components/schemas/CommercialUser"
+          },
+          "contactVerified": {
+            "type": "boolean"
+          },
+          "verificationChannel": {
+            "$ref": "#/components/schemas/VerificationChannelEnum"
+          },
+          "wholesaleApproved": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          }
+        },
+        "required": [
+          "capabilities",
+          "company",
+          "contactVerified",
+          "user",
+          "verificationChannel",
+          "websiteId",
+          "wholesaleApproved"
+        ]
+      },
+      "CommercialToken": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "string",
+            "default": "commercial",
+            "description": "Always commercial; does not grant ERP access."
+          },
+          "websiteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "access": {
+            "type": "string"
+          },
+          "access_token": {
+            "type": "string"
+          },
+          "refresh": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access",
+          "access_token",
+          "websiteId"
+        ]
+      },
+      "CommercialUser": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name"
+        ]
+      },
+      "ContextEnum": {
+        "enum": [
+          "erp",
+          "commercial"
+        ],
+        "type": "string",
+        "description": "* `erp` - erp\n* `commercial` - commercial"
+      },
+      "ContextRefreshResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TokenRefreshResponse"
+          },
+          {
+            "$ref": "#/components/schemas/CommercialToken"
+          }
+        ]
+      },
+      "ContextTokenResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TokenObtainResponse"
+          },
+          {
+            "$ref": "#/components/schemas/CommercialToken"
+          }
+        ]
+      },
+      "LogoutRequest": {
+        "type": "object",
+        "properties": {
+          "refresh": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "PatchedWholesaleApproval": {
+        "type": "object",
+        "properties": {
+          "wholesaleApproved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TokenObtainRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string"
+          },
+          "context": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContextEnum"
+              }
+            ],
+            "default": "erp"
+          },
+          "hostname": {
+            "type": "string",
+            "maxLength": 253
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "TokenObtainResponse": {
+        "type": "object",
+        "properties": {
+          "access": {
+            "type": "string"
+          },
+          "refresh": {
+            "type": "string"
+          },
+          "access_token": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUser"
+          },
+          "company": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthCompany"
+              }
+            ],
+            "nullable": true
+          },
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthCompanyListItem"
+            }
+          }
+        },
+        "required": [
+          "access",
+          "company",
+          "refresh",
+          "user"
+        ]
+      },
+      "TokenRefreshRequest": {
+        "type": "object",
+        "properties": {
+          "refresh": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string",
+            "maxLength": 253
+          }
+        }
+      },
+      "TokenRefreshResponse": {
+        "type": "object",
+        "properties": {
+          "access": {
+            "type": "string"
+          },
+          "access_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access"
+        ]
+      },
+      "VerificationChannelEnum": {
+        "enum": [
+          "email"
+        ],
+        "type": "string",
+        "description": "* `email` - email"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "CatalogBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "CommercialBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Commercial purpose; current account/session authorization required."
+      },
+      "ContextIdentityBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Commercial purpose; current account/session authorization required."
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid"
+      }
+    }
+  }
+}

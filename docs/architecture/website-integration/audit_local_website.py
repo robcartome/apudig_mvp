@@ -36,7 +36,7 @@ with transaction.atomic():
     plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
     domain = WebsiteDomain.objects.select_related("website__company", "website__published_revision").filter(hostname="demo.localhost").first()
     site = domain.website if domain else None
-    policy = WebsiteCatalogSettings.objects.filter(website=site).first() if site else None
+    policy = WebsiteCatalogSettings.objects.defer("commerce_enabled").filter(website=site).first() if site else None
     storage_keys = ("R2_ENDPOINT_URL", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL")
     result = {
         "checkedAt": timezone.now().isoformat(),

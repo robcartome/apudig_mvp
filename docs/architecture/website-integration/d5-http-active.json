@@ -1,0 +1,25 @@
+{
+  "database": "test_apudig_b4c_http",
+  "total": 4,
+  "results": [
+    {
+      "name": "persistent admin opt-in enables only A and does not enable registration",
+      "passed": true
+    },
+    {
+      "name": "verified retail confirms and persists exactly one request with explicit consent and idempotency",
+      "passed": true
+    },
+    {
+      "name": "B cannot obtain A request even for the same identity; ERP/CMS and anonymous cannot prepare",
+      "passed": true
+    },
+    {
+      "name": "enabled SSR routes contain no private customer credentials or request snapshots",
+      "passed": true
+    }
+  ],
+  "externalSMTP": "disabled",
+  "whatsapp": "server URL validated; not opened or sent",
+  "realDataWrites": false
+}

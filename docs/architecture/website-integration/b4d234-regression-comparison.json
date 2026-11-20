@@ -1,0 +1,13 @@
+{
+  "baselineTotal": 752,
+  "d1Total": 767,
+  "currentTotal": 794,
+  "baselineFailures": 79,
+  "baselineErrors": 36,
+  "currentFailures": 79,
+  "currentErrors": 36,
+  "newFailedCasesComparedToHead": [],
+  "resolvedComparedToHead": [],
+  "newFailedCasesComparedToD1": [],
+  "globalSuiteApproved": false
+}

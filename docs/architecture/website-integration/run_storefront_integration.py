@@ -14,7 +14,8 @@ import sys
 import time
 import urllib.request
 
-if sys.argv[1:] != ["--serve-isolated"]:
+simulate_email = sys.argv[1:] == ["--serve-isolated", "--simulate-email"]
+if sys.argv[1:] != ["--serve-isolated"] and not simulate_email:
     raise SystemExit(__doc__)
 repository = Path(__file__).resolve().parents[3]
 workspace = repository.parent
@@ -24,7 +25,10 @@ os.environ.update(
     DJANGO_SETTINGS_MODULE="config.settings", DJANGO_DB_ENGINE="django.db.backends.postgresql",
     DJANGO_DB_NAME="apudig_b4c_http_source", JWT_SECRET_KEY="b4c-isolated-http-only-secret-at-least-32-characters",
     R2_ACCESS_KEY_ID="", R2_SECRET_ACCESS_KEY="", DJANGO_DEBUG="1",
+    WEBSITE_REGISTRATION_ENABLED="0", WEBSITE_EMAIL_BACKEND="disabled",
 )
+if simulate_email:
+    os.environ.update(WEBSITE_REGISTRATION_ENABLED="1", WEBSITE_EMAIL_BACKEND="smtp", WEBSITE_SMTP_HOST="smtp.integration.invalid", WEBSITE_EMAIL_FROM="noreply@integration.invalid", WEBSITE_SMTP_USER="synthetic", WEBSITE_SMTP_PASSWORD="synthetic")
 import django
 django.setup()
 from django.conf import settings
@@ -108,6 +112,26 @@ try:
         user.set_password(password)
         user.save()
         auth[name] = {"email": user.email, "password": password, "token": build_token({"sub": str(user.pk), "type": "access", "company_id": str(fixture.a.pk)}, settings.JWT_ACCESS_TTL)}
+    # Commercial fixtures never send mail or confer employee memberships.
+    from apps.users.models import User
+    from apps.partners.models import Customer, SalesCustomerProfile
+    from apps.websites.models import CommercialAccount
+    from apps.websites.accounts import issue_email_challenge, verify_email_challenge
+    customer_user = User.objects.create_user(email="customer@b4d1.example.test", password=password, name="Cliente comercial de prueba", phone="999111222")
+    commercial_accounts = {}
+    for name, user, website, verified in (
+        ("customerA", customer_user, fixture.site, True),
+        ("customerB", customer_user, fixture.foreign_site, True),
+        ("mixedA", fixture.worker, fixture.site, True),
+    ):
+        customer = Customer.objects.create(company=website.company, document_type="0", legal_name=name)
+        account = CommercialAccount.objects.create(company=website.company, customer=customer, user=user)
+        if verified:
+            secret = issue_email_challenge(user, website)
+            verify_email_challenge(user, website, secret)
+        SalesCustomerProfile.objects.create(customer=customer, price_list=fixture.price_list if website == fixture.site else fixture.foreign_list)
+        commercial_accounts[name] = str(account.pk)
+    auth["customer"] = {"email": customer_user.email, "password": password}
     context = {
         "database": "test_apudig_b4c_http", "backend": "http://127.0.0.1:8770/api/v1", "next": "http://127.0.0.1:8771",
         "hostA": "a.b4c.localhost", "hostB": "b.b4c.localhost", "websiteA": str(fixture.site.pk), "websiteB": str(fixture.foreign_site.pk),
@@ -116,6 +140,8 @@ try:
         "categoryA": str(fixture.category.pk), "categoryOther": str(fixture.other_category.pk), "brandA": str(fixture.brand.pk), "brandOther": str(fixture.other_brand.pk),
         "priceList": str(fixture.price_list.pk), "foreignPriceList": str(fixture.foreign_list.pk), "warehouse": str(fixture.warehouse.pk),
         "auth": auth,
+        "commercialAccounts": commercial_accounts, "commercialVerification": "synthetic_fixture_only_no_email_delivery",
+        "emailSimulation": simulate_email,
     }
     context_path.write_text(json.dumps(context, indent=2), encoding="utf-8")
     environment = dict(os.environ, DJANGO_DB_NAME="test_apudig_b4c_http", CORS_ALLOWED_ORIGINS="http://a.b4c.localhost:8771,http://b.b4c.localhost:8771,http://localhost:8771")
@@ -145,6 +171,39 @@ try:
                 fixture.stock.quantity = command["quantity"]
                 fixture.stock.save(update_fields=["quantity"])
                 print("OK: isolated authorized stock updated", flush=True)
+            elif command["operation"] == "prepare_commerce":
+                from copy import deepcopy
+                from apps.websites.registration import configure_notice, policy_for, policy_etag
+                from apps.websites.catalog.services import update_configuration, commercial_etag
+                previous = fixture.site.published_revision
+                snapshot = deepcopy(previous.snapshot)
+                snapshot["document"]["contact"]["whatsapp"] = "51900000001"
+                page = previous.page
+                version = max(page.draft_version, page.published_version) + 1
+                page.published_version = page.draft_version = version
+                page.save(update_fields=["published_version", "draft_version"])
+                fixture.site.published_revision = WebsitePageRevision.objects.create(page=page, version=version, operation="PUBLISH", editorial_revision=version, snapshot=snapshot)
+                fixture.site.editorial_revision = version
+                fixture.site.save(update_fields=["published_revision", "editorial_revision"])
+                configure_notice(user=fixture.admin, company_id=fixture.a.pk, website_id=fixture.site.pk, version="integration-v1", text="Synthetic integration notice only. Not approved legal text for a real company.", pending_retention_days=3, linking_mode="NEW_OR_REVIEW", expected=policy_etag(policy_for(fixture.site)))
+                update_configuration(user=fixture.admin, company_id=fixture.a.pk, website_id=fixture.site.pk, expected=commercial_etag(fixture.site), data={"commerceEnabled": True})
+                print("OK: isolated Website published/contact/privacy and explicit admin opt-in prepared", flush=True)
+            elif command["operation"] == "deliver_email" and simulate_email:
+                from unittest.mock import patch
+                from django.core import mail
+                from django.core.mail.backends.locmem import EmailBackend
+                from apps.websites.registration_mail import send_queued_emails
+                import re
+                with patch("apps.websites.registration_mail.get_connection", return_value=EmailBackend()):
+                    result = send_queued_emails()
+                secret = re.search(r"#token=([A-Za-z0-9_-]+)", mail.outbox[-1].body).group(1)
+                (workspace / ".tools/d5-email-proof.json").write_text(json.dumps({"token": secret, "externalAdapter": "locmem SMTP simulation only"}), encoding="utf-8")
+                print("OK: external SMTP adapter simulated; private synthetic proof saved, no real delivery", flush=True)
+            elif command["operation"] == "advance_registration_cooldown" and simulate_email:
+                from datetime import timedelta
+                from apps.websites.models import CommercialRegistration
+                CommercialRegistration.objects.filter(website=fixture.site).update(created_at=timezone.now() - timedelta(minutes=2))
+                print("OK: isolated registration fixture cooldown advanced", flush=True)
             else:
                 print("Unknown isolated operation", flush=True)
 finally:
@@ -152,5 +211,6 @@ finally:
         process.terminate()
         process.wait(timeout=15)
     context_path.unlink(missing_ok=True)
+    (workspace / ".tools/d5-email-proof.json").unlink(missing_ok=True)
     runner.teardown_databases(databases)
     print("Stopped isolated HTTP environment; database and synthetic credential context removed", flush=True)

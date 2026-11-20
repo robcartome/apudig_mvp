@@ -1,5 +1,7 @@
 # B4-D: núcleo comercial y pendientes de integración
 
+Continuación posterior: [25-entrega-b4-d1.md](25-entrega-b4-d1.md) implementa sesión/contexto comercial, `/cuenta`, perfil y administración mayorista. Las afirmaciones de ausencia de esas piezas en este informe describen la entrega inicial24, no el estado posterior. D2–D4 y activación siguen pendientes.
+
 19/11/2026, America/Lima. **Entrega parcial de desarrollo; B4 no está completada ni aceptada para pedidos.** Continúa los documentos20–23. El usuario autorizó continuar B4 y confirmó: cualquier cliente registrado con contacto verificado podrá preparar solicitudes; la aprobación ADMIN es solo para mayoristas. Proveedor pendiente: **mantener registro público deshabilitado**. R2 real continúa pendiente por decisión previa; no se utilizaron credenciales productivas.
 
 ## Base y entorno

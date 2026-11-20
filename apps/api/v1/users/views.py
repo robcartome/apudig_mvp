@@ -1,4 +1,4 @@
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import OpenApiExample, extend_schema, PolymorphicProxySerializer
 from django.contrib.auth import authenticate, get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -12,6 +12,7 @@ from apps.api.v1.users.helpers import get_company_security_map, get_default_acce
 from apps.users.models import Permission, Role, UserRole, UserStore
 from apps.users.permissions import user_is_company_admin
 from apps.users.services import grant_company_admin_access, revoke_company_admin_access
+from apps.api.v1.commercial_accounts.serializers import CommercialTokenSerializer
 
 from .serializers import (
     AssignRoleRequestSerializer,
@@ -103,12 +104,13 @@ def _forbidden():
 
 class TokenObtainAPIView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     @extend_schema(
         tags=["Auth"],
         summary="Obtain JWT token pair",
         request=TokenObtainRequestSerializer,
-        responses={200: TokenObtainResponseSerializer},
+        responses={200: PolymorphicProxySerializer(component_name="ContextTokenResponse", serializers=[TokenObtainResponseSerializer, CommercialTokenSerializer], resource_type_field_name=None)},
         examples=[
             OpenApiExample(
                 "TokenResponse",
@@ -149,6 +151,11 @@ class TokenObtainAPIView(APIView):
         if not user.is_active:
             return Response({"detail": "Cuenta desactivada."}, status=status.HTTP_403_FORBIDDEN)
 
+        if serializer.validated_data["context"] == "commercial":
+            from apps.api.v1.commercial_accounts.views import commercial_auth_response
+            from apps.websites.commercial_sessions import start_session
+            return commercial_auth_response(start_session, user, serializer.validated_data["hostname"])
+
         access_obj = get_default_access(user)
         user_companies = _get_user_companies(user)
         security_map = get_company_security_map(user)
@@ -172,12 +179,13 @@ class TokenObtainAPIView(APIView):
 
 class TokenRefreshAPIView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     @extend_schema(
         tags=["Auth"],
         summary="Refresh access token",
         request=TokenRefreshRequestSerializer,
-        responses={200: TokenRefreshResponseSerializer},
+        responses={200: PolymorphicProxySerializer(component_name="ContextRefreshResponse", serializers=[TokenRefreshResponseSerializer, CommercialTokenSerializer], resource_type_field_name=None)},
     )
     def post(self, request):
         serializer = TokenRefreshRequestSerializer(data=request.data)
@@ -186,6 +194,13 @@ class TokenRefreshAPIView(APIView):
         payload = decode_token(serializer.validated_data["refresh"])
         if payload is None or payload.get("type") != "refresh":
             return Response({"detail": "Token invalido o expirado."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if payload.get("purpose") == "commercial":
+            from apps.api.v1.commercial_accounts.views import commercial_auth_response
+            from apps.websites.commercial_sessions import refresh_session
+            return commercial_auth_response(refresh_session, payload, serializer.validated_data.get("hostname"))
+        if payload.get("purpose") not in (None, "erp"):
+            return Response({"detail": "Contexto de sesión inválido."}, status=401)
 
         access = build_access_from_refresh_payload(payload)
         return Response({"access": access, "access_token": access}, status=status.HTTP_200_OK)
@@ -272,9 +287,16 @@ class SelectCompanyAPIView(APIView):
 
 class LogoutAPIView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
-    @extend_schema(tags=["Auth"], summary="Logout (stateless noop)", request=LogoutRequestSerializer)
-    def post(self, _request):
+    @extend_schema(tags=["Auth"], summary="Logout current context (commercial sessions are revoked)", request=LogoutRequestSerializer, responses={204: None})
+    def post(self, request):
+        serializer = LogoutRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = decode_token(serializer.validated_data.get("refresh") or serializer.validated_data.get("refresh_token") or "")
+        if payload and payload.get("type") == "refresh" and payload.get("purpose") == "commercial":
+            from apps.websites.commercial_sessions import revoke_session
+            revoke_session(payload)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

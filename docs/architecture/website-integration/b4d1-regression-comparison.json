@@ -1,0 +1,10 @@
+{
+  "baselineCommit": "a6ac628",
+  "baselineTotal": 752,
+  "currentTotal": 767,
+  "baselineUnsuccessful": 115,
+  "currentUnsuccessful": 115,
+  "newUnsuccessful": [],
+  "resolvedUnsuccessful": [],
+  "note": "Both additional cases versus the older 113-result report reproduce on clean HEAD in the current environment; root causes not attributed to D1 or confirmed as time-dependent."
+}

@@ -32,7 +32,7 @@ def configured_warehouses(website, configuration):
 
 def catalog_offers(website, *, detail=False, configuration=_UNSET_CONFIGURATION, customer_price_list=None):
     if configuration is _UNSET_CONFIGURATION:
-        configuration = WebsiteCatalogSettings.objects.filter(website=website).first()
+        configuration = WebsiteCatalogSettings.objects.defer("commerce_enabled").filter(website=website).first()
     warehouses = configured_warehouses(website, configuration)
     has_warehouses = warehouses.exists()
     default_list_id = configuration.default_price_list_id if configuration else None

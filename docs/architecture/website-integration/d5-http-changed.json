@@ -1,0 +1,13 @@
+{
+  "database": "test_apudig_b4c_http",
+  "total": 1,
+  "results": [
+    {
+      "name": "price change invalidates old confirmation and withholds historical stale WhatsApp link",
+      "passed": true
+    }
+  ],
+  "externalSMTP": "disabled",
+  "whatsapp": "server URL validated; not opened or sent",
+  "realDataWrites": false
+}
