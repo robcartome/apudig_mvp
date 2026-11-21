@@ -1,5 +1,15 @@
 {% load static %}
 <aside id="sidebar" class="navbar navbar-vertical navbar-expand-lg">
+  <script>
+    if (document.documentElement.classList.contains('sidebar-initial-collapsed')) {
+      document.currentScript.parentElement.classList.add('sidebar-collapsed');
+      document.body.classList.add('sidebar-collapsed-body');
+    }
+    if (window.innerWidth < 992 && document.documentElement.classList.contains('sidebar-initial-mobile-open')) {
+      document.currentScript.parentElement.classList.add('sidebar-mobile-open');
+      document.body.classList.add('sidebar-mobile-open-body');
+    }
+  </script>
   <div class="container-fluid">
     <div class="navbar-brand navbar-brand-autodark d-flex align-items-center w-100">
       <a href="{% url 'dashboard' %}" class="sidebar-brand-link text-decoration-none" aria-label="ApuDig">

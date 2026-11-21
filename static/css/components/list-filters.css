@@ -119,6 +119,13 @@
   gap: 6px;
 }
 
+.list-filter-all-dates {
+  min-height: 36px;
+  padding-inline: 10px;
+  font-size: .72rem;
+  white-space: nowrap;
+}
+
 .list-filter-toggle {
   min-height: 36px;
   display: inline-flex;
@@ -316,14 +323,14 @@
 
   .list-filter-primary {
     grid-template-columns: minmax(0, 1fr);
-    gap: 9px;
-    padding: 10px;
+    gap: 6px;
+    padding: 8px 10px;
   }
 
   .list-filter-toolbar {
     grid-column: auto;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .list-filter-toggle,
@@ -356,26 +363,33 @@
   }
 }
 
-@media (max-width: 479.98px) {
+@media (max-width: 767.98px) {
   .list-filter-date-range {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 28px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0;
   }
 
-  .list-filter-date-range > * {
-    border-radius: 0 !important;
+  .list-filter-date-range > .input-group-text:first-child {
+    display: none;
   }
 
-  .list-filter-date-range > :first-child {
-    border-radius: 9px 0 0 9px !important;
+  .list-filter-date-range > .list-filter-date-separator {
+    padding-inline: 7px;
   }
 
-  .list-filter-date-range > .btn {
-    grid-column: 1 / -1;
-    margin-top: 6px !important;
-    border-radius: 9px !important;
+  .list-filter-date-range > .form-control {
+    width: 100%;
+    min-width: 0;
+    margin: 0 !important;
+    padding-inline: 4px;
   }
 
+  .list-filter-date-range > input:first-of-type { border-radius: 9px 0 0 9px !important; }
+  .list-filter-date-range > input:last-of-type { border-radius: 0 9px 9px 0 !important; }
+}
+
+@media (max-width: 479.98px) {
   .list-filter-search__button {
     padding-inline: 11px;
   }

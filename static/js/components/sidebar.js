@@ -13,7 +13,16 @@
   var tooltipTimer = null;
   var overlay      = null;
   var KEY          = 'apudig_sidebar_collapsed';
+  var MOBILE_KEY   = 'apudig_sidebar_mobile_open';
   var SIDEBAR_W    = '3.5rem';
+
+  function readState(key) {
+    try { return localStorage.getItem(key) === '1'; } catch (error) { return false; }
+  }
+
+  function saveState(key, value) {
+    try { localStorage.setItem(key, value ? '1' : '0'); } catch (error) { /* Continue without persistence. */ }
+  }
 
   /* ══════════════════════════════════════════
      TOOLTIP (only visible when icon-only mode)
@@ -131,7 +140,7 @@
     sidebar.querySelectorAll('.nav-link[data-section-url]').forEach(function (link) {
       /* Use capture phase so we run before Bootstrap's collapse handler */
       link.addEventListener('click', function (e) {
-        if (sidebar.classList.contains('sidebar-collapsed')) {
+        if (window.innerWidth >= 992 && sidebar.classList.contains('sidebar-collapsed')) {
           e.preventDefault();
           e.stopImmediatePropagation();
           window.location.href = link.dataset.sectionUrl;
@@ -143,31 +152,36 @@
   /* ══════════════════════════════════════════
      MOBILE SIDEBAR — slide in / out
      ══════════════════════════════════════════ */
-  function openMobileSidebar() {
+  function openMobileSidebar(persist) {
     sidebar.classList.add('sidebar-mobile-open');
     document.body.classList.add('sidebar-mobile-open-body');
     if (overlay) overlay.classList.add('active');
+    if (headerSidebarBtn) headerSidebarBtn.setAttribute('aria-expanded', 'true');
+    if (persist !== false) saveState(MOBILE_KEY, true);
   }
 
-  function closeMobileSidebar() {
+  function closeMobileSidebar(persist) {
     sidebar.classList.remove('sidebar-mobile-open');
     document.body.classList.remove('sidebar-mobile-open-body');
     if (overlay) overlay.classList.remove('active');
+    if (headerSidebarBtn) headerSidebarBtn.setAttribute('aria-expanded', 'false');
+    if (persist !== false) saveState(MOBILE_KEY, false);
   }
 
   function setupMobileOverlay() {
-    overlay = document.createElement('div');
-    overlay.className = 'apudig-sidebar-overlay';
-    document.body.appendChild(overlay);
+    overlay = document.querySelector('.apudig-sidebar-overlay');
 
     /* Tap overlay → close sidebar */
-    overlay.addEventListener('click', closeMobileSidebar);
+    if (overlay) overlay.addEventListener('click', function () { closeMobileSidebar(); });
 
-    /* Close sidebar when tapping a leaf nav link on mobile */
-    sidebar.querySelectorAll('.navbar-nav a.nav-link:not([data-bs-toggle="collapse"])').forEach(function (link) {
-      link.addEventListener('click', function () {
-        if (window.innerWidth < 992) closeMobileSidebar();
-      });
+    /* Keep section toggles open, but close the menu before navigating to a view. */
+    sidebar.addEventListener('click', function (event) {
+      if (window.innerWidth >= 992 || event.defaultPrevented || event.button !== 0 ||
+          event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      var link = event.target.closest('a[href]');
+      if (!link || link.hasAttribute('data-bs-toggle') || link.getAttribute('href').charAt(0) === '#' ||
+          (link.target && link.target !== '_self')) return;
+      closeMobileSidebar();
     });
   }
 
@@ -177,6 +191,7 @@
   function applyCollapse(collapsed) {
     sidebar.classList.toggle('sidebar-collapsed', collapsed);
     document.body.classList.toggle('sidebar-collapsed-body', collapsed);
+    if (headerSidebarBtn && window.innerWidth >= 992) headerSidebarBtn.setAttribute('aria-expanded', String(!collapsed));
 
     /* Flex layout handles resizing automatically — no CSS var or margin hack needed */
 
@@ -204,8 +219,7 @@
 
     if (!sidebar) return;
 
-    /* Restore persisted state before first paint to avoid flicker */
-    if (localStorage.getItem(KEY) === '1') applyCollapse(true);
+    applyCollapse(readState(KEY));
 
     /* Desktop collapse button (inside sidebar) */
     if (toggleBtn) {
@@ -213,7 +227,7 @@
         hideTooltip();
         var collapsed = !sidebar.classList.contains('sidebar-collapsed');
         applyCollapse(collapsed);
-        localStorage.setItem(KEY, collapsed ? '1' : '0');
+        saveState(KEY, collapsed);
       });
     }
 
@@ -231,17 +245,33 @@
           /* Desktop: expand collapsed sidebar */
           hideTooltip();
           applyCollapse(false);
-          localStorage.setItem(KEY, '0');
+          saveState(KEY, false);
         }
       });
     }
 
     setupMobileOverlay();
+    if (window.innerWidth < 992 && readState(MOBILE_KEY)) openMobileSidebar(false);
+    document.documentElement.classList.remove('sidebar-initial-collapsed', 'sidebar-initial-mobile-open');
     bindTooltips();
     bindFlyouts();
     bindCollapsedNav();
 
     /* Dismiss flyout on scroll */
     document.addEventListener('scroll', removeFlyout, { passive: true });
+    window.addEventListener('storage', function (event) {
+      if (event.key === KEY) applyCollapse(event.newValue === '1');
+      if (event.key === MOBILE_KEY && window.innerWidth < 992) {
+        if (event.newValue === '1') openMobileSidebar(false);
+        else closeMobileSidebar(false);
+      }
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth >= 992) {
+        closeMobileSidebar(false);
+        if (headerSidebarBtn) headerSidebarBtn.setAttribute('aria-expanded', String(!sidebar.classList.contains('sidebar-collapsed')));
+      }
+      else if (readState(MOBILE_KEY)) openMobileSidebar(false);
+    });
   });
 })();

@@ -27,14 +27,136 @@
   background: var(--tblr-bg-surface-secondary, #f6f8fb);
 }
 
+.movement-product-name { display: none; }
+
 @media (max-width: 767.98px) {
   .movement-actions {
     display: grid;
     gap: .5rem;
   }
 
-  #lines-table th,
-  #lines-table td {
-    white-space: nowrap;
+  #lines-table,
+  #lines-table tbody,
+  #lines-table tfoot,
+  #lines-table tfoot tr,
+  #lines-table tfoot td {
+    display: block;
+    width: 100%;
   }
+
+  #lines-table tbody {
+    padding: .75rem;
+    background: #f5f7fb;
+  }
+
+  #lines-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  #lines-table .line-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "number remove" "product product" "unit quantity" "stock location";
+    gap: .7rem .75rem;
+    margin-bottom: .65rem;
+    padding: .85rem;
+    background: #fff;
+    border: 1px solid #e4e7ec;
+    border-radius: .75rem;
+    box-shadow: 0 2px 6px rgb(16 24 40 / 5%);
+  }
+
+  #lines-table .line-row:last-child { margin-bottom: 0; }
+
+  #lines-table .line-row:focus-within {
+    border-color: var(--company-primary, #206bc4);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary, #206bc4) 10%, transparent);
+  }
+
+  #lines-table .line-row > td {
+    display: block;
+    width: auto;
+    min-width: 0 !important;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    text-align: left !important;
+  }
+
+  #lines-table .line-row > td:nth-child(1) { grid-area: number; }
+  #lines-table .line-row > td:nth-child(2) { grid-area: product; }
+  #lines-table .line-row > td:nth-child(3) { grid-area: unit; }
+  #lines-table .line-row > td:nth-child(4) { grid-area: quantity; }
+  #lines-table .line-row > td:nth-child(5) { grid-area: stock; }
+  #lines-table .line-row > td:nth-child(6) { grid-area: location; }
+  #lines-table .line-row > td:last-child {
+    grid-area: remove;
+    justify-self: end;
+    align-self: center;
+  }
+
+  #lines-table .line-row > .line-num {
+    align-self: center;
+    color: var(--company-primary, #206bc4) !important;
+    font-size: .8rem;
+    font-weight: 700;
+  }
+
+  #lines-table .line-row > .line-num::before {
+    content: 'Producto ';
+    display: inline;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  #lines-table .remove-line {
+    min-width: 2.1rem;
+    min-height: 2.1rem;
+  }
+
+  #lines-table .line-row > td::before {
+    display: block;
+    margin-bottom: .2rem;
+    color: #667085;
+    font-size: .72rem;
+    font-weight: 600;
+  }
+
+  #lines-table .line-row > td:nth-child(2)::before { content: 'Producto'; }
+  #lines-table .line-row > td:nth-child(3)::before { content: 'Unidad'; }
+  #lines-table .line-row > td:nth-child(4)::before { content: 'Cantidad'; }
+  #lines-table.is-adjustment .line-row > td:nth-child(4)::before { content: 'Cantidad física'; }
+  #lines-table .line-row > td:nth-child(5)::before { content: 'Stock por almacén'; }
+  #lines-table .line-row > td:nth-child(6)::before { content: 'Ubicación'; }
+  #lines-table .select2-container { max-width: 100%; }
+  #lines-table .movement-product-name:not([hidden]) {
+    display: block;
+    margin-top: .45rem;
+    color: #344054;
+    font-size: .8rem;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  #lines-table .line-row .form-control,
+  #lines-table .line-row .form-select,
+  #lines-table .line-row .select2-container--bootstrap-5 .select2-selection {
+    min-height: 2.4rem;
+    height: 2.4rem;
+    border-radius: .5rem;
+  }
+
+  #lines-table .line-row .input-group > .form-control {
+    min-width: 0;
+    border-radius: .5rem 0 0 .5rem;
+  }
+
+  #lines-table .line-row .input-group > .btn { border-radius: 0 .5rem .5rem 0; }
+  #lines-table .product-stock:disabled { background: #f8fafc; color: #344054 !important; opacity: 1; }
+  #lines-table tfoot td { padding: .75rem; background: #f5f7fb; }
+  #lines-table #add-line { width: 100%; min-height: 2.5rem; border-style: dashed; }
 }
