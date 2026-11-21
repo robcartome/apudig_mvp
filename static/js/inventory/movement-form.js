@@ -4,7 +4,7 @@
  * Responsibilities:
  *   - Configure the reusable ProductPicker component
  *   - Handle formset add / remove / reindex logic
- *   - Update unit, stock and price when a product is selected
+ *   - Update unit and stock when a product is selected
  *   - Refresh stock when warehouse changes
  */
 (function () {
@@ -17,7 +17,6 @@
   const stockUrl = configEl.dataset.stockUrl;
   const locationUrl = configEl.dataset.locationUrl;
   const movementType = configEl.dataset.movementType;
-  const showUnitPrice = configEl.dataset.showUnitPrice === '1';
   const MOVEMENT_DECIMALS = 3;
   const warehouseInput = document.getElementById(
     movementType === 'TRANSFER' ? 'id_warehouse_origin' : 'id_warehouse'
@@ -86,16 +85,6 @@
     hint.textContent = `1 ${unitCode} = ${formatQuantity(factor)} ${row.dataset.baseUnitCode || ''}${total}`;
   }
 
-  function priceForSelectedUnit(row, basePrice) {
-    const option = row.querySelector('.product-unit-select')?.selectedOptions[0];
-    const configuredPrice = option?.dataset.price
-      ?? (movementType === 'ENTRY' ? option?.dataset.purchasePrice : option?.dataset.salePrice);
-    if (configuredPrice !== undefined && configuredPrice !== '') {
-      return Number(configuredPrice);
-    }
-    return Number(basePrice || 0) * Number(option?.dataset.factor || 1);
-  }
-
   function setStockEl(row, value) {
     const stockInput = row.querySelector('.product-stock');
     if (!stockInput) return;
@@ -119,20 +108,37 @@
   async function refreshStock(row) {
     const hiddenInput = row.querySelector('input[type=hidden][name*="-product"]');
     const warehouse = getWarehouse();
+    const productId = hiddenInput?.value || '';
+    const requestId = (Number(row.dataset.stockRequest || 0) + 1);
+    row.dataset.stockRequest = requestId;
 
-    if (!hiddenInput?.value || !warehouse) {
+    if (!productId) {
       setStockEl(row, null);
       return;
     }
 
     try {
       const data = await ApiService.get(
-        `${stockUrl}?product=${encodeURIComponent(hiddenInput.value)}&warehouse=${encodeURIComponent(warehouse)}`
+        `${stockUrl}?product=${encodeURIComponent(productId)}&warehouse=${encodeURIComponent(warehouse)}`
       );
+      if (row.dataset.stockRequest !== String(requestId)) return;
       setStockEl(row, data.stock);
+      const option = row.querySelector('.product-select')?.selectedOptions[0];
+      if (option) {
+        option.dataset.totalStock = data.total_stock;
+        $(row.querySelector('.product-select')).trigger('change.select2');
+      }
     } catch {
+      if (row.dataset.stockRequest !== String(requestId)) return;
       setStockEl(row, null);
     }
+  }
+
+  function setProductName(row, name) {
+    const label = row.querySelector('.movement-product-name');
+    if (!label) return;
+    label.textContent = name || '';
+    label.hidden = !name;
   }
 
   function totalForms() {
@@ -163,23 +169,16 @@
   function buildRow(index) {
     const row = document.createElement('tr');
     row.className = 'line-row';
-    const unitPriceCell = showUnitPrice
-      ? `<td>
-        <input type="text" name="lines-${index}-unit_price" id="id_lines-${index}-unit_price"
-               class="form-control form-control-sm text-end unit-price-input"
-               inputmode="decimal" autocomplete="off" maxlength="14" value="">
-      </td>`
-      : '';
-
     row.innerHTML = `
       <td class="text-center text-muted line-num">${index + 1}</td>
       <td style="min-width:220px">
         <input type="hidden" name="lines-${index}-product" id="id_lines-${index}-product" value="">
-        <select class="product-select w-100"></select>
+        <select class="product-select w-100" aria-label="Producto"></select>
+        <div class="movement-product-name" hidden></div>
       </td>
       <td>
         <input type="hidden" name="lines-${index}-unit" id="id_lines-${index}-unit" value="">
-        <select class="form-select form-select-sm product-unit-select"
+        <select class="form-select form-select-sm product-unit-select" aria-label="Unidad"
                 title="La unidad se define por producto. Cuando existan equivalencias se habilitará.">
           <option value="">—</option>
         </select>
@@ -201,14 +200,13 @@
       </td>
       <td style="min-width:160px">
         <input type="hidden" name="lines-${index}-location" id="id_lines-${index}-location" value="">
-        <select class="location-select w-100"
+        <select class="location-select w-100" aria-label="Ubicación"
                 data-location-url="${locationUrl}"
                 data-placeholder="Ubicación (opcional)">
         </select>
       </td>
-      ${unitPriceCell}
       <td class="text-center">
-        <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar fila">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-line" title="Eliminar producto" aria-label="Eliminar producto">
           <i class="ti ti-x"></i>
         </button>
       </td>`;
@@ -220,18 +218,10 @@
     const row = event.target.closest('.line-row');
     const product = event.detail;
 
-    const basePrice = movementType === 'EXIT'
-      ? product.price_sale
-      : (product.supplier_purchase_price ?? product.price_purchase);
-    row.dataset.basePrice = basePrice || 0;
     setProductUnits(row, product);
-    setStockEl(row, product.stock !== undefined ? product.stock : null);
+    setProductName(row, product.name || product.text);
+    refreshStock(row);
 
-    const priceInput = row.querySelector('input[name*="-unit_price"]');
-    if (priceInput && parseFloat(basePrice) > 0 &&
-        (!priceInput.value || priceInput.value === '0' || priceInput.value === '0.000')) {
-      priceInput.value = priceForSelectedUnit(row, basePrice).toFixed(MOVEMENT_DECIMALS);
-    }
   });
 
   linesBody.addEventListener('product-picker:cleared', event => {
@@ -241,6 +231,8 @@
     delete row.dataset.baseUnitCode;
     updateUnitEquivalence(row);
     setStockEl(row, null);
+    row.dataset.stockRequest = Number(row.dataset.stockRequest || 0) + 1;
+    setProductName(row, '');
   });
 
   linesBody.addEventListener('change', event => {
@@ -250,14 +242,6 @@
     if (hidden) hidden.value = event.target.value;
     updateUnitEquivalence(row);
     if (row.dataset.baseStock !== undefined) setStockEl(row, Number(row.dataset.baseStock));
-    const priceInput = row?.querySelector('input[name*="-unit_price"]');
-    if (priceInput) {
-      const option = event.target.selectedOptions[0];
-      const configuredPrice = option?.dataset.price
-        ?? (movementType === 'ENTRY' ? option?.dataset.purchasePrice : option?.dataset.salePrice);
-      if ((configuredPrice === undefined || configuredPrice === '') && row.dataset.basePrice === undefined) return;
-      priceInput.value = priceForSelectedUnit(row, row.dataset.basePrice || 0).toFixed(MOVEMENT_DECIMALS);
-    }
   });
 
   function normalizeDecimalInput(input, decimalPlaces) {
@@ -274,8 +258,6 @@
     if (event.target.matches('input[name*="-quantity"]')) {
       normalizeDecimalInput(event.target, MOVEMENT_DECIMALS);
       updateUnitEquivalence(event.target.closest('.line-row'));
-    } else if (event.target.matches('input[name*="-unit_price"]')) {
-      normalizeDecimalInput(event.target, MOVEMENT_DECIMALS);
     }
   });
 
@@ -327,11 +309,10 @@
       const unitId = row.dataset.initUnitId || row.querySelector('.product-unit-select option')?.value || '';
       setUnitSelect(row, unitId, unitLabel);
       const quantityInput = row.querySelector('input[name*="-quantity"]');
-      const priceInput = row.querySelector('input[name*="-unit_price"]');
       if (quantityInput) normalizeDecimalInput(quantityInput, MOVEMENT_DECIMALS);
-      if (priceInput) normalizeDecimalInput(priceInput, MOVEMENT_DECIMALS);
       updateUnitEquivalence(row);
       ProductPicker.init(row);
+      setProductName(row, row.dataset.initName);
       refreshStock(row);
     });
   }

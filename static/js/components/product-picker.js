@@ -200,7 +200,7 @@ window.ProductPicker = (function ($) {
     const hasCodeAndName = textParts.length > 1;
     const code = product.sku || optionData.sku || (hasCodeAndName ? textParts[0] : 'SIN-COD');
     const name = product.name || optionData.name || (hasCodeAndName ? textParts.slice(1).join(' | ') : product.text) || '';
-    const total = (product.total_stock !== null && product.total_stock !== undefined) ? product.total_stock : '—';
+    const total = optionData.totalStock ?? product.total_stock ?? '—';
     return `${code} | ${name} | Stock sucursal: ${total}`;
   }
 

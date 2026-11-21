@@ -502,17 +502,7 @@ class MovementDetailForm(forms.Form):
         widget=_quantity_widget(),
         label="Cantidad",
     )
-    unit_price = forms.DecimalField(
-        max_digits=10, decimal_places=3, min_value=Decimal("0"),
-        required=False,
-        widget=forms.TextInput(attrs={
-            "class": f"{_sm} text-end unit-price-input",
-            "inputmode": "decimal",
-            "autocomplete": "off",
-            "maxlength": "14",
-        }),
-        label="P. Unitario",
-    )
+    detail_id = forms.UUIDField(required=False, widget=forms.HiddenInput())
     location = forms.UUIDField(
         required=False,
         widget=forms.HiddenInput(),
@@ -536,11 +526,6 @@ class MovementDetailForm(forms.Form):
                 .select_related("unit")
                 .order_by("name")
             )
-
-    def clean_unit_price(self):
-        val = self.cleaned_data.get("unit_price")
-        return val if val is not None else Decimal("0")
-
 
 MovementDetailFormSet = forms.formset_factory(
     MovementDetailForm, extra=1, min_num=1, validate_min=True
