@@ -48,6 +48,7 @@ class PurchaseReceiptStatus(models.TextChoices):
 
 
 class SupplierPaymentStatus(models.TextChoices):
+    PENDING = "PENDING", "Pendiente de aprobación"
     REGISTERED = "REGISTERED", "Registrado"
     CANCELLED = "CANCELLED", "Anulado"
 
@@ -317,6 +318,7 @@ class PurchaseDocument(TimeStampedModel):
     global_discount_before_tax = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     register_inventory_movement = models.BooleanField(default=False)
+    inventory_receipt_date = models.DateField(null=True, blank=True)
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.SET_NULL,
@@ -607,6 +609,14 @@ class SupplierPayment(TimeStampedModel):
     means_of_payment = models.ForeignKey(
         "sales.MeansOfPayment", on_delete=models.PROTECT, related_name="supplier_payments"
     )
+    bank_movement = models.OneToOneField(
+        "treasury.BankMovement", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="supplier_payment",
+    )
+    cash_movement = models.OneToOneField(
+        "treasury.CashSafeMovement", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="supplier_payment",
+    )
     reference = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
     status = models.CharField(
@@ -627,6 +637,10 @@ class SupplierPayment(TimeStampedModel):
             ),
             models.CheckConstraint(condition=models.Q(amount__gt=0), name="supplier_payment_amount_gt_zero"),
             models.CheckConstraint(condition=models.Q(exchange_rate__gt=0), name="supplier_payment_exchange_rate_gt_zero"),
+            models.CheckConstraint(
+                condition=models.Q(bank_movement__isnull=True) | models.Q(cash_movement__isnull=True),
+                name="supplier_payment_one_treasury_source",
+            ),
         ]
 
     def __str__(self):

@@ -528,7 +528,7 @@ class MovementDetailForm(forms.Form):
             )
 
 MovementDetailFormSet = forms.formset_factory(
-    MovementDetailForm, extra=1, min_num=1, validate_min=True
+    MovementDetailForm, extra=0, min_num=1, validate_min=True
 )
 
 MovementDetailEditFormSet = forms.formset_factory(

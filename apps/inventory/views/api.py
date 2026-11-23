@@ -91,7 +91,12 @@ def product_search(request):
     )
     if company_id:
         qs = qs.filter(company_id=company_id)
-    if q:
+    if request.GET.get("barcode") is not None:
+        if not company_id:
+            return JsonResponse({"error": "Selecciona una empresa activa."}, status=400)
+        barcode = request.GET.get("barcode", "").strip()
+        products = list(qs.filter(barcode=barcode).order_by("name")[:2]) if barcode else []
+    elif q:
         product_fields = (
             Q(name__icontains=q) | Q(sku__icontains=q)
             | Q(barcode__icontains=q) | Q(model__icontains=q)

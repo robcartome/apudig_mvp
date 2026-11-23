@@ -20,7 +20,7 @@
 {% block content %}
 <div class="purchase-list-header mb-3">
   <span class="text-muted purchase-list-header__description">Comprobantes recibidos de proveedores</span>
-  <div class="purchase-list-header__actions"><a href="{% url 'purchases:analytics' %}"
+  <div class="purchase-list-header__actions"><a href="{% url 'purchases:advance_list' %}" class="btn btn-outline-secondary btn-sm">Anticipos</a><a href="{% url 'purchases:analytics' %}"
       class="btn btn-outline-secondary btn-sm"><i class="ti ti-chart-bar me-1"></i>Analítica</a><a
       href="{% url 'purchases:accounts_payable_list' %}" class="btn btn-outline-secondary btn-sm"><i
         class="ti ti-cash me-1"></i>Cuentas por pagar</a><a href="{% url 'purchases:order_list' %}"
@@ -150,7 +150,10 @@
           <div class="col-md-4"><label class="form-label required">Fecha y hora</label><input type="datetime-local" class="form-control" name="payment_date" value="{{ quick_payment_date }}" required></div>
           <div class="col-md-4"><label class="form-label required">Importe</label><div class="input-group"><span class="input-group-text" id="quick-payment-currency"></span><input type="number" class="form-control" name="amount" id="quick-payment-amount" min="0.01" step="0.01" required></div><div class="form-hint">Puede registrar un adelanto menor al saldo.</div></div>
           <div class="col-md-4"><label class="form-label required">Medio de pago</label><select class="form-select" name="means_of_payment" required><option value="">Seleccionar</option>{% for means in payment_means %}<option value="{{ means.pk }}">{{ means.name }}</option>{% endfor %}</select></div>
-          <div class="col-12"><label class="form-label">Referencia / operacion</label><input class="form-control" name="reference" maxlength="100"></div>
+          <div class="col-md-4"><label class="form-label required">Origen del dinero</label><select name="source_type" class="form-select" required><option value="">Seleccionar</option><option value="CASH">Fondo de efectivo</option><option value="BANK">Cuenta bancaria</option></select></div>
+          <div class="col-md-4" data-payment-source><label class="form-label">Fondo de efectivo</label><select name="cash_fund" class="form-select"><option value="">Seleccionar</option>{% for fund in payment_funds %}<option value="{{ fund.pk }}">{{ fund.name }}</option>{% endfor %}</select></div>
+          <div class="col-md-4" data-payment-source><label class="form-label">Cuenta bancaria de origen</label><select name="bank_account" class="form-select"><option value="">Seleccionar</option>{% for account in payment_bank_accounts %}<option value="{{ account.pk }}">{{ account }} · {{ account.currency }}</option>{% endfor %}</select></div>
+          <div class="col-12"><label class="form-label">Referencia / operacion</label><input class="form-control" name="reference" maxlength="100"><div class="form-hint">Las salidas de efectivo requieren aprobación en Tesorería.</div></div>
         </div>
       </div>
       <div class="modal-footer"><a class="btn btn-outline-secondary me-auto" id="quick-payment-details" href="#">Mas detalles</a><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary"><i class="ti ti-cash me-1"></i>Registrar pago</button></div>
@@ -172,6 +175,7 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-filter.js' %}?v=20261021-1"></script>
 <script src="{% static 'js/components/table-scroll-sync.js' %}"></script>
+<script src="{% static 'js/purchases/payment-source.js' %}"></script>
 <script>
   (function () {
     const paymentModalEl = document.getElementById('quickPaymentModal');

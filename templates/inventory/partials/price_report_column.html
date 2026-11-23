@@ -1,0 +1,10 @@
+<div class="price-column-option" data-col="{{ column_key }}">
+  <div class="form-check">
+    <input class="form-check-input col-toggle" type="checkbox" id="col-{{ column_key }}" data-col="{{ column_key }}" checked>
+    <label class="form-check-label" for="col-{{ column_key }}">{{ column_label }}</label>
+  </div>
+  <div class="btn-group btn-group-sm">
+    <button type="button" class="btn btn-outline-secondary move-column-up" aria-label="Subir {{ column_label }}" title="Mover antes"><i class="ti ti-arrow-up"></i></button>
+    <button type="button" class="btn btn-outline-secondary move-column-down" aria-label="Bajar {{ column_label }}" title="Mover después"><i class="ti ti-arrow-down"></i></button>
+  </div>
+</div>

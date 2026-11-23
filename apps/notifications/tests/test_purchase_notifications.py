@@ -87,6 +87,7 @@ class NotificationTestBase(TestCase):
 
     def pay(self, document, amount, number="PAG-NOT-1"):
         return register_supplier_payment(
+            allow_unlinked=True,
             company_id=self.company.pk, store=self.store, supplier=self.supplier,
             payment_number=number, payment_date=timezone.now(), currency="PEN",
             exchange_rate=1, means_of_payment=self.means,

@@ -395,38 +395,19 @@ def price_report(request):
 
     price_lists, rows = get_price_consolidate(company.pk, query=q)
 
-    # Parse selected columns for Excel export (?cols=compra,venta,<uuid>,...)
-    # All columns shown by default; cols param restricts what goes into Excel.
-    cols_param = request.GET.get("cols", "").strip()
-    if cols_param:
-        selected_cols = set(cols_param.split(","))
+    # Preserve the requested order and accept only columns belonging to this company.
+    available_columns = ["compra", "venta"] + [str(pl.pk) for pl in price_lists]
+    available_set = set(available_columns)
+    if "cols" in request.GET:
+        requested = request.GET.get("cols", "").split(",")
+        selected_cols = list(dict.fromkeys(key for key in requested if key in available_set))
     else:
-        selected_cols = {"compra", "venta"} | {str(pl.pk) for pl in price_lists}
+        selected_cols = available_columns
 
     if fmt == "xlsx":
-        # Filter price_lists and rows to match selected_cols
-        show_compra = "compra" in selected_cols
-        show_venta = "venta" in selected_cols
-        xl_lists = [pl for pl in price_lists if str(pl.pk) in selected_cols]
-
-        # Rebuild rows with only selected pl_amounts
-        xl_rows = []
-        for row in rows:
-            xl_rows.append({
-                "sku": row["sku"],
-                "name": row["name"],
-                "price_purchase": row["price_purchase"] if show_compra else None,
-                "price_sale": row["price_sale"] if show_venta else None,
-                "prices": {str(pl.pk): row["prices"].get(str(pl.pk)) for pl in xl_lists},
-                "_show_compra": show_compra,
-                "_show_venta": show_venta,
-            })
         try:
             data = build_price_report_workbook(
-                price_lists=xl_lists,
-                rows=xl_rows,
-                show_compra=show_compra,
-                show_venta=show_venta,
+                price_lists=price_lists, rows=rows, column_order=selected_cols,
             )
         except ValueError as exc:
             messages.error(request, str(exc))
@@ -454,4 +435,5 @@ def price_report(request):
         "q": q,
         "total": len(rows),
         "selected_cols": selected_cols,
+        "report_scope": f"{request.user.pk}:{company.pk}:{request.session.get('active_store_id', '')}",
     })

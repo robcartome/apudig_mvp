@@ -193,14 +193,15 @@
     <div class="card-body border-bottom py-2">
       <div class="row g-2 align-items-end">
         <div class="col-12 col-lg-7">
-          <label class="form-label mb-1 small text-muted">Buscar producto registrado</label>
+          <label class="form-label mb-1 small text-muted" for="barcode-search">Escanear código de barras</label>
           <div class="input-group input-group-sm">
             <input type="text" id="barcode-search" class="form-control"
-                   placeholder="Nombre, SKU o código de barras…" autocomplete="off">
+                   placeholder="Escanea o escribe el código" autocomplete="off">
             <button type="button" id="barcode-btn" class="btn btn-outline-secondary" title="Buscar">
               <i class="ti ti-search"></i>
             </button>
           </div>
+          <span id="barcode-message" class="form-hint" role="status" aria-live="polite"></span>
         </div>
         <div class="col-12 col-lg-5">
           <label class="form-label mb-1 small text-muted">
@@ -505,7 +506,7 @@
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20261105-1"></script>
+<script src="{% static 'js/sales/document-lines.js' %}?v=20261122-1"></script>
 <script>
 (function () {
   const cfg = document.getElementById('sales-form-config');
@@ -618,4 +619,4 @@
   }
 })();
 </script>
-{% endblock %}
+<script src="{% static 'js/components/barcode-entry.js' %}?v=20261122-2"></script>{% endblock %}
