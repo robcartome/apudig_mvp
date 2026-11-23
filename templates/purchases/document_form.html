@@ -112,9 +112,13 @@
                     <label class="form-label">Orden de compra relacionada</label>
                     {{ form.purchase_order }}
                 </div>
-                <div class="col-md-6 col-xl-3">
-                    <label class="form-label">Almacen</label>
-                    {{ form.warehouse }}
+                <div class="col-md-6 col-xl-3" id="purchase-warehouse-field">
+                    <label class="form-label">Almacén</label>
+                    {{ form.warehouse }}{{ form.warehouse.errors }}
+                </div>
+                <div class="col-md-6 col-xl-3" id="purchase-receipt-date-field">
+                    <label class="form-label">Fecha de ingreso al almacén</label>
+                    {{ form.inventory_receipt_date }}{{ form.inventory_receipt_date.errors }}
                 </div>
                 <div class="col-md-6 col-xl-3">
                     <div class="form-check mt-4">{{ form.update_purchase_prices }}<label class="form-check-label"
@@ -151,7 +155,7 @@
                     class="badge bg-azure-lt text-azure">Editable</span></h3>
         </div>
         {{ formset.management_form }}
-        <div class="table-responsive">
+        <div class="px-3 py-2"><label class="form-label" for="barcode-search">Escanear código de barras</label><div class="input-group" style="max-width: 420px"><input id="barcode-search" class="form-control" autocomplete="off" placeholder="Escanea o escribe el código"><button id="barcode-btn" type="button" class="btn btn-outline-secondary">Agregar</button></div><div id="barcode-message" class="form-hint" role="status" aria-live="polite"></div></div><div class="table-responsive">
             <table class="table table-sm table-vcenter mb-0" id="lines-table">
                 <thead class="table-light">
                     <tr>
@@ -421,4 +425,4 @@
 <script src="{% static 'js/components/partner-picker.js' %}"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}"></script>
-<script src="{% static 'js/purchases/document-form.js' %}?v=20261021-1"></script>{% endblock %}
+<script src="{% static 'js/purchases/document-form.js' %}?v=20261122-1"></script><script src="{% static 'js/components/barcode-entry.js' %}?v=20261122-2"></script>{% endblock %}

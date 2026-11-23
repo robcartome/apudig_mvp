@@ -5,6 +5,7 @@
       <h3 class="card-title mb-0">Cuenta por pagar</h3>
       <div class="text-muted small">Cuotas, pagos aplicados y saldo actualizado</div>
     </div>
+    {% if can_manage_purchase_documents and purchase_document.document_status == 'REGISTERED' %}<a class="btn btn-sm btn-outline-primary ms-auto me-2" href="{% url 'purchases:advance_apply' purchase_document.pk %}">Aplicar anticipo</a>{% endif %}
     <span class="ms-auto">{% include "components/status_badge.html" with status=purchase_document.payment_status label=purchase_document.get_payment_status_display %}</span>
   </div>
   <div class="card-body py-3">
@@ -66,7 +67,7 @@
         <tr class="{% if payment.status == 'CANCELLED' %}text-muted{% endif %}">
           <td class="fw-semibold">{{ payment.payment_number }}</td>
           <td class="text-nowrap">{{ payment.payment_date|date:"d/m/Y H:i" }}</td>
-          <td>{{ payment.means_of_payment }}</td>
+          <td>{{ payment.means_of_payment }}{% if payment.bank_movement %}<div class="small text-muted">{{ payment.bank_movement.account }} · <a href="{% url 'treasury:bank_expense_list' %}">{{ payment.bank_movement.movement_number }}</a></div>{% elif payment.cash_movement %}<div class="small text-muted">{{ payment.cash_movement.fund }} · <a href="{% url 'treasury:cash_safe_movement_detail' payment.cash_movement.pk %}">{{ payment.cash_movement.movement_number }}</a></div>{% else %}<div class="small text-muted">Sin movimiento vinculado</div>{% endif %}</td>
           <td>{% if payment.reference %}<div>{{ payment.reference }}</div>{% else %}<span class="text-muted">Sin referencia</span>{% endif %}{% if payment.notes %}<div class="small text-muted">{{ payment.notes }}</div>{% endif %}</td>
           <td>
             {% for allocation in payment.allocations.all %}
@@ -76,7 +77,7 @@
           <td>{% include "components/status_badge.html" with status=payment.status label=payment.get_status_display %}</td>
           <td class="text-end fw-semibold text-nowrap">{{ payment.currency|currency_symbol }}&nbsp;{{ payment.amount|floatformat:2 }}</td>
           <td class="text-end text-nowrap">
-            {% if payment.status == 'REGISTERED' and can_manage_purchase_documents %}
+            {% if payment.status == 'REGISTERED' and can_manage_purchase_documents and not payment.cash_movement_id and not payment.bank_movement_id %}
             <a href="{% url 'purchases:payment_edit' payment.pk %}" class="btn btn-sm btn-outline-primary" title="Corregir fecha, medio o referencia" aria-label="Editar pago"><i class="ti ti-edit"></i></a>
             {% endif %}
             {% if payment.status == 'REGISTERED' and can_authorize_purchase_documents %}

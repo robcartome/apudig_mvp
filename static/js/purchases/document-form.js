@@ -37,7 +37,14 @@
       if (hasReceiptSource) registerInventoryMovement.checked = false;
       registerInventoryMovement.disabled = hasReceiptSource;
     }
-    if (warehouse) warehouse.disabled = hasReceiptSource || !registerInventoryMovement?.checked;
+    const enabled = !hasReceiptSource && registerInventoryMovement?.checked;
+    if (warehouse) warehouse.disabled = !enabled;
+    const receiptDate = document.getElementById("id_inventory_receipt_date");
+    if (receiptDate) receiptDate.disabled = !enabled;
+    ["purchase-warehouse-field", "purchase-receipt-date-field"].forEach(id => {
+      const field = document.getElementById(id);
+      if (field) field.hidden = !enabled;
+    });
   }
 
   function updateReceiptLinkSummary(receiptMovements = []) {

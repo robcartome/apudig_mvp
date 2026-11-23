@@ -179,7 +179,7 @@
           <span class="badge bg-azure-lt text-azure">Editable</span>
         </h3>
       </div>
-      <div class="table-responsive">
+      <div class="px-3 py-2"><label class="form-label" for="barcode-search">Escanear código de barras</label><div class="input-group" style="max-width: 420px"><input id="barcode-search" class="form-control" autocomplete="off" placeholder="Escanea o escribe el código"><button id="barcode-btn" type="button" class="btn btn-outline-secondary">Agregar</button></div><div id="barcode-message" class="form-hint" role="status" aria-live="polite"></div></div><div class="table-responsive">
         {{ formset.management_form }}
         <table class="table table-sm table-vcenter mb-0{% if movement_type == 'ADJUSTMENT' %} is-adjustment{% endif %}" id="lines-table">
           <thead class="table-light">
@@ -353,5 +353,6 @@
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
 <script src="{% static 'js/inventory/movement-form.js' %}?v=20261121-4"></script>
 {# All JS logic lives in static/js/** — nothing inline needed here #}
+<script src="{% static 'js/components/barcode-entry.js' %}?v=20261122-2"></script>
 {% endblock extra_js %}
 

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Aplicar anticipo - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Aplicar anticipo</h2>{% endblock %}
+{% block content %}
+<div class="alert alert-info">{{ purchase_document.supplier_name }} ? {{ purchase_document.series }}-{{ purchase_document.number }} ? {{ purchase_document.currency }}</div>
+{% if form.errors %}{% include "components/form_errors_alert.html" with form=form %}{% endif %}
+<form method="post" novalidate>{% csrf_token %}<div class="card mb-3"><div class="card-body">{% for field in form %}<div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}<div class="form-hint">Esta aplicaci?n reduce el saldo de la compra y no genera otra salida de dinero.</div></div></div><button class="btn btn-primary">Aplicar anticipo</button> <a class="btn btn-outline-secondary" href="{% url 'purchases:document_detail' purchase_document.pk %}">Cancelar</a></form>
+{% endblock %}

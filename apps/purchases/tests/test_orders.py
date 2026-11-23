@@ -111,6 +111,18 @@ class PurchaseOrderTest(TestCase):
         )
         self.assertEqual(document.lines.get().purchase_order_line_id, order.lines.get().pk)
 
+    def test_purchase_receipt_uses_selected_date(self):
+        document_type = DocumentType.objects.create(code="FDT", name="Factura fecha", category="BILLING")
+        receipt_date = date(2026, 9, 3)
+        document = create_purchase_document_draft(
+            company_id=self.company.pk, store=self.store, supplier=self.supplier,
+            document_type=document_type, lines=[self.line()], series="F001", number="505",
+            issue_date=date(2026, 9, 1), register_inventory_movement=True,
+            warehouse=self.warehouse, inventory_receipt_date=receipt_date,
+        )
+        register_purchase_document(document.pk, company_id=self.company.pk)
+        self.assertEqual(timezone.localtime(Movement.objects.get().date).date(), receipt_date)
+
     def test_linked_invoice_cannot_duplicate_order_receipt(self):
         order = self.create_order()
         document_type = DocumentType.objects.create(code="FOD", name="Factura no duplica", category="BILLING")

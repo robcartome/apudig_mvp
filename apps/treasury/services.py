@@ -565,6 +565,8 @@ def approve_cash_safe_movement(*, movement_id, company_id, store_id, user):
             "transfer_counterpart_id": str(counterpart.pk) if counterpart else "",
         },
     )
+    from apps.purchases.payment_services import settle_cash_supplier_payment
+    settle_cash_supplier_payment(movement, approved=True)
     return movement
 
 
@@ -598,15 +600,19 @@ def reject_cash_safe_movement(*, movement_id, company_id, store_id, reason, user
         user=user, action="CASH_SAFE_REJECT", entity="CashSafeMovement",
         entity_id=str(movement.pk), meta_data={"reason": reason},
     )
+    from apps.purchases.payment_services import settle_cash_supplier_payment
+    settle_cash_supplier_payment(movement, approved=False)
     return movement
 
 
 @transaction.atomic
-def reverse_cash_safe_movement(*, movement_id, company_id, store_id, reason, user):
+def reverse_cash_safe_movement(*, movement_id, company_id, store_id, reason, user, from_supplier_payment=False):
     Store.objects.select_for_update().get(pk=store_id, company_id=company_id)
     movement = CashSafeMovement.objects.select_for_update().get(
         pk=movement_id, company_id=company_id, store_id=store_id
     )
+    if not from_supplier_payment and hasattr(movement, "supplier_payment"):
+        raise TreasuryDomainError("Anule el pago desde Compras para revertir también la cuenta por pagar.")
     if movement.status != CashSafeMovement.Status.POSTED:
         raise TreasuryDomainError("Solo se puede revertir un movimiento confirmado.")
     if movement.transfer_source_id:
@@ -890,13 +896,15 @@ def register_bank_movement(*, company_id, user, **data):
 
 
 @transaction.atomic
-def reverse_bank_movement(*, movement_id, company_id, reason, user):
+def reverse_bank_movement(*, movement_id, company_id, reason, user, from_supplier_payment=False):
     if not reason:
         raise TreasuryDomainError("Indique el motivo de la reversión bancaria.")
     Company.objects.select_for_update().get(pk=company_id)
     movement = BankMovement.objects.select_for_update(of=("self",)).select_related(
         "account", "destination_account", "transfer_source"
     ).get(pk=movement_id, company_id=company_id)
+    if not from_supplier_payment and hasattr(movement, "supplier_payment"):
+        raise TreasuryDomainError("Anule el pago desde Compras para revertir también la cuenta por pagar.")
     if movement.status != BankMovement.Status.POSTED:
         raise TreasuryDomainError("Solo se puede revertir un movimiento confirmado.")
     if movement.transfer_source_id:

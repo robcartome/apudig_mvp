@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -495,7 +496,8 @@ def register_purchase_document(document_id, *, company_id, registered_by=None):
         movement = register_entry(
             store_id=str(document.store_id),
             warehouse_id=str(document.warehouse_id),
-            date=timezone.now(),
+            date=timezone.make_aware(datetime.combine(document.inventory_receipt_date, timezone.localtime().time()))
+            if document.inventory_receipt_date else timezone.now(),
             lines=[
                 {
                     "product_id": line.product_id,
@@ -536,7 +538,7 @@ def cancel_purchase_document(document_id, *, company_id, cancelled_by=None):
     if document.document_status == PurchaseDocumentStatus.CANCELLED:
         return document
     if document.installments.filter(
-        payment_allocations__payment__status="REGISTERED"
+        payment_allocations__payment__status__in=("REGISTERED", "PENDING")
     ).exists():
         raise ValueError("No se puede cancelar un documento con pagos registrados. Anula primero los pagos.")
     if document.landed_costs.filter(status="ALLOCATED").exists():

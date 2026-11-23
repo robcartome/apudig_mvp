@@ -604,20 +604,8 @@ def import_pricelist_excel(
 
 # ── Price report workbook ─────────────────────────────────────────────────────
 
-def build_price_report_workbook(
-    price_lists: list,
-    rows: list[dict],
-    show_compra: bool = True,
-    show_venta: bool = True,
-) -> bytes:
-    """Build an Excel price report from pre-computed selector data.
-
-    price_lists  — list of PriceList objects to include.
-    rows         — list of dicts with keys: sku, name, price_purchase, price_sale,
-                   prices {str(pl_pk): Decimal|None}.
-    show_compra  — include Precio Compra column.
-    show_venta   — include Precio Venta column.
-    """
+def build_price_report_workbook(price_lists: list, rows: list[dict], column_order=None) -> bytes:
+    """Export the selected price columns in the same order as the report."""
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Font, PatternFill
@@ -625,122 +613,41 @@ def build_price_report_workbook(
     except ImportError as exc:
         raise ValueError("Falta dependencia openpyxl.") from exc
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "consolidado_precios"
+    list_names = {str(price_list.pk): price_list.name for price_list in price_lists}
+    labels = {"compra": "Precio Compra", "venta": "Precio Venta", **list_names}
+    if column_order is None:
+        column_order = ["compra", "venta", *list_names]
+    columns = list(dict.fromkeys(key for key in column_order if key in labels))
 
-    headers = ["SKU", "Nombre"]
-    if show_compra:
-        headers.append("Precio Compra")
-    if show_venta:
-        headers.append("Precio Venta")
-    headers += [pl.name for pl in price_lists]
-
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(fill_type="solid", fgColor="2B5AB7")
-    center = Alignment(horizontal="center")
-    right = Alignment(horizontal="right")
-
-    ws.append(headers)
-    for col_idx in range(1, len(headers) + 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = center
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "reporte_precios"
+    sheet.append(["SKU", "Nombre", *(labels[key] for key in columns)])
+    for cell in sheet[1]:
+        cell.data_type = "s"
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(fill_type="solid", fgColor="2B5AB7")
+        cell.alignment = Alignment(horizontal="center")
 
     for row in rows:
-        row_data: list = [row["sku"], row["name"]]
-        if show_compra:
-            row_data.append(float(row["price_purchase"]) if row["price_purchase"] is not None else "")
-        if show_venta:
-            row_data.append(float(row["price_sale"]) if row["price_sale"] is not None else "")
-        for pl in price_lists:
-            val = row["prices"].get(str(pl.pk))
-            row_data.append(float(val) if val is not None else "")
-        ws.append(row_data)
-        row_num = ws.max_row
-        for col_idx in range(3, len(headers) + 1):
-            ws.cell(row=row_num, column=col_idx).alignment = right
+        values = []
+        for key in columns:
+            value = (row["price_purchase"] if key == "compra" else
+                     row["price_sale"] if key == "venta" else row["prices"].get(key))
+            values.append(float(value) if value is not None else None)
+        sheet.append([row["sku"], row["name"], *values])
+        for cell in sheet[sheet.max_row][:2]:
+            cell.data_type = "s"  # Product names and SKUs must not become formulas.
+        for cell in sheet[sheet.max_row][2:]:
+            cell.number_format = "#,##0.00"
+            cell.alignment = Alignment(horizontal="right")
 
-    ws.column_dimensions["A"].width = 15
-    ws.column_dimensions["B"].width = 45
-    for i in range(2, len(headers)):
-        col_letter = get_column_letter(3 + i - 2 + 1)
-        ws.column_dimensions[get_column_letter(3 + i - 2)].width = 18
-
-    ws.freeze_panes = "A2"
-
+    sheet.column_dimensions["A"].width = 16
+    sheet.column_dimensions["B"].width = 44
+    for index in range(3, len(columns) + 3):
+        sheet.column_dimensions[get_column_letter(index)].width = 22
+    sheet.freeze_panes = "C2"
+    sheet.auto_filter.ref = sheet.dimensions
     output = io.BytesIO()
-    wb.save(output)
-    return output.getvalue()
-
-
-# ── Consolidated price report Excel builder ───────────────────────────────────
-
-def build_price_report_workbook(price_lists: list, rows: list[dict]) -> bytes:
-    """Generate a styled Excel workbook from pre-built consolidate data.
-
-    price_lists — list of PriceList objects (ordered).
-    rows        — list of dicts as returned by get_price_consolidate().
-    """
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import Alignment, Font, PatternFill, numbers
-        from openpyxl.utils import get_column_letter
-    except ImportError as exc:
-        raise ValueError("Falta dependencia openpyxl.") from exc
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "reporte_precios"
-
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(fill_type="solid", fgColor="2B5AB7")
-    sku_fill = PatternFill(fill_type="solid", fgColor="F0F0F0")
-    center = Alignment(horizontal="center")
-    right = Alignment(horizontal="right")
-    num_fmt = "#,##0.00"
-
-    headers = (
-        ["SKU", "Nombre", "Precio Compra", "Precio Venta General"]
-        + [pl.name for pl in price_lists]
-    )
-    ws.append(headers)
-    for col_idx in range(1, len(headers) + 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = center
-
-    for row in rows:
-        row_data = [
-            row["sku"],
-            row["name"],
-            float(row["price_purchase"]),
-            float(row["price_sale"]),
-        ] + [
-            float(row["prices"].get(str(pl.pk))) if row["prices"].get(str(pl.pk)) is not None else ""
-            for pl in price_lists
-        ]
-        ws.append(row_data)
-        data_row = ws.max_row
-        ws.cell(data_row, 1).fill = sku_fill
-        for col_idx in range(3, len(headers) + 1):
-            c = ws.cell(data_row, col_idx)
-            c.number_format = num_fmt
-            c.alignment = right
-
-    # Column widths
-    ws.column_dimensions["A"].width = 16
-    ws.column_dimensions["B"].width = 44
-    ws.column_dimensions["C"].width = 16
-    ws.column_dimensions["D"].width = 22
-    for i in range(len(price_lists)):
-        col_letter = get_column_letter(5 + i)
-        ws.column_dimensions[col_letter].width = 22
-
-    ws.freeze_panes = "C2"  # freeze SKU+Nombre columns and header row
-
-    output = io.BytesIO()
-    wb.save(output)
+    workbook.save(output)
     return output.getvalue()

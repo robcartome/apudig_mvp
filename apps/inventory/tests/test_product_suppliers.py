@@ -428,6 +428,24 @@ class ProductSupplierViewTest(TestCase):
         self.assertContains(response, "Error:")
         self.assertContains(response, 'data-auto-dismiss="8000"')
 
+    def test_barcode_search_is_exact_and_reports_duplicate_matches(self):
+        self.product.barcode = "12345"
+        self.product.save(update_fields=["barcode"])
+        other = Product.objects.create(company=self.company, name="Otro", sku="BAR-OTHER", barcode="123456", unit=self.unit)
+        import json
+        from django.test import RequestFactory
+        from apps.inventory.views.api import product_search
+        request = RequestFactory().get("/", {"barcode": "12345"})
+        request.user = self.user
+        request.session = {"active_company_id": str(self.company.pk), "active_store_id": str(self.store.pk)}
+        response = product_search(request)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([item["id"] for item in json.loads(response.content)["products"]], [str(self.product.pk)])
+        other.barcode = "12345"
+        other.save(update_fields=["barcode"])
+        response = product_search(request)
+        self.assertEqual(len(json.loads(response.content)["products"]), 2)
+
     def test_product_search_api_uses_selected_supplier_and_company(self):
         response = self.client.get(reverse("inventory:api_product_search"), {
             "q": "OLD", "supplier": str(self.supplier.pk),

@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block title %}Consolidado de Lista de Precios — APUDIG{% endblock %}
 {% block page_title %}<h2 class="page-title">Consolidado de Lista de Precios</h2>{% endblock %}
 
@@ -32,26 +32,21 @@
 {# ─── Column selector panel ─── #}
 <div class="collapse d-print-none mb-3" id="col-selector">
   <div class="card card-body">
-    <p class="text-muted small mb-2 fw-semibold">Seleccionar columnas visibles (SKU y Nombre son fijas):</p>
-    <div class="d-flex flex-wrap gap-3">
-      <div class="form-check form-check-inline">
-        <input class="form-check-input col-toggle" type="checkbox" id="col-compra" data-col="compra" checked>
-        <label class="form-check-label" for="col-compra">Precio Compra</label>
-      </div>
-      <div class="form-check form-check-inline">
-        <input class="form-check-input col-toggle" type="checkbox" id="col-venta" data-col="venta" checked>
-        <label class="form-check-label" for="col-venta">Precio Venta</label>
-      </div>
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+      <div><h3 class="card-title mb-1">Columnas del reporte</h3><p class="text-muted small mb-0">Elige qué precios mostrar y usa las flechas para ordenarlos. SKU y nombre permanecen fijos.</p></div>
+      <span class="badge bg-blue-lt">Se guarda en este navegador</span>
+    </div>
+    <div id="column-options" class="price-column-options" data-scope="{{ report_scope }}">
+      {% include "inventory/partials/price_report_column.html" with column_key="compra" column_label="Precio compra" %}
+      {% include "inventory/partials/price_report_column.html" with column_key="venta" column_label="Precio venta" %}
       {% for pl in price_lists %}
-      <div class="form-check form-check-inline">
-        <input class="form-check-input col-toggle" type="checkbox" id="col-pl-{{ pl.pk }}" data-col="{{ pl.pk }}" checked>
-        <label class="form-check-label" for="col-pl-{{ pl.pk }}">{{ pl.name }}</label>
-      </div>
+      {% include "inventory/partials/price_report_column.html" with column_key=pl.pk column_label=pl.name %}
       {% endfor %}
     </div>
     <div class="mt-2 d-flex gap-2">
       <button type="button" class="btn btn-sm btn-ghost-primary" id="col-select-all">Todas</button>
       <button type="button" class="btn btn-sm btn-ghost-secondary" id="col-select-none">Ninguna</button>
+      <button type="button" class="btn btn-sm btn-ghost-secondary" id="col-reset">Restablecer orden y columnas</button>
     </div>
   </div>
 </div>
@@ -64,7 +59,7 @@
         <div class="input-group input-group-sm">
           <span class="input-group-text"><i class="ti ti-search"></i></span>
           <input type="text" name="q" value="{{ q }}" class="form-control"
-                 placeholder="Buscar por SKU, nombre o codigo de barras..." autofocus>
+                 placeholder="Buscar por SKU, nombre o código de barras...">
         </div>
       </div>
       <div class="col-auto">
@@ -104,7 +99,7 @@
       <tbody class="table-body small">
         {% for row in rows %}
         <tr>
-          <td class="text-muted small text-nowrap font-monospace">{{ row.sku }}</td>
+          <td class="small text-nowrap font-monospace"><a href="{% url 'inventory:product_update' row.product_id %}" title="Editar {{ row.name }}">{{ row.sku }}</a></td>
           <td>{{ row.name }}</td>
           <td class="text-end text-muted col-dyn" data-col="compra">{{ row.price_purchase|floatformat:2 }}</td>
           <td class="text-end fw-semibold col-dyn" data-col="venta">{{ row.price_sale|floatformat:2 }}</td>
@@ -129,7 +124,7 @@
   {% if page_obj.paginator.num_pages > 1 %}
   <div class="card-footer d-flex align-items-center d-print-none">
     <p class="m-0 text-muted small">
-      Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} &mdash; {{ total }} producto{{ total|pluralize }}
+      Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} &mdash; {{ total }} producto{{ total|pluralize }}
     </p>
     <ul class="pagination m-0 ms-auto">
       {% if page_obj.has_previous %}
@@ -162,12 +157,19 @@
 
 <p class="text-muted small mt-2 d-print-none">
   <i class="ti ti-info-circle me-1"></i>
-  Excel exporta <strong>todos</strong> los resultados de la busqueda con las columnas seleccionadas.
+  Excel exporta <strong>todos</strong> los resultados de la búsqueda con las columnas seleccionadas y en el orden elegido. La impresión incluye la página actual.
 </p>
 {% endblock %}
 
 {% block extra_css %}
 <style>
+  .price-column-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .5rem; }
+  .price-column-option { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .6rem .75rem; border: 1px solid var(--tblr-border-color, #dce1e7); border-radius: .4rem; background: var(--tblr-bg-surface, #fff); }
+  .price-column-option .form-check { margin: 0; min-width: 0; }
+  #price-table th, #price-table td { padding: .6rem .75rem; }
+  #price-table thead th { font-size: .72rem; letter-spacing: .03em; }
+  #price-table tbody tr:nth-child(even) { background: rgba(99, 115, 129, .035); }
+  #price-table tbody td:not(:nth-child(-n+2)) { font-variant-numeric: tabular-nums; }
   @media print {
     body { font-size: 9pt; }
     .sidebar, .navbar, .page-header, .d-print-none { display: none !important; }
@@ -181,72 +183,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-(function () {
-  const table = document.getElementById('price-table');
-  if (!table) return;
-
-  // Build ordered map of dynamic column keys from header cells
-  const allHeaderCells = Array.from(table.querySelectorAll('thead th'));
-  const dynCols = [];
-  allHeaderCells.forEach(function (th, colIdx) {
-    if (th.classList.contains('col-dyn')) {
-      dynCols.push({ key: th.dataset.col, colIdx: colIdx });
-    }
-  });
-
-  // Tag every body cell with its column key (overrides the Django placeholder)
-  Array.from(table.querySelectorAll('tbody tr')).forEach(function (tr) {
-    dynCols.forEach(function (col) {
-      const td = tr.cells[col.colIdx];
-      if (td) td.dataset.col = col.key;
-    });
-  });
-
-  function applyVisibility() {
-    document.querySelectorAll('.col-toggle').forEach(function (cb) {
-      const key = cb.dataset.col;
-      const display = cb.checked ? '' : 'none';
-      const th = table.querySelector('thead th[data-col="' + key + '"]');
-      if (th) th.style.display = display;
-      table.querySelectorAll('tbody td[data-col="' + key + '"]').forEach(function (td) {
-        td.style.display = display;
-      });
-    });
-  }
-
-  // Bind change handlers
-  document.querySelectorAll('.col-toggle').forEach(function (cb) {
-    cb.addEventListener('change', applyVisibility);
-  });
-
-  // Select all / none
-  const btnAll = document.getElementById('col-select-all');
-  const btnNone = document.getElementById('col-select-none');
-  if (btnAll) btnAll.addEventListener('click', function () {
-    document.querySelectorAll('.col-toggle').forEach(function (cb) { cb.checked = true; });
-    applyVisibility();
-  });
-  if (btnNone) btnNone.addEventListener('click', function () {
-    document.querySelectorAll('.col-toggle').forEach(function (cb) { cb.checked = false; });
-    applyVisibility();
-  });
-
-  // Excel export — sends only checked column keys to the server
-  const btnExcel = document.getElementById('btn-export-excel');
-  if (btnExcel) btnExcel.addEventListener('click', function () {
-    const cols = Array.from(document.querySelectorAll('.col-toggle'))
-      .filter(function (cb) { return cb.checked; })
-      .map(function (cb) { return cb.dataset.col; })
-      .join(',');
-    const url = new URL(window.location.href);
-    url.searchParams.set('format', 'xlsx');
-    if (cols) url.searchParams.set('cols', cols);
-    window.location.href = url.toString();
-  });
-
-  // Apply initial state
-  applyVisibility();
-})();
-</script>
+<script src="{% static 'js/inventory/price-report.js' %}?v=20261122-1"></script>
 {% endblock %}

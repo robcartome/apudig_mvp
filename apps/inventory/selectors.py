@@ -140,7 +140,7 @@ def get_price_consolidate(company_id, query: str = ""):
 
     price_lists  — list of PriceList objects ordered by name.
     rows         — list of dicts:
-        {sku, name, price_purchase, price_sale, prices: {str(pl_pk): Decimal|None}}
+        {product_id, sku, name, price_purchase, price_sale, prices: {str(pl_pk): Decimal|None}}
     """
     price_lists = list(
         PriceList.objects.filter(company_id=company_id, active=True).order_by("name")
@@ -168,6 +168,7 @@ def get_price_consolidate(company_id, query: str = ""):
 
     rows = [
         {
+            "product_id": p.pk,
             "sku": p.sku,
             "name": p.name,
             "price_purchase": p.price_purchase,
