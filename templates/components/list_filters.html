@@ -16,15 +16,15 @@
           <label class="form-label">{{ filter_date_label|default:"Fechas de emisión" }}</label>
           <div class="input-group list-filter-date-range">
             <span class="input-group-text" aria-hidden="true"><i class="ti ti-calendar"></i></span>
-            <input type="date" name="date_from" value="{{ list_filters.date_from }}" class="form-control" title="Desde" aria-label="Fecha desde">
+            <input id="list-filter-date-from" type="date" name="date_from" value="{{ list_filters.date_from }}" class="form-control" title="Desde" aria-label="Fecha desde">
             <span class="input-group-text list-filter-date-separator">a</span>
-            <input type="date" name="date_to" value="{{ list_filters.date_to }}" class="form-control" title="Hasta" aria-label="Fecha hasta">
-            <button class="btn btn-outline-secondary" type="submit" name="show_all_dates" value="1"
-                    title="Quitar el filtro de fechas y mostrar todos los registros">Todas</button>
+            <input id="list-filter-date-to" type="date" name="date_to" value="{{ list_filters.date_to }}" class="form-control" title="Hasta" aria-label="Fecha hasta">
           </div>
         </div>
 
         <div class="list-filter-toolbar">
+          <button class="btn btn-outline-secondary list-filter-all-dates" type="submit" name="show_all_dates" value="1"
+                  title="Quitar el filtro de fechas y mostrar todos los registros">Todas</button>
           <button class="btn list-filter-toggle{% if list_filters.advanced_filters_active %} is-active{% endif %}" type="button"
                   data-bs-toggle="collapse" data-bs-target="#{{ filter_collapse_id }}"
                   aria-controls="{{ filter_collapse_id }}"

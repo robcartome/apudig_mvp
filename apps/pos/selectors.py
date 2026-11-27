@@ -127,8 +127,62 @@ def get_cash_session_history(*, company_id, store_id) -> QuerySet:
     )
 
 
+def get_daily_document_payment_summary(cash_session):
+    """Allocate each completed sale once, across checkout means and credit balance."""
+    transactions = list(cash_session.transactions.filter(
+        status=PosTransaction.Status.COMPLETED,
+    ).select_related("sales_document__document_type", "sales_document__payment_method"))
+    payments_by_document = {}
+    for payment in cash_session.sales_payments.filter(
+        sales_document_id__in=[sale.sales_document_id for sale in transactions],
+        status=SalesPayment.Status.REGISTERED, purpose=SalesPayment.Purpose.SALE_CHECKOUT,
+    ).select_related("means_of_payment"):
+        payments_by_document.setdefault(payment.sales_document_id, []).append(payment)
+    grouped = {}
+    for sale in transactions:
+        document = sale.sales_document
+        condition = str(document.payment_method) if document.payment_method_id else (
+            "Crédito" if sale.payment_condition == PosTransaction.PaymentCondition.CREDIT else "Contado"
+        )
+        portions = [(payment.means_of_payment.name, payment.amount_in_sale_currency)
+                    for payment in payments_by_document.get(document.pk, [])]
+        pending = document.total - sum((amount for _, amount in portions), Decimal("0.00"))
+        if pending > 0:
+            portions.append(("Por cobrar al emitir" if sale.payment_condition == PosTransaction.PaymentCondition.CREDIT
+                             else "Sin pago registrado", pending))
+        for means, amount in portions:
+            key = (document.document_type.code, means, condition)
+            if key not in grouped:
+                grouped[key] = {"document_type": document.document_type.name, "means": means,
+                                "condition": condition, "amount": Decimal("0.00")}
+            grouped[key]["amount"] += amount
+    return [grouped[key] for key in sorted(grouped)]
+
+
 def get_cash_session_summary(cash_session: CashSession) -> dict:
     """Resumen operativo para arqueo y cierre de una sesión de caja."""
+    completed_sales = cash_session.transactions.filter(status=PosTransaction.Status.COMPLETED)
+    daily_summary = list(completed_sales.values(
+        "sales_document__document_type__code", "sales_document__document_type__name", "payment_condition",
+    ).annotate(operations=Count("id"), total=Sum("sales_document__total")).order_by(
+        "sales_document__document_type__code", "payment_condition",
+    ))
+    sales_total = completed_sales.aggregate(total=Sum("sales_document__total"))["total"] or Decimal("0.00")
+    credit_sales_total = completed_sales.filter(
+        payment_condition=PosTransaction.PaymentCondition.CREDIT
+    ).aggregate(total=Sum("sales_document__total"))["total"] or Decimal("0.00")
+    payment_breakdown = list(cash_session.sales_payments.filter(
+        status=SalesPayment.Status.REGISTERED,
+    ).values(
+        "purpose", "sales_document__document_type__name", "means_of_payment__name",
+        "sales_document__pos_transaction__payment_condition", "sales_document__payment_method__name",
+    ).annotate(total=Sum("amount"), operations=Count("id")).order_by(
+        "purpose", "sales_document__document_type__name", "means_of_payment__name",
+    ))
+    collection_total = sum(
+        (row["total"] for row in payment_breakdown if row["purpose"] == SalesPayment.Purpose.CREDIT_COLLECTION),
+        Decimal("0.00"),
+    )
     payments = list(
         cash_session.sales_payments.filter(status=SalesPayment.Status.REGISTERED)
         .values(
@@ -259,6 +313,12 @@ def get_cash_session_summary(cash_session: CashSession) -> dict:
         row["difference"] = declaration.difference if declaration else None
 
     return {
+        "document_payment_summary": get_daily_document_payment_summary(cash_session),
+        "daily_summary": daily_summary,
+        "sales_total": sales_total.quantize(MONEY_QUANTUM),
+        "credit_sales_total": credit_sales_total.quantize(MONEY_QUANTUM),
+        "collection_total": collection_total.quantize(MONEY_QUANTUM),
+        "payment_breakdown": payment_breakdown,
         "opening_total": cash_session.opening_total.quantize(MONEY_QUANTUM),
         "payment_total": payment_total.quantize(MONEY_QUANTUM),
         "refund_total": refund_total.quantize(MONEY_QUANTUM),

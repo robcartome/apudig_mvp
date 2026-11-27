@@ -1,163 +1,264 @@
 {% extends 'base.html' %}
+{% load static l10n %}
 {% block title %}Dashboard — APUDIG{% endblock %}
-
-{% block page_title %}
-<h2 class="page-title">Dashboard</h2>
-{% endblock %}
-
+{% block page_title %}<h2 class="page-title">Dashboard</h2>{% endblock %}
+{% block extra_css %}<link href="{% static 'css/dashboard.css' %}?v=20261127-6" rel="stylesheet">{% endblock %}
 {% block content %}
-<!-- Header de bienvenida -->
-<div class="page-header d-print-none mb-3">
-  <div class="row align-items-center">
-    <div class="col">
-      <h2 class="page-title">
-        Bienvenido, {{ user.name|default:user.email }}
-      </h2>
-      {% if active_company %}
-      <div class="page-subtitle text-muted">
-        <i class="ti ti-building me-1"></i>
-        {{ active_company.name }}{% if active_store %} &mdash; {{ active_store.name }}{% endif %}
+<div class="dashboard py-3">
+  <div class="row align-items-center g-2 g-md-3 mb-3 mb-lg-4">
+    <div class="col-12 col-md">
+      <div class="subheader mb-1">Resumen del negocio</div>
+      <h1 class="page-title text-break">Hola, {{ user.name|default:user.email }}</h1>
+      <div class="text-secondary small mt-2">
+        <i class="ti ti-building me-1" aria-hidden="true"></i>{{ active_company.name }}
+        <span class="mx-2">/</span>{{ active_store.name|default:"Selecciona una sucursal" }}
       </div>
-      {% else %}
-      <div class="page-subtitle">
-        <a href="{% url 'select_company' %}" class="text-warning">
-          <i class="ti ti-alert-triangle me-1"></i>Sin empresa activa — seleccionar
-        </a>
-      </div>
+    </div>
+    <div class="col-12 col-md-auto d-flex align-items-center justify-content-between gap-3">
+      <span class="text-secondary small"><span class="status-dot bg-green me-1" aria-hidden="true"></span>Actualizado a las {{ updated_at|date:"H:i" }}</span>
+      {% if dashboard_permissions.pos %}
+      <a href="{% url 'pos:sale' %}" class="btn btn-primary"><i class="ti ti-plus me-2" aria-hidden="true"></i>Nueva venta</a>
       {% endif %}
     </div>
-    <div class="col-auto">
-      <a href="{% url 'select_company' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="ti ti-switch me-1"></i>Cambiar empresa
+  </div>
+
+  {% if not active_store %}
+  <div class="card">
+    <div class="empty">
+      <div class="empty-icon"><i class="ti ti-building-store fs-1" aria-hidden="true"></i></div>
+      <h2 class="empty-title">Elige una sucursal para comenzar</h2>
+      <p class="empty-subtitle text-secondary">Consulta sus ventas, compras y existencias en un solo lugar.</p>
+      <div class="empty-action"><a href="{% url 'select_company' %}" class="btn btn-primary">Seleccionar empresa y sucursal</a></div>
+    </div>
+  </div>
+  {% else %}
+  <div class="row g-3 align-items-center mb-3">
+    <div class="col-12 col-lg d-flex flex-wrap align-items-baseline gap-2">
+      <h2 class="h3 mb-0">Vista general</h2>
+      <span class="text-secondary small">{{ date_from|date:"d M Y" }} — {{ date_to|date:"d M Y" }}</span>
+    </div>
+    <form method="get" class="col-12 col-lg-auto">
+      <div class="row g-2">
+        <div class="col">
+          <label class="visually-hidden" for="dashboard-period">Período</label>
+          <select name="period" id="dashboard-period" class="form-select form-select-sm">
+            {% for value, label in periods %}<option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col">
+          <label class="visually-hidden" for="dashboard-currency">Moneda</label>
+          <select name="currency" id="dashboard-currency" class="form-select form-select-sm">
+            {% for value, label in currencies %}<option value="{{ value }}" {% if currency == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-auto"><button type="submit" class="btn btn-sm btn-white"><i class="ti ti-adjustments-horizontal me-1" aria-hidden="true"></i>Aplicar</button></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="row g-2 g-md-3 mb-3 mb-lg-4">
+    {% if dashboard_permissions.sales %}
+    <div class="col-6 col-xl">
+      <a class="card card-link dashboard-kpi h-100 text-reset" href="{% url 'sales:document_list' %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <span class="text-secondary small">Ventas netas</span>
+            <span class="avatar avatar-sm bg-blue-lt"><i class="ti ti-chart-bar fs-3" aria-hidden="true"></i></span>
+          </div>
+          <div class="dashboard-metric fw-bold mb-2"><small class="fw-normal">{{ currency|currency_symbol }}</small> {{ sales.total|smart_number }}</div>
+          <div class="text-secondary small">
+            {% if sales.change != None %}<span class="badge {% if sales.change_direction == 'up' %}bg-green-lt{% else %}bg-red-lt{% endif %} me-1"><i class="ti ti-arrow-{% if sales.change_direction == 'up' %}up-right{% else %}down-right{% endif %}" aria-hidden="true"></i>{{ sales.change|floatformat:1 }}%</span>vs. período anterior{% else %}Sin base de comparación anterior{% endif %}
+          </div>
+        </div>
       </a>
     </div>
-  </div>
-</div>
-
-<!-- Módulos del sistema -->
-<div class="row row-deck row-cards">
-
-  <div class="col-sm-6 col-lg-3">
-    <div class="card">
-      <div class="card-body">
-        <div class="d-flex align-items-center mb-3">
-          <span class="bg-blue-lt avatar me-3">
-            <i class="ti ti-package text-blue fs-3"></i>
-          </span>
-          <div>
-            <div class="fw-bold">Inventario</div>
-            <div class="text-muted small">Productos · Almacenes · Stock</div>
+    <div class="col-6 col-xl">
+      <a class="card card-link dashboard-kpi h-100 text-reset" href="{% url 'sales:document_list' %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <span class="text-secondary small">Documentos emitidos</span>
+            <span class="avatar avatar-sm bg-purple-lt"><i class="ti ti-file-invoice fs-3" aria-hidden="true"></i></span>
           </div>
+          <div class="dashboard-metric fw-bold mb-2">{{ sales.count }}</div>
+          <div class="text-secondary small">Promedio neto: <strong class="fw-medium">{{ currency|currency_symbol }} {{ sales.average|smart_number }}</strong></div>
         </div>
-        <div class="text-muted small">
-          Gestión de productos, movimientos de entrada, salida y transferencias entre almacenes.
-        </div>
-      </div>
-      <div class="card-footer">
-        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
-      </div>
+      </a>
     </div>
-  </div>
-
-  <div class="col-sm-6 col-lg-3">
-    <div class="card">
-      <div class="card-body">
-        <div class="d-flex align-items-center mb-3">
-          <span class="bg-green-lt avatar me-3">
-            <i class="ti ti-receipt text-green fs-3"></i>
-          </span>
-          <div>
-            <div class="fw-bold">Ventas</div>
-            <div class="text-muted small">Cotizaciones · Órdenes · Documentos de venta</div>
+    {% endif %}
+    {% if dashboard_permissions.purchases %}
+    <div class="col-6 col-xl">
+      <a class="card card-link dashboard-kpi h-100 text-reset" href="{% url 'purchases:document_list' %}?status=REGISTERED&amp;date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <span class="text-secondary small">Compras registradas</span>
+            <span class="avatar avatar-sm bg-teal-lt"><i class="ti ti-shopping-cart fs-3" aria-hidden="true"></i></span>
           </div>
+          <div class="dashboard-metric fw-bold mb-2"><small class="fw-normal">{{ currency|currency_symbol }}</small> {{ purchases.total|smart_number }}</div>
+          <div class="text-secondary small">{{ purchases.count }} documento{{ purchases.count|pluralize:"s" }} en el período</div>
         </div>
-        <div class="text-muted small">
-          Ciclo comercial completo desde la cotización hasta la emisión del documento de venta.
-        </div>
-      </div>
-      <div class="card-footer">
-        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
-      </div>
+      </a>
     </div>
-  </div>
-
-  <div class="col-sm-6 col-lg-3">
-    <div class="card">
-      <div class="card-body">
-        <div class="d-flex align-items-center mb-3">
-          <span class="bg-orange-lt avatar me-3">
-            <i class="ti ti-users text-orange fs-3"></i>
-          </span>
-          <div>
-            <div class="fw-bold">Socios</div>
-            <div class="text-muted small">Clientes · Proveedores</div>
+    {% endif %}
+    {% if dashboard_permissions.inventory %}
+    <div class="col-6 col-xl">
+      <a class="card card-link dashboard-kpi h-100 text-reset" href="#dashboard-stock">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <span class="text-secondary small">Productos por reponer</span>
+            <span class="avatar avatar-sm bg-yellow-lt"><i class="ti ti-package fs-3" aria-hidden="true"></i></span>
           </div>
+          <div class="dashboard-metric fw-bold mb-2">{{ stock.critical_count }} <small class="fw-normal text-secondary">/ {{ stock.count }}</small></div>
+          <div class="text-secondary small">{% if stock.critical_count %}<span class="text-warning">Existencias ≤ mínimo</span>{% else %}Sin alertas de reposición{% endif %} · Al momento</div>
         </div>
-        <div class="text-muted small">
-          Registro y búsqueda de clientes y proveedores con datos de contacto y condiciones comerciales.
-        </div>
-      </div>
-      <div class="card-footer">
-        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
-      </div>
+      </a>
     </div>
+    {% endif %}
   </div>
 
-  <div class="col-sm-6 col-lg-3">
-    <div class="card">
-      <div class="card-body">
-        <div class="d-flex align-items-center mb-3">
-          <span class="bg-purple-lt avatar me-3">
-            <i class="ti ti-adjustments text-purple fs-3"></i>
-          </span>
-          <div>
-            <div class="fw-bold">Maestros</div>
-            <div class="text-muted small">Categorías · Marcas · Series</div>
+  <section class="card mb-3 mb-lg-4" aria-labelledby="shortcuts-title">
+    <div class="card-header border-0">
+      <div><h2 class="card-title mb-1" id="shortcuts-title">Accesos directos</h2><p class="text-secondary small mb-0">Tu operación diaria, a un clic.</p></div>
+      <i class="ti ti-bolt text-secondary ms-auto" aria-hidden="true"></i>
+    </div>
+    <div class="card-body pt-0">
+      <div class="row g-2">
+        {% if dashboard_permissions.pos %}
+          {% url 'pos:sale' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Punto de venta' subtitle='Venta rápida' icon='device-desktop-dollar' color='blue' only %}
+        {% endif %}
+        {% if dashboard_permissions.create_sale %}
+          {% url 'sales:document_create' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Emitir documento' subtitle='Ventas' icon='receipt' color='blue' only %}
+          {% url 'sales:quotation_create' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Nueva cotización' subtitle='Comercial' icon='file-pencil' color='purple' only %}
+        {% endif %}
+        {% if dashboard_permissions.create_purchase %}
+          {% url 'purchases:document_create' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Registrar compra' subtitle='Compras' icon='shopping-cart-plus' color='teal' only %}
+        {% endif %}
+        {% if dashboard_permissions.inventory %}
+          {% url 'inventory:stock_comparative_report' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Consultar stock' subtitle='Stock comparativo' icon='packages' color='yellow' only %}
+          {% url 'inventory:price_report' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Consultar precios' subtitle='Reporte de precios' icon='tags' color='teal' only %}
+        {% endif %}
+        {% if dashboard_permissions.create_product %}
+          {% url 'inventory:product_create' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Nuevo artículo' subtitle='Catálogo' icon='box' color='blue' only %}
+        {% endif %}
+        {% if dashboard_permissions.treasury %}
+          {% url 'treasury:dashboard' as shortcut_url %}
+          {% include 'web/components/dashboard_shortcut.html' with href=shortcut_url title='Ver tesorería' subtitle='Cuentas y movimientos' icon='building-bank' color='purple' only %}
+        {% endif %}
+        {% if not dashboard_permissions.pos and not dashboard_permissions.create_sale and not dashboard_permissions.create_purchase and not dashboard_permissions.inventory and not dashboard_permissions.create_product and not dashboard_permissions.treasury %}
+        <div class="col-12 text-secondary small">Los accesos disponibles dependen de los permisos de tu usuario.</div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <div class="row g-2 g-md-3 mb-3 mb-lg-4">
+    {% if dashboard_permissions.sales %}
+    <div class="col-12 col-xl-7">
+      <section class="card" aria-labelledby="sales-chart-title">
+        <div class="card-header border-0">
+          <div><h2 class="card-title mb-1" id="sales-chart-title">Evolución de ventas</h2><p class="text-secondary small mb-0">Ventas netas diarias · {{ currency }} · {{ period_label }}</p></div>
+          <span class="text-secondary small ms-auto d-none d-sm-block"><span class="legend bg-primary"></span>Ventas netas</span>
+        </div>
+        <div class="card-body pt-0">
+          <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2"><strong class="dashboard-chart-total mb-0">{{ currency|currency_symbol }} {{ sales.total|smart_number }}</strong><span class="text-secondary small">{{ sales.count }} documentos emitidos</span></div>
+          {% if chart.has_activity %}
+          <div class="dashboard-chart" role="img" aria-label="Gráfico de ventas netas diarias. Los valores se pueden consultar en la tabla debajo del gráfico.">
+            <div class="dashboard-chart-labels text-secondary small"><span>{{ chart.high|smart_number }}</span><span>{{ chart.low|smart_number }}</span></div>
+            <svg viewBox="0 0 760 200" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="dashboard-chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity=".16"/><stop offset="100%" stop-color="currentColor" stop-opacity=".01"/></linearGradient></defs>
+              <path d="M20 30H740 M20 100H740 M20 170H740" class="dashboard-chart-grid"/>
+              <line x1="20" x2="740" y1="{{ chart.zero_y|unlocalize }}" y2="{{ chart.zero_y|unlocalize }}" class="dashboard-chart-zero"/>
+              {% if chart.series|length > 1 %}<polygon points="20,{{ chart.zero_y|unlocalize }} {{ chart.points }} 740,{{ chart.zero_y|unlocalize }}" fill="url(#dashboard-chart-fill)"/>{% endif %}
+              <polyline points="{{ chart.points }}" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+              {% for row in chart.series %}<circle cx="{{ row.x|unlocalize }}" cy="{{ row.y|unlocalize }}" r="3.5" fill="currentColor"><title>{{ row.day|date:"d/m" }}: {{ currency }} {{ row.total|smart_number }}</title></circle>{% endfor %}
+            </svg>
           </div>
+          <div class="dashboard-chart-dates d-flex justify-content-between text-secondary small"><span>{{ date_from|date:"d M" }}</span><span>{{ date_to|date:"d M" }}</span></div>
+          {% else %}
+          {% include 'web/components/dashboard_empty.html' with title='Aún no hay ventas en este período' subtitle='Las ventas emitidas aparecerán aquí. Prueba con otro período o moneda.' icon='chart-line' only %}
+          {% endif %}
         </div>
-        <div class="text-muted small">
-          Configuración de catálogos base: categorías, unidades, series documentarias y tipos.
+        {% if chart.has_activity %}
+        <details class="card-footer small">
+          <summary class="cursor-pointer">Ver detalle diario</summary>
+          <div class="table-responsive mt-3"><table class="table table-sm mb-0"><caption class="visually-hidden">Ventas netas diarias en {{ currency }}</caption><thead><tr><th scope="col">Fecha</th><th scope="col" class="text-end">Venta neta ({{ currency }})</th></tr></thead><tbody>{% for row in chart.series %}<tr><td>{{ row.day|date:"d/m/Y" }}</td><td class="text-end">{{ row.total|smart_number }}</td></tr>{% endfor %}</tbody></table></div>
+        </details>
+        {% endif %}
+      </section>
+    </div>
+    {% endif %}
+    <div class="col-12 {% if dashboard_permissions.sales %}col-xl-5{% endif %}">
+      <section class="card" aria-labelledby="pending-title">
+        <div class="card-header border-0">
+          <div><h2 class="card-title mb-1" id="pending-title">Pendientes operativos</h2><p class="text-secondary small mb-0">Qué necesita tu atención ahora.</p></div>
+          <span class="avatar avatar-sm bg-yellow-lt ms-auto"><i class="ti ti-bell fs-3" aria-hidden="true"></i></span>
         </div>
-      </div>
-      <div class="card-footer">
-        <span class="badge bg-secondary-lt text-secondary">Próximamente</span>
-      </div>
+        <div class="list-group list-group-flush">
+          {% if dashboard_permissions.sales %}
+            {% url 'sales:document_list' as pending_url %}
+            {% include 'web/components/dashboard_pending.html' with href=pending_url title='Documentos por emitir' subtitle='Borradores de venta' icon='file-invoice' count=sales.drafts status='DRAFT' only %}
+            {% url 'sales:order_list' as pending_url %}
+            {% include 'web/components/dashboard_pending.html' with href=pending_url title='Pedidos por facturar' subtitle='Pedidos confirmados' icon='clipboard-list' count=sales.orders status='CONFIRMED' only %}
+            {% url 'sales:quotation_list' as pending_url %}
+            {% include 'web/components/dashboard_pending.html' with href=pending_url title='Cotizaciones enviadas' subtitle='Seguimiento comercial' icon='send' count=sales.quotations status='SENT' only %}
+          {% endif %}
+          {% if dashboard_permissions.purchases %}
+            {% url 'purchases:document_list' as pending_url %}
+            {% include 'web/components/dashboard_pending.html' with href=pending_url title='Compras por registrar' subtitle='Borradores de compra' icon='shopping-bag' count=purchases.drafts status='DRAFT' only %}
+          {% endif %}
+          {% if not dashboard_permissions.sales and not dashboard_permissions.purchases %}<div class="card-body text-secondary small">No tienes acceso a pendientes comerciales.</div>{% endif %}
+        </div>
+        <div class="card-footer text-secondary small"><i class="ti ti-info-circle me-1" aria-hidden="true"></i>Incluye pendientes de todas las fechas y monedas.</div>
+      </section>
     </div>
   </div>
 
-</div><!-- /row módulos -->
-
-<!-- Info de sesión -->
-<div class="row mt-3">
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title"><i class="ti ti-info-circle me-2 text-muted"></i>Sesión actual</h3>
-      </div>
-      <div class="card-body p-0">
-        <table class="table table-sm card-table mb-0">
-          <tbody>
-            <tr>
-              <td class="text-muted fw-semibold" style="width:35%">Empresa</td>
-              <td>{{ active_company.name|default:"—" }}</td>
-            </tr>
-            <tr>
-              <td class="text-muted fw-semibold">Sucursal</td>
-              <td>{{ active_store.name|default:"(sin sucursal)" }}</td>
-            </tr>
-            <tr>
-              <td class="text-muted fw-semibold">Usuario</td>
-              <td>{{ user.name|default:user.email }}</td>
-            </tr>
-            <tr>
-              <td class="text-muted fw-semibold">Rol</td>
-              <td>{% if user.is_superuser %}APUDIG{% elif can_manage_company %}Administrador de empresa{% elif active_store_role == 'ADMIN' %}Administrador de tienda{% elif active_store_role == 'SELLER' %}Vendedor{% elif active_store_role == 'CASHIER' %}Cajero{% else %}Usuario{% endif %}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+  <div class="row g-3">
+    {% if dashboard_permissions.sales %}
+    <div class="col-12 {% if dashboard_permissions.inventory %}col-xxl-7{% endif %}">
+      <section class="card" aria-labelledby="recent-title">
+        <div class="card-header">
+          <div><h2 class="card-title mb-1" id="recent-title">Últimos documentos emitidos</h2><p class="text-secondary small mb-0">Actividad del período en {{ currency }}.</p></div>
+          <a class="text-primary small text-nowrap ms-auto" href="{% url 'sales:document_list' %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}">Ver ventas <i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+        </div>
+        {% if sales.recent %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Últimos documentos emitidos, tabla desplazable"><table class="table table-vcenter table-hover card-table mb-0"><thead><tr><th scope="col">Documento / cliente</th><th scope="col">Fecha</th><th scope="col">Estado</th><th scope="col" class="text-end">Neto ({{ currency }})</th></tr></thead><tbody>
+          {% for document in sales.recent %}<tr><td><a class="fw-semibold text-reset" href="{% url 'sales:document_detail' document.pk %}">{{ document.document_type.name }} {{ document.series_code }}-{{ document.number }}</a><div class="text-secondary small">{{ document.customer_legal_name|default:"Cliente general" }}</div></td><td class="text-nowrap">{{ document.issue_date|date:"d M" }}</td><td><span class="badge {% if document.status == 'SUNAT_OBSERVED' %}bg-yellow-lt{% else %}bg-green-lt{% endif %}">{{ document.get_status_display }}</span></td><td class="text-end text-nowrap fw-semibold">{{ document.net_amount|smart_number }}</td></tr>{% endfor %}
+        </tbody></table></div>
+        {% else %}
+          {% include 'web/components/dashboard_empty.html' with title='Sin documentos para mostrar' subtitle='Aquí verás los últimos documentos emitidos del período.' icon='file-invoice' only %}
+        {% endif %}
+      </section>
     </div>
+    {% endif %}
+    {% if dashboard_permissions.inventory %}
+    <div class="col-12 {% if dashboard_permissions.sales %}col-xxl-5{% endif %}">
+      <section class="card" id="dashboard-stock" aria-labelledby="stock-title">
+        <div class="card-header">
+          <div><h2 class="card-title mb-1" id="stock-title">Atención al inventario{% if stock.critical_count %}<span class="badge bg-yellow-lt ms-2">{{ stock.critical_count }}</span>{% endif %}</h2><p class="text-secondary small mb-0">Existencias al mínimo o por debajo · Al momento.</p></div>
+          <a class="text-primary small text-nowrap ms-auto" href="{% url 'inventory:stock_report_detail' %}?run=1">Ver stock <i class="ti ti-arrow-right" aria-hidden="true"></i></a>
+        </div>
+        {% if stock.critical %}
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Atención al inventario, tabla desplazable"><table class="table table-vcenter table-hover card-table mb-0"><thead><tr><th scope="col">Producto</th><th scope="col" class="text-end">Existencias</th><th scope="col" class="text-end">Mínimo</th></tr></thead><tbody>
+          {% for product in stock.critical %}<tr><td><a class="fw-semibold text-reset" href="{% url 'inventory:stock_report_detail' %}?run=1&amp;q={{ product.sku|urlencode }}">{{ product.name }}</a><div class="text-secondary small">{{ product.sku }} · {{ product.unit.code }}</div></td><td class="text-end text-nowrap text-warning fw-semibold">{{ product.on_hand|smart_number }}</td><td class="text-end text-nowrap text-secondary">{{ product.minimum|smart_number }}</td></tr>{% endfor %}
+        </tbody></table></div>
+        <div class="card-footer text-secondary small">Hasta 5 productos prioritarios. Existencias sumadas de los almacenes activos de la sucursal.</div>
+        {% elif stock.count %}
+          {% include 'web/components/dashboard_empty.html' with title='Inventario sin alertas' subtitle='Los productos monitoreados están por encima de su mínimo.' icon='package' only %}
+        {% else %}
+          {% include 'web/components/dashboard_empty.html' with title='Empieza a gestionar tu inventario' subtitle='Registra existencias o configura mínimos para monitorear tus productos.' icon='package' only %}
+        {% endif %}
+      </section>
+    </div>
+    {% endif %}
   </div>
+  <p class="text-secondary small mt-3 mb-0"><i class="ti ti-info-circle me-1" aria-hidden="true"></i>Importes con impuestos en {{ currency }}, sin conversión de moneda.{% if dashboard_permissions.sales %} Ventas netas: documentos emitidos menos notas de crédito; se excluyen borradores, anulados, rechazados y facturas consolidadas de tickets ya contabilizados. Comparación con los {{ chart.series|length }} día{{ chart.series|length|pluralize:"s" }} anteriores.{% endif %}</p>
+  {% endif %}
 </div>
 {% endblock %}
-

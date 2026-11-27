@@ -33,6 +33,7 @@
       <thead>
         <tr>
           <th class="text-center">Imagen</th>
+          <th>Fecha</th>
           <th>SKU</th>
           <th>Nombre</th>
           <th>Categoría</th>
@@ -54,6 +55,7 @@
             <span class="avatar avatar-sm"><i class="ti ti-package"></i></span>
             {% endif %}
           </td>
+          <td class="text-muted">{{ obj.created_at|date:"d/m/Y" }}</td>
           <td class="fw-semibold">
             <a href="{% url 'inventory:product_update' obj.pk %}"
                title="Editar producto {{ obj.sku }}">{{ obj.sku }}</a>
@@ -84,7 +86,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="9" class="text-center text-muted py-4">
+          <td colspan="10" class="text-center text-muted py-4">
             No hay productos{% if query %} que coincidan con "{{ query }}"{% endif %}.
           </td>
         </tr>

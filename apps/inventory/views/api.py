@@ -91,7 +91,12 @@ def product_search(request):
     )
     if company_id:
         qs = qs.filter(company_id=company_id)
-    if q:
+    if request.GET.get("barcode") is not None:
+        if not company_id:
+            return JsonResponse({"error": "Selecciona una empresa activa."}, status=400)
+        barcode = request.GET.get("barcode", "").strip()
+        products = list(qs.filter(barcode=barcode).order_by("name")[:2]) if barcode else []
+    elif q:
         product_fields = (
             Q(name__icontains=q) | Q(sku__icontains=q)
             | Q(barcode__icontains=q) | Q(model__icontains=q)
@@ -161,21 +166,32 @@ def product_search(request):
 
 @require_GET
 def product_stock(request):
-    """Return stock for a single product at a given warehouse."""
+    """Return the product's stock in the active store and selected warehouse."""
     if _require_auth(request):
         return JsonResponse({"error": "Unauthorized"}, status=401)
 
     product_id   = request.GET.get("product", "").strip()
     warehouse_id = request.GET.get("warehouse", "").strip()
-
-    if not product_id or not warehouse_id:
-        return JsonResponse({"stock": 0})
+    company_id = _get_company_id(request)
+    store_id = _get_store_id(request)
+    if not product_id or not company_id or not store_id:
+        return JsonResponse({"error": "Selecciona una empresa y sucursal activas."}, status=400)
 
     try:
-        s = StockByWarehouse.objects.get(product_id=product_id, warehouse_id=warehouse_id)
-        return JsonResponse({"stock": float(s.quantity)})
-    except StockByWarehouse.DoesNotExist:
-        return JsonResponse({"stock": 0})
+        product_id = uuid_lib.UUID(product_id)
+        warehouse_id = uuid_lib.UUID(warehouse_id) if warehouse_id else None
+    except ValueError:
+        return JsonResponse({"error": "Identificador inválido."}, status=400)
+
+    if not Product.objects.filter(pk=product_id, company_id=company_id).exists():
+        return JsonResponse({"error": "Producto no encontrado."}, status=404)
+    if warehouse_id and not Warehouse.objects.filter(pk=warehouse_id, store_id=store_id).exists():
+        return JsonResponse({"error": "Almacén no encontrado."}, status=404)
+
+    stocks = StockByWarehouse.objects.filter(product_id=product_id, warehouse__store_id=store_id)
+    total = stocks.aggregate(total=Sum("quantity"))["total"] or 0
+    warehouse_stock = stocks.filter(warehouse_id=warehouse_id).values_list("quantity", flat=True).first() if warehouse_id else None
+    return JsonResponse({"stock": float(warehouse_stock or 0) if warehouse_id else None, "total_stock": float(total)})
 
 
 @require_GET

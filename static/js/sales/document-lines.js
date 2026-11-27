@@ -666,47 +666,6 @@
   }
 
   // ── Barcode search ──────────────────────────────────────────────────────────
-  function searchByBarcode() {
-    const barcode = document.getElementById('barcode-search')?.value?.trim();
-    if (!barcode) return;
-    window.ApiService.get(configEl.dataset.searchUrl + '?q=' + encodeURIComponent(barcode))
-      .then(function (data) {
-        const results = data.results || [];
-        if (!results.length) {
-          alert('No se encontró producto con código: ' + barcode);
-          return;
-        }
-        const product = results[0];
-        const index   = parseInt(totalForms().value, 10);
-        const row     = buildRow(index);
-        linesBody.appendChild(row);
-        totalForms().value = index + 1;
-        renumber();
-        ProductPicker.init(row);
-
-        const productHidden = row.querySelector('input[name$="-product"]');
-        if (productHidden) productHidden.value = product.id;
-
-        const productSelect = row.querySelector('.product-select');
-        if (productSelect) {
-          $(productSelect).append(new Option(product.text || product.name, product.id, true, true)).trigger('change');
-        }
-
-        row.dispatchEvent(new CustomEvent('product-picker:selected', {
-          detail: product,
-          bubbles: true,
-        }));
-
-        document.getElementById('barcode-search').value = '';
-      })
-      .catch(function (err) { console.error('Barcode search error', err); });
-  }
-
-  document.getElementById('barcode-btn')?.addEventListener('click', searchByBarcode);
-  document.getElementById('barcode-search')?.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); searchByBarcode(); }
-  });
-
   // ── Init existing rows (edit / copy) ──────────────────────────────────────
   function initRow(row) {
     const unitLabel = row.dataset.initUnit   || '—';

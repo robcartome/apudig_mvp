@@ -1,5 +1,15 @@
 {% load static %}
 <aside id="sidebar" class="navbar navbar-vertical navbar-expand-lg">
+  <script>
+    if (document.documentElement.classList.contains('sidebar-initial-collapsed')) {
+      document.currentScript.parentElement.classList.add('sidebar-collapsed');
+      document.body.classList.add('sidebar-collapsed-body');
+    }
+    if (window.innerWidth < 992 && document.documentElement.classList.contains('sidebar-initial-mobile-open')) {
+      document.currentScript.parentElement.classList.add('sidebar-mobile-open');
+      document.body.classList.add('sidebar-mobile-open-body');
+    }
+  </script>
   <div class="container-fluid">
     <div class="navbar-brand navbar-brand-autodark d-flex align-items-center w-100">
       <a href="{% url 'dashboard' %}" class="sidebar-brand-link text-decoration-none" aria-label="ApuDig">
@@ -33,7 +43,7 @@
 
         {# ─── Dashboard ─── #}
         <li class="nav-item">
-          <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+          <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' and not request.resolver_match.namespace %}active{% endif %}"
              href="{% url 'dashboard' %}"
              data-tooltip-label="Dashboard">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-home fs-2"></i></span>
@@ -114,10 +124,12 @@
           </a>
           <div class="collapse {% if request.resolver_match.namespace == 'treasury' %}show{% endif %}" id="sidebar-treasury">
             <ul class="navbar-nav ps-lg-3">
-              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_ledger' %}active{% endif %}" href="{% url 'treasury:cash_safe_ledger' %}">Caja fuerte de tienda</a></li>
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Efectivo y fondos</span></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_ledger' or request.resolver_match.url_name == 'cash_safe_movement_detail' or request.resolver_match.url_name == 'cash_safe_income_create' %}active{% endif %}" href="{% url 'treasury:cash_safe_ledger' %}">Caja fuerte de tienda</a></li>
               <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_deposit_list' %}active{% endif %}" href="{% url 'treasury:cash_safe_deposit_list' %}">Depósitos en tránsito</a></li>
-              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_count_list' %}active{% endif %}" href="{% url 'treasury:cash_safe_count_list' %}">Arqueos de caja fuerte</a></li>
+              <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'cash_safe_count_list' or request.resolver_match.url_name == 'cash_safe_count_detail' %}active{% endif %}" href="{% url 'treasury:cash_safe_count_list' %}">Arqueos de caja fuerte</a></li>
               <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'treasury_fund_list' %}active{% endif %}" href="{% url 'treasury:treasury_fund_list' %}">Fondos y cajas</a></li>
+              <li class="nav-item mt-1"><span class="sidebar-section-label">Bancos</span></li>
               <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.namespace == 'treasury' %}active{% endif %}" href="{% url 'treasury:dashboard' %}">Cuentas y movimientos</a></li>
               <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'bank_income_list' %}active{% endif %}" href="{% url 'treasury:bank_income_list' %}">Ingresos bancarios</a></li>
               <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'bank_expense_list' %}active{% endif %}" href="{% url 'treasury:bank_expense_list' %}">Egresos bancarios</a></li>
@@ -167,20 +179,20 @@
         {# ─── Inventario (movimientos) ─── #}
         {% with inv_name=request.resolver_match.url_name|default:'' %}
         <li class="nav-item">
-          <a class="nav-link {% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}active{% endif %}"
+          <a class="nav-link {% if request.resolver_match.namespace == 'inventory' %}{% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}active{% endif %}{% endif %}"
              href="#sidebar-inventory"
              data-bs-toggle="collapse"
              data-section-url="{% url 'inventory:movement_list' %}"
              data-tooltip-label="Inventario"
-             aria-expanded="{% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}true{% else %}false{% endif %}">
+             aria-expanded="{% if request.resolver_match.namespace == 'inventory' %}{% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}true{% else %}false{% endif %}{% else %}false{% endif %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-package fs-2"></i></span>
             <span class="nav-link-title">Inventario</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}show{% endif %}" id="sidebar-inventory">
+          <div class="collapse {% if request.resolver_match.namespace == 'inventory' %}{% if 'movement' in inv_name or 'entry' in inv_name or 'exit' in inv_name or 'transfer' in inv_name or 'adjustment' in inv_name or inv_name == 'stock_report' %}show{% endif %}{% endif %}" id="sidebar-inventory">
             <ul class="navbar-nav ps-lg-3">
               <li class="nav-item">
-                <a class="nav-link {% if 'movement' in inv_name %}active{% endif %}"
+                <a class="nav-link {% if request.resolver_match.namespace == 'inventory' and 'movement' in inv_name %}active{% endif %}"
                    href="{% url 'inventory:movement_list' %}">Movimientos</a>
               </li>
               <li class="nav-item">
@@ -212,17 +224,17 @@
         {# ─── Productos ─── #}
         {% with prod_name=request.resolver_match.url_name|default:'' %}
         <li class="nav-item">
-          <a class="nav-link {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' or prod_name == 'price_report' %}active{% endif %}"
+          <a class="nav-link {% if request.resolver_match.namespace == 'inventory' %}{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}active{% endif %}{% endif %}"
              href="#sidebar-products"
              data-bs-toggle="collapse"
              data-section-url="{% url 'inventory:product_list' %}"
              data-tooltip-label="Artículos"
-             aria-expanded="{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' or prod_name == 'price_report' %}true{% else %}false{% endif %}">
+             aria-expanded="{% if request.resolver_match.namespace == 'inventory' %}{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}true{% else %}false{% endif %}{% else %}false{% endif %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-box fs-2"></i></span>
             <span class="nav-link-title">Artículos</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' or prod_name == 'price_report' %}show{% endif %}" id="sidebar-products">
+          <div class="collapse {% if request.resolver_match.namespace == 'inventory' %}{% if 'product' in prod_name or 'pricelist' in prod_name or 'unit' in prod_name or 'category' in prod_name or prod_name == 'bulk_import' %}show{% endif %}{% endif %}" id="sidebar-products">
             <ul class="navbar-nav ps-lg-3">
 
               <li class="nav-item mt-1"><span class="sidebar-section-label">Producto (bien o servicio)</span></li>
@@ -250,10 +262,6 @@
               <li class="nav-item">
                 <a class="nav-link {% if prod_name == 'pricelist_bulk_import' %}active{% endif %}"
                    href="{% url 'inventory:pricelist_bulk_import' %}">Importar Lista de Precio</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link {% if prod_name == 'price_report' %}active{% endif %}"
-                   href="{% url 'inventory:price_report' %}">Consolidado de Lista de Precios</a>
               </li>
 
               <li class="nav-item mt-1"><span class="sidebar-section-label">Unidad de medida del producto</span></li>
@@ -286,16 +294,16 @@
 
         {# ─── Reportes ─── #}
         <li class="nav-item">
-          <a class="nav-link {% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' %}active{% endif %}"
+          <a class="nav-link {% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' or request.resolver_match.namespace == 'inventory' and request.resolver_match.url_name == 'price_report' %}active{% endif %}"
              href="#sidebar-reports"
              data-bs-toggle="collapse"
              data-tooltip-label="Reportes"
-             aria-expanded="{% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' %}true{% else %}false{% endif %}">
+             aria-expanded="{% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' or request.resolver_match.namespace == 'inventory' and request.resolver_match.url_name == 'price_report' %}true{% else %}false{% endif %}">
             <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-chart-bar fs-2"></i></span>
             <span class="nav-link-title">Reportes</span>
             <span class="nav-link-arrow"></span>
           </a>
-          <div class="collapse {% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' %}show{% endif %}" id="sidebar-reports">
+          <div class="collapse {% if '/reportes/' in request.path or request.resolver_match.url_name == 'price_history' or request.resolver_match.namespace == 'inventory' and request.resolver_match.url_name == 'price_report' %}show{% endif %}" id="sidebar-reports">
             <ul class="navbar-nav ps-lg-3">
               <li class="nav-item">
                 <a class="nav-link {% if 'stock_report_detail' in request.resolver_match.url_name|default:'' %}active{% endif %}"
@@ -312,6 +320,10 @@
               <li class="nav-item">
                 <a class="nav-link {% if 'kardex_report' in request.resolver_match.url_name|default:'' %}active{% endif %}"
                    href="{% url 'inventory:kardex_report' %}">Kardex de Inventario</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if request.resolver_match.namespace == 'inventory' and request.resolver_match.url_name == 'price_report' %}active{% endif %}"
+                   href="{% url 'inventory:price_report' %}">Consolidado de precios</a>
               </li>
               <li class="nav-item">
                 <a class="nav-link {% if request.resolver_match.url_name == 'price_history' %}active{% endif %}"

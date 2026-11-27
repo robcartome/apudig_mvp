@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Registrar cobranza — APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Registrar cobranza</h2>{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">{% include "sales/partials/collection_form.html" %}</div></div>
+<a href="{% url 'sales:document_list' %}" class="btn btn-outline-secondary mt-3">Volver a ventas</a>
+{% endblock %}

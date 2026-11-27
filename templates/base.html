@@ -4,6 +4,12 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <script>
+    try {
+      if (localStorage.getItem('apudig_sidebar_collapsed') === '1') document.documentElement.classList.add('sidebar-initial-collapsed');
+      if (localStorage.getItem('apudig_sidebar_mobile_open') === '1') document.documentElement.classList.add('sidebar-initial-mobile-open');
+    } catch (error) { /* Storage may be unavailable in private browsing. */ }
+  </script>
   <meta name="robots" content="noindex,nofollow"/>
   <title>{% block title %}APUDIG{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css" rel="stylesheet"/>
@@ -11,10 +17,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet">
-  <link href="{% static 'css/layout.css' %}?v=20261029-1" rel="stylesheet"/>
-  <link href="{% static 'css/components/sidebar.css' %}" rel="stylesheet"/>
+  <link href="{% static 'css/layout.css' %}?v=20261126-1" rel="stylesheet"/>
+  <link href="{% static 'css/components/sidebar.css' %}?v=20261121-1" rel="stylesheet"/>
   <link href="{% static 'css/components/select2.css' %}?v=20260819-1" rel="stylesheet"/>
-  <link href="{% static 'css/components/list-filters.css' %}?v=20261021-2" rel="stylesheet"/>
+  <link href="{% static 'css/components/list-filters.css' %}?v=20261121-2" rel="stylesheet"/>
+  <link href="{% static 'css/components/form-feedback.css' %}?v=20261126-3" rel="stylesheet"/>
   <style>
     :root {
       --company-primary: {% if active_branding and active_branding.primary_color %}{{ active_branding.primary_color }}{% else %}#066fd1{% endif %};
@@ -71,29 +78,30 @@
 <div class="app-layout">
   <!-- SIDEBAR -->
   {% include 'components/sidebar.html' %}
+  <div class="apudig-sidebar-overlay" aria-hidden="true"></div>
 
   <div class="main-layout">
 
     <!-- Topbar -->
     <header class="navbar navbar-expand-md d-flex d-print-none">
-      <div class="container-xxl">
+      <div class="container-xxl app-header__inner">
         <!-- Sidebar toggle: opens sidebar on mobile / expands it on desktop when collapsed -->
-        <button id="header-sidebar-btn" class="btn btn-ghost-secondary sidebar-header-toggle me-2" type="button" title="Menú" aria-label="Alternar menú lateral">
+        <button id="header-sidebar-btn" class="btn btn-ghost-secondary sidebar-header-toggle me-2" type="button" title="Menú" aria-label="Alternar menú lateral" aria-controls="sidebar" aria-expanded="false">
           <i class="ti ti-menu-2 fs-3"></i>
         </button>
-        <div class="me-auto">
+        <div class="me-auto app-header__title">
           {% block page_title %}{% endblock %}
         </div>
 
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 app-header__actions">
           {% include "components/global_notifications.html" %}
 
           <!-- Empresa / Sucursal activa -->
           {% if available_accesses %}
-          <form method="post" action="{% url 'select_company' %}" class="d-flex align-items-center gap-1">
+          <form method="post" action="{% url 'select_company' %}" class="d-flex align-items-center gap-1 app-header__company">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <select class="form-select form-select-sm" name="access_id" onchange="this.form.submit()" style="min-width: 250px;">
+            <select class="form-select form-select-sm" name="access_id" onchange="this.form.submit()" aria-label="Empresa y sucursal activa">
               {% for access in available_accesses %}
               <option value="{{ access.id }}" {% if active_access_id == access.id|stringformat:'s' %}selected{% endif %}>
                 {{ access.company.name }}{% if access.store %} / {{ access.store.name }}{% endif %}
@@ -102,13 +110,13 @@
             </select>
           </form>
           {% elif active_company %}
-          <a href="{% url 'select_company' %}" class="btn btn-sm btn-outline-secondary">
+          <a href="{% url 'select_company' %}" class="btn btn-sm btn-outline-secondary app-header__company app-header__company-link">
             <i class="ti ti-building me-1"></i>{{ active_company.name }}{% if active_store %} / {{ active_store.name }}{% endif %}
           </a>
           {% endif %}
 
           <!-- Menú de usuario -->
-          <div class="nav-item dropdown">
+          <div class="nav-item dropdown app-header__user">
             <a href="#" class="nav-link d-flex align-items-center lh-1 p-0 gap-2"
                data-bs-toggle="dropdown" aria-label="Menú de usuario">
               <span class="avatar avatar-sm">
@@ -167,12 +175,15 @@
   </div>
 </div>
 
+{% include "components/confirm_action.html" %}
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
-<script src="{% static 'js/components/sidebar.js' %}"></script>
+<script src="{% static 'js/components/confirm-action.js' %}"></script>
+<script src="{% static 'js/components/sidebar.js' %}?v=20261121-2"></script>
 <script src="{% static 'js/components/alerts.js' %}?v=20261106-1"></script>
 <script src="{% static 'js/components/filter-toggle.js' %}"></script>
-<script src="{% static 'js/components/notifications.js' %}?v=20261028-1"></script>
+<script src="{% static 'js/components/notifications.js' %}?v=20261127-1"></script>
 <script src="{% static 'js/currency.js' %}?v=20260930-1"></script>
 {% block extra_js %}{% endblock %}
+<script src="{% static 'js/components/form-feedback.js' %}?v=20261126-3"></script>
 </body>
 </html>

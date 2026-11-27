@@ -1,0 +1,27 @@
+<div class="card my-3">
+  <div class="card-header"><h3 class="card-title">Pagos y cobranzas</h3></div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-sm-4"><div class="text-muted">Total</div><strong>{{ sales_document.currency|currency_symbol }} {{ payment_summary.total|floatformat:2 }}</strong></div>
+      <div class="col-sm-4"><div class="text-muted">Pagado</div><strong class="text-success">{{ sales_document.currency|currency_symbol }} {{ payment_summary.paid|floatformat:2 }}</strong></div>
+      <div class="col-sm-4"><div class="text-muted">Saldo por cobrar</div><strong class="{% if payment_summary.balance > 0 %}text-warning{% else %}text-success{% endif %}">{% if payment_summary.balance != None %}{{ sales_document.currency|currency_symbol }} {{ payment_summary.balance|floatformat:2 }}{% else %}No aplica{% endif %}</strong></div>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-vcenter mb-0">
+      <thead><tr><th>Fecha y hora</th><th>Medio de pago</th><th>Referencia</th><th class="text-end">Importe</th><th>Origen / caja</th><th>Estado</th></tr></thead>
+      <tbody>
+        {% for payment in payment_summary.payments %}
+        <tr>
+          <td class="text-nowrap">{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+          <td>{{ payment.means_of_payment.name }}</td>
+          <td>{{ payment.operation_reference|default:"—" }}</td>
+          <td class="text-end text-nowrap">{{ payment.currency|currency_symbol }} {{ payment.amount|floatformat:2 }}{% if payment.currency != sales_document.currency %}<div class="small text-muted">Aplicado: {{ sales_document.currency|currency_symbol }} {{ payment.amount_in_sale_currency|floatformat:2 }}</div>{% endif %}</td>
+          <td>{{ payment.get_purpose_display }}<div class="small text-muted">{{ payment.cash_session.register.name }} · Sesión {{ payment.cash_session.session_number }} · {{ payment.created_by|default:"Sistema" }}</div></td>
+          <td>{% include "components/status_badge.html" with status=payment.status label=payment.get_status_display %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="6" class="text-muted text-center py-3">No hay pagos registrados.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

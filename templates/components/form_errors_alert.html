@@ -1,3 +1,8 @@
+{% if form.errors or formset.total_error_count or unit_formset.total_error_count or supplier_formset.total_error_count %}
+{% for field in form %}{% if field.errors %}<span hidden data-invalid-field="{{ field.auto_id }}"></span>{% endif %}{% endfor %}
+{% for line_form in formset %}{% for field in line_form %}{% if field.errors %}<span hidden data-invalid-field="{{ field.auto_id }}"></span>{% endif %}{% endfor %}{% endfor %}
+{% for line_form in unit_formset %}{% for field in line_form %}{% if field.errors %}<span hidden data-invalid-field="{{ field.auto_id }}"></span>{% endif %}{% endfor %}{% endfor %}
+{% for line_form in supplier_formset %}{% for field in line_form %}{% if field.errors %}<span hidden data-invalid-field="{{ field.auto_id }}"></span>{% endif %}{% endfor %}{% endfor %}
 <div class="alert app-alert alert-danger fade show py-2 px-3" role="alert">
   <div class="d-flex align-items-center gap-2 w-100">
     <i class="ti ti-circle-x-filled app-alert-icon" aria-hidden="true"></i>
@@ -39,3 +44,4 @@
     <button type="button" class="btn-close app-alert-close flex-shrink-0" data-bs-dismiss="alert" aria-label="Cerrar"></button>
   </div>
 </div>
+{% endif %}

@@ -110,6 +110,24 @@ Las categorías permiten agrupar y analizar gastos; no representan artículos ni
 
 ### 5. Gestionar cuentas por pagar y cuotas
 
+Compras y gastos comparten las mismas reglas de condición de pago:
+
+- **Crédito o pago diferido:** se muestra el vencimiento del pago y es obligatorio;
+  no puede ser anterior a la emisión. Se identifica por `is_credit=True` o
+  `immediate_payment=False`, sin interpretar el nombre ni el indicador de efectivo.
+- **Contado o pago inmediato:** el vencimiento editable se oculta y se guarda la fecha de emisión.
+  Seleccionar contado no registra un pago ni cambia el documento a pagado.
+- **Sin condición:** puede guardarse el documento sin vencimiento; para indicar
+  una fecha debe seleccionarse una condición. Al editar un documento antiguo con
+  fecha pero sin condición, se muestra la fecha y se pide clasificarla.
+
+La fecha indica el límite para pagar la factura, no la recepción de mercadería.
+El estado no pagado/parcial/pagado depende de los pagos registrados. Los avisos
+incluyen documentos antiguos sin condición que tengan vencimiento y saldo,
+dentro del umbral configurado en la empresa.
+
+Pruebas de los controles compartidos: `node --test apps/purchases/tests/test_payment_terms_js.cjs`.
+
 Al registrar un documento se genera inicialmente una cuota por el total, con la fecha de vencimiento del documento. Antes de registrar pagos se puede reemplazar por un cronograma de varias cuotas.
 
 1. Abrir el documento registrado.

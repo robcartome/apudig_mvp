@@ -37,6 +37,7 @@ class PurchaseAnalyticsTest(TestCase):
             allocation_method=LandedCostAllocationMethod.VALUE,
         )
         register_supplier_payment(
+            allow_unlinked=True,
             company_id=self.company.pk, store=self.store, supplier=self.supplier,
             payment_number="PA-1", payment_date=timezone.now(), currency="PEN", exchange_rate=1,
             means_of_payment=self.means,

@@ -147,6 +147,36 @@ class CashSafeOperationsViewTest(TestCase):
             store=self.store, code="CHICA", name="Caja chica"
         ).exists())
 
+    def test_fund_form_shows_errors_only_after_invalid_submission(self):
+        url = reverse("treasury:treasury_fund_list")
+        self.assertNotContains(self.client.get(url), "Revisa la información:")
+        response = self.client.post(url, {"action": "save", "code": ""})
+        self.assertContains(response, "Revisa la información:")
+
+    def test_movement_detail_keeps_treasury_section_active(self):
+        movement = CashSafeMovement.objects.create(
+            company=self.company, store=self.store, fund=self.fund,
+            movement_number="CF-SIDEBAR", direction="IN", movement_type="MANUAL_INCOME",
+            amount=Decimal("10"), currency="PEN", status="POSTED", created_by=self.user,
+        )
+        response = self.client.get(reverse("treasury:cash_safe_movement_detail", args=[movement.pk]))
+        self.assertContains(response, 'class="collapse show" id="sidebar-treasury"', html=False)
+        self.assertContains(response, 'class="collapse " id="sidebar-inventory"', html=False)
+        self.assertContains(response, 'href="/treasury/caja-fuerte/">Caja fuerte de tienda', html=False)
+
+    def test_cash_actions_explain_state_changes_before_submitting(self):
+        for status, number in (("PENDING", "CF-PENDING"), ("POSTED", "CF-POSTED")):
+            CashSafeMovement.objects.create(
+                company=self.company, store=self.store, fund=self.fund, movement_number=number,
+                direction="IN", movement_type="MANUAL_INCOME", amount=Decimal("10"),
+                currency="PEN", status=status, created_by=self.user,
+            )
+        response = self.client.get(reverse("treasury:cash_safe_ledger"))
+        self.assertContains(response, 'data-confirm-title="&#191;Confirmar movimiento CF-PENDING?"', html=False)
+        self.assertContains(response, 'data-confirm-title="&#191;Rechazar movimiento CF-PENDING?"', html=False)
+        self.assertContains(response, 'data-confirm-title="&#191;Revertir movimiento CF-POSTED?"', html=False)
+        self.assertContains(response, 'id="confirm-action-modal"', html=False)
+
     def test_drawer_transfer_requires_and_stores_destination_register(self):
         register = PosRegister.objects.create(
             company=self.company, store=self.store, code="POS-01", name="Caja principal"

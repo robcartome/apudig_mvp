@@ -10,6 +10,34 @@ from .models import Brand, Category, Movement, MovementDetail, MovementType, Pri
 from .valuation import inventory_valuation
 
 
+def get_dashboard_stock(company_id, store_id):
+    """Count products at/below their branch minimum using on-hand stock."""
+    from django.db.models import DecimalField, F, Subquery, Value
+    from django.db.models.functions import Coalesce
+
+    stock = StockByWarehouse.objects.filter(
+        product_id=OuterRef("pk"), warehouse__store_id=store_id,
+        warehouse__store__company_id=company_id, warehouse__active=True,
+    )
+    config = StoreProductConfig.objects.filter(
+        product_id=OuterRef("pk"), store_id=store_id, store__company_id=company_id,
+    )
+    products = Product.objects.filter(company_id=company_id, active=True, tracks_inventory=True).annotate(
+        has_stock=Exists(stock), has_config=Exists(config),
+    ).filter(Q(has_stock=True) | Q(has_config=True)).annotate(
+        on_hand=Coalesce(
+            Subquery(stock.order_by().values("product_id").annotate(total=Sum("quantity")).values("total")),
+            Value(Decimal("0")), output_field=DecimalField(max_digits=18, decimal_places=3),
+        ),
+        minimum=Coalesce(Subquery(config.values("min_stock")[:1]), Value(0)),
+    )
+    critical = products.filter(on_hand__lte=F("minimum")).order_by("on_hand", "name", "pk")
+    return {
+        "count": products.count(), "critical_count": critical.count(),
+        "critical": list(critical.select_related("unit")[:5]),
+    }
+
+
 # ── Maestros ──────────────────────────────────────────────────────────────────
 
 def get_categories(company_id=None, active_only: bool = False):
@@ -140,7 +168,7 @@ def get_price_consolidate(company_id, query: str = ""):
 
     price_lists  — list of PriceList objects ordered by name.
     rows         — list of dicts:
-        {sku, name, price_purchase, price_sale, prices: {str(pl_pk): Decimal|None}}
+        {product_id, sku, name, price_purchase, price_sale, prices: {str(pl_pk): Decimal|None}}
     """
     price_lists = list(
         PriceList.objects.filter(company_id=company_id, active=True).order_by("name")
@@ -168,6 +196,7 @@ def get_price_consolidate(company_id, query: str = ""):
 
     rows = [
         {
+            "product_id": p.pk,
             "sku": p.sku,
             "name": p.name,
             "price_purchase": p.price_purchase,

@@ -8,6 +8,8 @@ from django.db import models
 from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
 
+from .payment_terms import requires_purchase_due_date
+
 
 class PurchaseDocumentStatus(models.TextChoices):
     DRAFT = "DRAFT", "Borrador"
@@ -48,6 +50,7 @@ class PurchaseReceiptStatus(models.TextChoices):
 
 
 class SupplierPaymentStatus(models.TextChoices):
+    PENDING = "PENDING", "Pendiente de aprobación"
     REGISTERED = "REGISTERED", "Registrado"
     CANCELLED = "CANCELLED", "Anulado"
 
@@ -317,6 +320,7 @@ class PurchaseDocument(TimeStampedModel):
     global_discount_before_tax = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     register_inventory_movement = models.BooleanField(default=False)
+    inventory_receipt_date = models.DateField(null=True, blank=True)
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.SET_NULL,
@@ -377,9 +381,9 @@ class PurchaseDocument(TimeStampedModel):
         if self.payment_method_id:
             if str(self.payment_method.company_id) != str(self.company_id):
                 errors["payment_method"] = "La condicion de pago no pertenece a la empresa."
-            elif self.payment_method.is_cash and self.issue_date:
+            elif not requires_purchase_due_date(self.payment_method) and self.issue_date:
                 self.due_date = self.issue_date
-            elif not self.payment_method.is_cash and not self.due_date:
+            elif requires_purchase_due_date(self.payment_method) and not self.due_date:
                 errors["due_date"] = "Indica la fecha de vencimiento para una compra a credito."
         if errors:
             raise ValidationError(errors)
@@ -607,6 +611,14 @@ class SupplierPayment(TimeStampedModel):
     means_of_payment = models.ForeignKey(
         "sales.MeansOfPayment", on_delete=models.PROTECT, related_name="supplier_payments"
     )
+    bank_movement = models.OneToOneField(
+        "treasury.BankMovement", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="supplier_payment",
+    )
+    cash_movement = models.OneToOneField(
+        "treasury.CashSafeMovement", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="supplier_payment",
+    )
     reference = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
     status = models.CharField(
@@ -627,6 +639,10 @@ class SupplierPayment(TimeStampedModel):
             ),
             models.CheckConstraint(condition=models.Q(amount__gt=0), name="supplier_payment_amount_gt_zero"),
             models.CheckConstraint(condition=models.Q(exchange_rate__gt=0), name="supplier_payment_exchange_rate_gt_zero"),
+            models.CheckConstraint(
+                condition=models.Q(bank_movement__isnull=True) | models.Q(cash_movement__isnull=True),
+                name="supplier_payment_one_treasury_source",
+            ),
         ]
 
     def __str__(self):

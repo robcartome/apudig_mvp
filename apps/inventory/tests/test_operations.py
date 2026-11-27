@@ -141,6 +141,23 @@ class MovementViewsTest(TestCase):
         self.assertEqual(stock_by_name[self.warehouse.name], "12.500")
         self.assertEqual(stock_by_name[other_warehouse.name], "0")
 
+    def test_product_stock_reports_active_store_and_selected_warehouse(self):
+        UserStore.objects.create(user=self.user, store=self.store, role="WAREHOUSE")
+        second_warehouse = Warehouse.objects.create(store=self.store, name="Almacén B")
+        other_store = Store.objects.create(company=self.company, name="Otra sucursal")
+        other_warehouse = Warehouse.objects.create(store=other_store, name="Almacén C")
+        for warehouse, quantity in ((self.warehouse, 4), (second_warehouse, 6), (other_warehouse, 100)):
+            StockByWarehouse.objects.create(product=self.product, warehouse=warehouse, quantity=quantity)
+
+        url = reverse("inventory:api_product_stock")
+        response = self.client.get(url, {"product": self.product.pk, "warehouse": self.warehouse.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"stock": 4.0, "total_stock": 10.0})
+        response = self.client.get(url, {"product": self.product.pk})
+        self.assertEqual(response.json(), {"stock": None, "total_stock": 10.0})
+        response = self.client.get(url, {"product": self.product.pk, "warehouse": other_warehouse.pk})
+        self.assertEqual(response.status_code, 404)
+
     # ── Entry ─────────────────────────────────────────────────────────────────
 
     def test_entry_create_get(self):
@@ -462,7 +479,7 @@ class MovementViewsTest(TestCase):
             reason="Prueba de selector",
             created_by=self.user,
         )
-        MovementDetail.objects.create(
+        detail = MovementDetail.objects.create(
             movement=movement,
             product=self.product,
             quantity=Decimal("5"),
@@ -479,15 +496,13 @@ class MovementViewsTest(TestCase):
         self.assertEqual(line_form.initial["product_sku"], self.product.sku)
         self.assertEqual(line_form.initial["product_name"], self.product.name)
         self.assertEqual(line_form.initial["quantity"], "5.000")
-        self.assertEqual(line_form.initial["unit_price"], "3.000")
-        self.assertEqual(line_form.fields["unit_price"].decimal_places, 3)
-        self.assertEqual(line_form.fields["unit_price"].widget.input_type, "text")
+        self.assertNotIn("unit_price", line_form.fields)
         self.assertContains(
             response,
             f"{self.product.sku} | {self.product.name}",
             count=1,
         )
-        self.assertContains(response, 'value="3.000"', html=False)
+        self.assertNotContains(response, 'name="lines-0-unit_price"')
 
         update_response = self.client.post(
             reverse("inventory:movement_edit", args=[movement.pk]),
@@ -505,10 +520,12 @@ class MovementViewsTest(TestCase):
                 "lines-MIN_NUM_FORMS": "1",
                 "lines-MAX_NUM_FORMS": "1000",
                 "lines-0-product": str(self.product.pk),
+                "lines-0-detail_id": str(detail.pk),
                 "lines-0-unit": str(self.unit.pk),
                 "lines-0-quantity": "5.000",
-                "lines-0-unit_price": "3.000",
+                "lines-0-unit_price": "999.000",
             },
         )
 
         self.assertRedirects(update_response, reverse("inventory:movement_list"))
+        self.assertEqual(movement.details.get().unit_price, Decimal("3.000000"))

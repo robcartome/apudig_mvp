@@ -1,6 +1,9 @@
 {% if notification_center %}
 <div class="nav-item dropdown global-notifications"
      data-notification-center
+     data-user-id="{{ user.pk }}"
+     data-company-id="{{ active_company.pk }}"
+     data-store-id="{{ active_store.pk }}"
      data-dropdown-url="{% url 'notifications:dropdown' %}"
      data-count-url="{% url 'notifications:unread_count' %}"
      data-read-all-url="{% url 'notifications:mark_all_read' %}">

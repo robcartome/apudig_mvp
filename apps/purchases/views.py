@@ -21,12 +21,14 @@ from apps.inventory.models import Category, Movement, MovementStatus, MovementTy
 from apps.inventory.pricing import tax_rate_for_company
 from apps.partners.models import Supplier
 from apps.sales.models import MeansOfPayment
+from apps.treasury.models import BankAccount, TreasuryFund
+from apps.treasury.services import TreasuryDomainError
 from apps.users.permissions import user_has_company_permission
 
 from .forms import (
     PurchaseCategoryForm, PurchaseDocumentForm, PurchaseDocumentReceiptLinkForm, PurchaseDocumentLineFormSet, PurchaseExpenseLineFormSet,
     PurchaseOrderForm, PurchaseOrderLineFormSet, PurchaseReceiptForm, PurchaseReceiptLineFormSet,
-    SupplierPaymentEditForm, SupplierPaymentForm,
+    SupplierPaymentEditForm, SupplierPaymentForm, SupplierAdvanceForm, SupplierAdvanceAllocationForm,
     PurchaseInstallmentFormSet,
     PurchaseLandedCostAllocationFormSet, PurchaseLandedCostForm,
 )
@@ -39,9 +41,10 @@ from .order_services import (
     approve_purchase_order, cancel_purchase_order, create_purchase_order, update_purchase_order,
 )
 from .receipt_services import cancel_purchase_receipt, received_quantities, register_purchase_receipt
+from .payment_terms import purchase_payment_terms_config
 from .payment_services import (
     cancel_supplier_payment, document_payment_summary, installment_paid_amount,
-    register_supplier_payment, replace_installment_schedule,
+    register_supplier_payment, replace_installment_schedule, apply_supplier_advance,
     update_supplier_payment_details,
 )
 from .landed_cost_services import (
@@ -249,7 +252,7 @@ def _form_context(form, formset, company_id, title, document=None):
             company_id=company_id, active=True
         ).order_by("name"),
         "operational_settings": operational_settings or CompanyOperationalSettings(company_id=company_id),
-        "payment_methods": list(form.fields["payment_method"].queryset.values("id", "is_cash")),
+        "payment_methods": purchase_payment_terms_config(form),
         "price_decimal_places": operational_settings.price_decimal_places if operational_settings else 2,
         "default_igv_rate": tax_rate_for_company(company_id),
     }
@@ -349,6 +352,8 @@ def purchase_document_list(request):
         "payment_means": MeansOfPayment.objects.filter(
             company_id=company_id, active=True
         ).order_by("name"),
+        "payment_funds": TreasuryFund.objects.filter(company_id=company_id, store=store, active=True),
+        "payment_bank_accounts": BankAccount.objects.filter(company_id=company_id, active=True, use_for_payments=True),
         "quick_payment_number": f"PAG-{SupplierPayment.objects.filter(company_id=company_id).count() + 1:06d}",
         "quick_payment_date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
         **_permission_context(request),
@@ -534,6 +539,7 @@ def purchase_document_create(request):
                 register_inventory_movement=form.cleaned_data.get("register_inventory_movement", False),
                 receipt_movements=form.cleaned_data.get("receipt_movements"),
                 warehouse=form.cleaned_data.get("warehouse"),
+                inventory_receipt_date=form.cleaned_data.get("inventory_receipt_date"),
                 global_discount_amount=form.cleaned_data.get("global_discount_amount") or Decimal("0"),
                 global_discount_before_tax=form.cleaned_data.get("global_discount_before_tax", False),
                 notes=form.cleaned_data.get("notes", ""),
@@ -573,6 +579,7 @@ def _expense_context(form, formset, company_id, title, document=None):
         "formset": formset,
         "title": title,
         "purchase_document": document,
+        "payment_methods": purchase_payment_terms_config(form),
         "selected_supplier": Supplier.objects.filter(
             pk=supplier_id, company_id=company_id
         ).first() if supplier_id else None,
@@ -722,6 +729,7 @@ def purchase_document_edit(request, pk):
                 register_inventory_movement=form.cleaned_data.get("register_inventory_movement", False),
                 receipt_movements=form.cleaned_data.get("receipt_movements"),
                 warehouse=form.cleaned_data.get("warehouse"),
+                inventory_receipt_date=form.cleaned_data.get("inventory_receipt_date"),
                 global_discount_amount=form.cleaned_data.get("global_discount_amount") or Decimal("0"),
                 global_discount_before_tax=form.cleaned_data.get("global_discount_before_tax", False),
                 notes=form.cleaned_data.get("notes", ""),
@@ -746,7 +754,7 @@ def _document_payment_context(document):
         SupplierPayment.objects.filter(
             allocations__installment__purchase_document=document
         )
-        .select_related("means_of_payment")
+        .select_related("means_of_payment", "bank_movement__account__bank", "cash_movement__fund")
         .prefetch_related("allocations__installment")
         .distinct()
     )
@@ -1322,6 +1330,73 @@ def purchase_receipt_cancel(request, pk):
     return redirect("purchases:order_detail", pk=receipt.purchase_order_id)
 
 
+def supplier_advance_list(request):
+    denied = _require_permission(request, "read")
+    if denied:
+        return denied
+    company_id, store = _active_scope(request)
+    payments = SupplierPayment.objects.filter(company_id=company_id, store=store).select_related(
+        "supplier", "means_of_payment", "cash_movement__fund", "bank_movement__account"
+    ).annotate(allocated=Sum("allocations__amount"))
+    advances = [payment for payment in payments if payment.amount > (payment.allocated or Decimal("0"))]
+    for payment in advances:
+        payment.available = payment.amount - (payment.allocated or Decimal("0"))
+    return render(request, "purchases/advance_list.html", {"advances": advances, **_permission_context(request)})
+
+
+def supplier_advance_create(request):
+    denied = _require_permission(request, "manage")
+    if denied:
+        return denied
+    company_id, store = _active_scope(request)
+    initial = {"payment_number": f"PAG-{SupplierPayment.objects.filter(company_id=company_id).count() + 1:06d}",
+               "payment_date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"), "currency": "PEN", "exchange_rate": 1}
+    form = SupplierAdvanceForm(request.POST or None, company_id=company_id, store_id=store.pk, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        permission = "manage.treasury.cash_safe" if data["source_type"] == "CASH" else "manage.treasury.bank_movements"
+        if not user_has_company_permission(request.user, company_id, permission, store.pk):
+            return HttpResponseForbidden("No tienes permiso para registrar este movimiento de Tesorería.")
+        try:
+            payment = register_supplier_payment(
+                company_id=company_id, store=store, supplier=data["supplier"],
+                payment_number=data["payment_number"], payment_date=data["payment_date"],
+                currency=data["currency"], exchange_rate=data["exchange_rate"], means_of_payment=data["means_of_payment"],
+                allocations=[], advance_amount=data["amount"], bank_account=data.get("bank_account"),
+                cash_fund=data.get("cash_fund"), reference=data["reference"], notes=data["notes"], created_by=request.user,
+            )
+        except IntegrityError:
+            form.add_error("payment_number", "Ya existe un pago con este número.")
+        except (ValueError, TreasuryDomainError, ValidationError) as exc:
+            form.add_error(None, str(exc))
+        else:
+            messages.success(request, "Anticipo registrado." if payment.status == "REGISTERED" else
+                             "Solicitud registrada; el anticipo estará disponible al aprobar el efectivo en Tesorería.")
+            return redirect("purchases:advance_list")
+    return render(request, "purchases/advance_form.html", {"form": form})
+
+
+def supplier_advance_apply(request, document_pk):
+    denied = _require_permission(request, "manage")
+    if denied:
+        return denied
+    company_id, store = _active_scope(request)
+    document = _document_or_404(request, document_pk)
+    if document.document_status != PurchaseDocumentStatus.REGISTERED:
+        raise Http404
+    form = SupplierAdvanceAllocationForm(request.POST or None, document=document)
+    if request.method == "POST" and form.is_valid():
+        try:
+            apply_supplier_advance(payment_id=form.cleaned_data["payment"].pk, document_id=document.pk,
+                                   company_id=company_id, store=store, amount=form.cleaned_data["amount"], user=request.user)
+        except (ValueError, SupplierPayment.DoesNotExist, PurchaseDocument.DoesNotExist) as exc:
+            form.add_error(None, str(exc) or "El anticipo o documento ya no está disponible.")
+        else:
+            messages.success(request, "Anticipo aplicado al documento sin una nueva salida de fondos.")
+            return redirect("purchases:document_detail", pk=document.pk)
+    return render(request, "purchases/advance_apply.html", {"form": form, "purchase_document": document})
+
+
 def supplier_payment_create(request, document_pk):
     denied = _require_permission(request, "manage")
     if denied:
@@ -1340,8 +1415,13 @@ def supplier_payment_create(request, document_pk):
         "payment_date": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
         "amount": summary["balance"],
     }
-    form = SupplierPaymentForm(request.POST or None, company_id=company_id, initial=initial)
+    form = SupplierPaymentForm(request.POST or None, company_id=company_id, store_id=store.pk,
+                               currency=document.currency, initial=initial)
     if request.method == "POST" and form.is_valid():
+        treasury_permission = ("manage.treasury.cash_safe" if form.cleaned_data["source_type"] == "CASH"
+                               else "manage.treasury.bank_movements")
+        if not user_has_company_permission(request.user, company_id, treasury_permission, store.pk):
+            return HttpResponseForbidden("No tienes permiso para registrar este movimiento de Tesorería.")
         amount = form.cleaned_data["amount"]
         if amount > summary["balance"]:
             form.add_error("amount", f"El importe supera el saldo pendiente ({summary['balance']}).")
@@ -1363,15 +1443,19 @@ def supplier_payment_create(request, document_pk):
                     payment_date=form.cleaned_data["payment_date"], currency=document.currency,
                     exchange_rate=document.exchange_rate,
                     means_of_payment=form.cleaned_data["means_of_payment"], allocations=allocations,
+                    cash_fund=form.cleaned_data.get("cash_fund"), bank_account=form.cleaned_data.get("bank_account"),
                     reference=form.cleaned_data.get("reference", ""), notes=form.cleaned_data.get("notes", ""),
                     created_by=request.user,
                 )
             except IntegrityError:
                 form.add_error("payment_number", "Ya existe un pago con este numero.")
-            except ValueError as exc:
+            except (ValueError, TreasuryDomainError, ValidationError) as exc:
                 form.add_error(None, str(exc))
             else:
-                messages.success(request, f"Pago {payment.payment_number} registrado correctamente.")
+                if payment.status == "PENDING":
+                    messages.success(request, f"Solicitud {payment.payment_number} registrada; el pago se aplicará al aprobar la salida de efectivo en Tesorería.")
+                else:
+                    messages.success(request, f"Pago {payment.payment_number} registrado correctamente.")
                 if request.POST.get("next") == "list":
                     return_query = QueryDict(
                         request.POST.get("return_query", ""), mutable=True
@@ -1452,10 +1536,20 @@ def supplier_payment_cancel(request, pk):
         ).get(pk=pk, company_id=company_id, store_id=store.pk)
     except SupplierPayment.DoesNotExist:
         raise Http404
-    document_id = payment.allocations.first().installment.purchase_document_id
-    cancel_supplier_payment(payment.pk, company_id=company_id, cancelled_by=request.user)
+    allocation = payment.allocations.select_related("installment").first()
+    document_id = allocation.installment.purchase_document_id if allocation else None
+    target = redirect("purchases:document_detail", pk=document_id) if document_id else redirect("purchases:advance_list")
+    permission = ("authorize.treasury.cash_safe" if payment.cash_movement_id else
+                  "manage.treasury.bank_movements" if payment.bank_movement_id else None)
+    if permission and not user_has_company_permission(request.user, company_id, permission, store.pk):
+        return HttpResponseForbidden("No tienes permiso para revertir este movimiento de Tesorería.")
+    try:
+        cancel_supplier_payment(payment.pk, company_id=company_id, cancelled_by=request.user)
+    except (TreasuryDomainError, ValidationError, ValueError) as exc:
+        messages.error(request, str(exc))
+        return target
     messages.success(request, "Pago anulado y saldos recalculados.")
-    return redirect("purchases:document_detail", pk=document_id)
+    return target
 
 
 def accounts_payable_list(request):

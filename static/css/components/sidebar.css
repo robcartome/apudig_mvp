@@ -344,6 +344,9 @@
   backdrop-filter: blur(1px);
 }
 .apudig-sidebar-overlay.active { display: block; }
+@media (max-width: 991.98px) {
+  html.sidebar-initial-mobile-open .apudig-sidebar-overlay { display: block; }
+}
 
 /* ══════════════════════════════════════════
    MOBILE SIDEBAR — slide in from the left

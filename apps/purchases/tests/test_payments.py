@@ -42,6 +42,7 @@ class SupplierPaymentTest(TestCase):
 
     def pay(self, number, amount):
         return register_supplier_payment(
+            allow_unlinked=True,
             company_id=self.company.pk, store=self.store, supplier=self.supplier,
             payment_number=number, payment_date=timezone.now(), currency="PEN", exchange_rate=1,
             means_of_payment=self.means,
@@ -132,6 +133,12 @@ class SupplierPaymentViewTest(TestCase):
         unit = Unit.objects.create(code="UPV", name="Unidad vista pago")
         product = Product.objects.create(company=self.company, name="Servicio vista", sku="PV-1", unit=unit, tracks_inventory=False)
         self.means = MeansOfPayment.objects.create(company=self.company, name="Efectivo")
+        from apps.treasury.models import Bank, BankAccount
+        bank = Bank.objects.create(company=self.company, name="BCP test")
+        self.account = BankAccount.objects.create(
+            company=self.company, bank=bank, name="Cuenta test", account_number="TEST-1",
+            currency="PEN", opening_balance=Decimal("100"), opening_balance_date=date(2026, 1, 1),
+        )
         self.document = create_purchase_document_draft(
             company_id=self.company.pk, store=self.store, supplier=self.supplier,
             document_type=self.document_type,
@@ -154,6 +161,7 @@ class SupplierPaymentViewTest(TestCase):
         response = self.client.post(reverse("purchases:payment_create", args=[self.document.pk]), {
             "payment_number": "PAG-WEB-1", "payment_date": "2026-09-02T10:00",
             "amount": "20", "means_of_payment": str(self.means.pk), "reference": "OP-123",
+            "source_type": "BANK", "bank_account": str(self.account.pk),
         })
         self.assertRedirects(response, reverse("purchases:document_detail", args=[self.document.pk]), fetch_redirect_response=False)
         self.document.refresh_from_db()
@@ -172,6 +180,7 @@ class SupplierPaymentViewTest(TestCase):
         response = self.client.post(reverse("purchases:payment_create", args=[self.document.pk]), {
             "payment_number": "PAG-RAPIDO-1", "payment_date": "2026-09-03T11:00",
             "amount": "15", "means_of_payment": str(self.means.pk),
+            "source_type": "BANK", "bank_account": str(self.account.pk),
             "reference": "ADELANTO", "next": "list",
         })
         self.assertRedirects(
@@ -190,6 +199,7 @@ class SupplierPaymentViewTest(TestCase):
 
     def test_preview_displays_payment_summary_and_registered_payments(self):
         payment = register_supplier_payment(
+            allow_unlinked=True,
             company_id=self.company.pk,
             store=self.store,
             supplier=self.supplier,
@@ -219,6 +229,7 @@ class SupplierPaymentViewTest(TestCase):
 
     def test_payment_edit_updates_reference_without_changing_amount(self):
         payment = register_supplier_payment(
+            allow_unlinked=True,
             company_id=self.company.pk,
             store=self.store,
             supplier=self.supplier,
@@ -253,3 +264,143 @@ class SupplierPaymentViewTest(TestCase):
         payment.refresh_from_db()
         self.assertEqual(payment.reference, "OP-CORREGIDA")
         self.assertEqual(payment.amount, Decimal("20.00"))
+
+
+class SupplierPaymentTreasuryTest(SupplierPaymentTest):
+    def setUp(self):
+        super().setUp()
+        from apps.treasury.models import Bank, BankAccount, CashSafeMovement, TreasuryFund
+        from apps.users.models import UserStore
+        self.user = get_user_model().objects.create_user(email="integracion@example.com", password="test", is_superuser=True)
+        UserStore.objects.create(user=self.user, store=self.store, role="ADMIN")
+        bank = Bank.objects.create(company=self.company, name="BCP")
+        self.account = BankAccount.objects.create(company=self.company, bank=bank, name="Cuenta", account_number="123", currency="PEN", opening_balance=Decimal("200"), opening_balance_date=date(2026, 1, 1))
+        self.fund = TreasuryFund.objects.create(company=self.company, store=self.store, code="CAJA", name="Caja fuerte")
+        CashSafeMovement.objects.create(company=self.company, store=self.store, fund=self.fund, movement_number="CF-OPEN", direction="IN", movement_type="MANUAL_INCOME", amount=200, currency="PEN", status="POSTED", created_by=self.user)
+        self.means.kind = "TRANSFER"
+        self.means.save()
+
+    def register_integrated(self, **overrides):
+        data = dict(company_id=self.company.pk, store=self.store, supplier=self.supplier,
+                    payment_number="INT-1", payment_date=timezone.now(), currency="PEN", exchange_rate=1,
+                    means_of_payment=self.means, allocations=[{"installment": self.document.installments.get(), "amount": Decimal("40")}],
+                    created_by=self.user, bank_account=self.account)
+        data.update(overrides)
+        return register_supplier_payment(**data)
+
+    def test_bank_payment_and_cancellation_update_both_balances(self):
+        from apps.treasury.services import bank_account_balance, reverse_bank_movement, TreasuryDomainError
+        payment = self.register_integrated()
+        self.assertEqual(bank_account_balance(self.account), Decimal("160"))
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("78"))
+        with self.assertRaises(TreasuryDomainError):
+            reverse_bank_movement(movement_id=payment.bank_movement_id, company_id=self.company.pk, reason="test", user=self.user)
+        cancel_supplier_payment(payment.pk, company_id=self.company.pk, cancelled_by=self.user)
+        self.assertEqual(bank_account_balance(self.account), Decimal("200"))
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("118"))
+
+    def test_new_payment_requires_a_treasury_source(self):
+        with self.assertRaisesRegex(ValueError, "origen"):
+            self.register_integrated(bank_account=None)
+        self.assertFalse(SupplierPayment.objects.exists())
+
+    def test_bank_payment_rolls_back_when_funds_are_insufficient(self):
+        from apps.treasury.models import BankMovement
+        from apps.treasury.services import TreasuryDomainError
+        self.account.opening_balance = Decimal("10")
+        self.account.save(update_fields=("opening_balance",))
+        with self.assertRaises(TreasuryDomainError):
+            self.register_integrated()
+        self.assertFalse(SupplierPayment.objects.exists())
+        self.assertFalse(BankMovement.objects.exists())
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("118"))
+
+    def test_bank_payment_rejects_a_foreign_currency(self):
+        self.account.currency = "USD"
+        self.account.save(update_fields=("currency",))
+        with self.assertRaisesRegex(ValueError, "moneda"):
+            self.register_integrated()
+        self.assertFalse(SupplierPayment.objects.exists())
+
+    def test_reconciled_bank_payment_cannot_be_cancelled(self):
+        from apps.treasury.models import BankReconciliationMatch, BankStatement, BankStatementLine
+        from apps.treasury.services import TreasuryDomainError, bank_account_balance
+        payment = self.register_integrated()
+        today = timezone.localdate()
+        statement = BankStatement.objects.create(company=self.company, account=self.account,
+            date_from=today, date_to=today, opening_balance=200, closing_balance=160)
+        line = BankStatementLine.objects.create(statement=statement, transaction_date=today,
+            direction="OUT", amount=40, description="Pago", fingerprint="payment-1")
+        BankReconciliationMatch.objects.create(statement_line=line, bank_movement=payment.bank_movement)
+        with self.assertRaisesRegex(TreasuryDomainError, "conciliado"):
+            cancel_supplier_payment(payment.pk, company_id=self.company.pk, cancelled_by=self.user)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "REGISTERED")
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("78"))
+        self.assertEqual(bank_account_balance(self.account), Decimal("160"))
+
+    def test_cash_payment_waits_for_approval_and_reserves_installment(self):
+        from apps.treasury.services import approve_cash_safe_movement, cash_safe_balance
+        self.means.kind = "CASH"
+        self.means.save()
+        payment = self.register_integrated(bank_account=None, cash_fund=self.fund)
+        self.assertEqual(payment.status, "PENDING")
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("118"))
+        with self.assertRaisesRegex(ValueError, "supera el saldo"):
+            self.register_integrated(payment_number="INT-2", bank_account=None, cash_fund=self.fund,
+                allocations=[{"installment": self.document.installments.get(), "amount": Decimal("100")}])
+        approve_cash_safe_movement(movement_id=payment.cash_movement_id, company_id=self.company.pk, store_id=self.store.pk, user=self.user)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "REGISTERED")
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("78"))
+        self.assertEqual(cash_safe_balance(company_id=self.company.pk, store_id=self.store.pk, fund_id=self.fund.pk, currency="PEN"), Decimal("160"))
+        cancel_supplier_payment(payment.pk, company_id=self.company.pk, cancelled_by=self.user)
+        self.assertEqual(cash_safe_balance(company_id=self.company.pk, store_id=self.store.pk, fund_id=self.fund.pk, currency="PEN"), Decimal("200"))
+
+    def test_advance_applies_without_second_bank_movement(self):
+        from apps.purchases.payment_services import apply_supplier_advance
+        from apps.treasury.models import BankMovement
+        from apps.treasury.services import bank_account_balance
+        payment = self.register_integrated(allocations=[], advance_amount=Decimal("60"))
+        apply_supplier_advance(payment_id=payment.pk, document_id=self.document.pk, company_id=self.company.pk, store=self.store, amount=Decimal("40"), user=self.user)
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("78"))
+        self.assertEqual(bank_account_balance(self.account), Decimal("140"))
+        self.assertEqual(BankMovement.objects.count(), 1)
+        with self.assertRaisesRegex(ValueError, "saldo disponible"):
+            apply_supplier_advance(payment_id=payment.pk, document_id=self.document.pk, company_id=self.company.pk, store=self.store, amount=Decimal("21"), user=self.user)
+
+    def test_rejected_cash_request_releases_reserved_amount(self):
+        from apps.treasury.services import reject_cash_safe_movement
+        self.means.kind = "CASH"
+        self.means.save()
+        payment = self.register_integrated(bank_account=None, cash_fund=self.fund)
+        reject_cash_safe_movement(movement_id=payment.cash_movement_id, company_id=self.company.pk,
+                                  store_id=self.store.pk, reason="No procede", user=self.user)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "CANCELLED")
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("118"))
+        another = self.register_integrated(payment_number="INT-2", bank_account=None, cash_fund=self.fund,
+            allocations=[{"installment": self.document.installments.get(), "amount": Decimal("118")}])
+        self.assertEqual(another.status, "PENDING")
+
+    def test_advance_can_be_created_and_applied_through_views(self):
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["active_company_id"] = str(self.company.pk)
+        session["active_store_id"] = str(self.store.pk)
+        session.save()
+        response = self.client.get(reverse("purchases:advance_create"))
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(reverse("purchases:advance_create"), {
+            "supplier": str(self.supplier.pk), "payment_number": "ADV-WEB", "payment_date": "2026-09-02T10:00",
+            "currency": "PEN", "exchange_rate": "1", "amount": "60", "means_of_payment": str(self.means.pk),
+            "source_type": "BANK", "bank_account": str(self.account.pk), "reference": "OP-42",
+        })
+        self.assertRedirects(response, reverse("purchases:advance_list"), fetch_redirect_response=False)
+        payment = SupplierPayment.objects.get(payment_number="ADV-WEB")
+        response = self.client.get(reverse("purchases:advance_apply", args=[self.document.pk]))
+        self.assertContains(response, "ADV-WEB")
+        response = self.client.post(reverse("purchases:advance_apply", args=[self.document.pk]),
+                                    {"payment": str(payment.pk), "amount": "40"})
+        self.assertRedirects(response, reverse("purchases:document_detail", args=[self.document.pk]), fetch_redirect_response=False)
+        self.assertEqual(document_payment_summary(self.document)["balance"], Decimal("78"))

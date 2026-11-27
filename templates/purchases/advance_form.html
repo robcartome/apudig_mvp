@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Registrar anticipo - APUDIG{% endblock %}
+{% block page_title %}<h2 class="page-title">Registrar anticipo a proveedor</h2>{% endblock %}
+{% block content %}
+{% if form.errors %}{% include "components/form_errors_alert.html" with form=form %}{% endif %}
+<form method="post" novalidate>{% csrf_token %}<div class="card mb-3"><div class="card-body"><div class="row g-3">{% for field in form %}<div class="col-md-4" {% if field.name == 'cash_fund' or field.name == 'bank_account' %}data-payment-source{% endif %}><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}</div><p class="form-hint mt-3">El anticipo se aplicar? posteriormente a una compra del mismo proveedor y moneda. Una salida de efectivo requiere aprobaci?n en Tesorer?a.</p></div></div><button class="btn btn-primary">Registrar anticipo</button> <a class="btn btn-outline-secondary" href="{% url 'purchases:advance_list' %}">Cancelar</a></form>
+<script src="{% static 'js/purchases/payment-source.js' %}"></script>{% endblock %}

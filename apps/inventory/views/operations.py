@@ -91,19 +91,23 @@ def _movement_reference(movement, *, link=True):
         label,
     )
 
-def _parse_lines(formset):
+def _parse_lines(formset, movement=None):
     """Extrae líneas válidas del formset de detalles."""
     lines = []
+    existing = {detail.pk: detail for detail in movement.details.all()} if movement else {}
     for f in formset:
         if f.is_valid() and f.cleaned_data and not f.cleaned_data.get("DELETE", False):
-            lines.append({
+            line = {
                 "product_id": f.cleaned_data["product"].pk,
                 "unit_id": f.cleaned_data.get("unit"),
                 "quantity": f.cleaned_data["quantity"],
                 "physical_quantity": f.cleaned_data.get("quantity"),
-                "unit_price": f.cleaned_data.get("unit_price", 0),
                 "location_id": f.cleaned_data.get("location") or None,
-            })
+            }
+            detail = existing.pop(f.cleaned_data.get("detail_id"), None)
+            if detail and detail.product_id == line["product_id"] and detail.unit_id == (line["unit_id"] or detail.product.unit_id):
+                line.update(unit_price=detail.unit_price, cost_source=detail.cost_source)
+            lines.append(line)
     return lines
 
 def stock_report(request):
@@ -260,6 +264,7 @@ def _movement_forms(request, store_id, movement, company_id=None):
     initial_lines = [
         {
             "product":      d.product_id,
+            "detail_id": d.pk,
             "product_name": d.product.name,
             "product_sku":  d.product.sku,
             "unit":          d.unit_id or d.product.unit_id,
@@ -273,7 +278,6 @@ def _movement_forms(request, store_id, movement, company_id=None):
                 if movement.type == MovementType.ADJUSTMENT and d.physical_quantity is not None
                 else d.quantity
             ),
-            "unit_price": _movement_decimal(d.unit_price),
         }
         for d in movement.details.all()
     ]
@@ -315,7 +319,7 @@ def movement_edit(request, pk):
     form, formset = _movement_forms(request, store_id, movement, company_id=company_id)
 
     if request.method == "POST" and form.is_valid() and formset.is_valid():
-        lines = _parse_lines(formset)
+        lines = _parse_lines(formset, movement=movement)
         if not lines:
             messages.error(request, "Debe agregar al menos un producto.")
         else:
@@ -740,7 +744,6 @@ def movement_copy(request, pk):
                 if source.type == MovementType.ADJUSTMENT and d.physical_quantity is not None
                 else d.quantity
             ),
-            "unit_price": _movement_decimal(d.unit_price),
         }
         for d in source.details.all()
     ]

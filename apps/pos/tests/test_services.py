@@ -648,6 +648,7 @@ class PosServiceTest(TestCase):
                 {"denomination": "20.00", "quantity": 1},
             ],
             next_opening_total="100.00",
+            safe_deposit_total="120.00",
             tender_counts=[
                 {"means_of_payment_id": self.cash.pk, "counted_amount": "118.00"},
             ],
@@ -672,6 +673,25 @@ class PosServiceTest(TestCase):
         self.assertEqual(audit.meta_data["cash_payments"], "118.00")
         self.assertEqual(audit.meta_data["cash_in"], "10.00")
         self.assertEqual(audit.meta_data["cash_out"], "8.00")
+
+    def test_close_defaults_to_carrying_counted_cash_to_next_opening(self):
+        session = self._session(opening="100.00")
+        closed = close_cash_session(
+            cash_session_id=session.pk, closed_by=self.user, counted_cash_total="100.00",
+        )
+        self.assertEqual(closed.next_opening_total, Decimal("100.00"))
+        self.assertEqual(closed.safe_deposit_total, Decimal("0.00"))
+        self.assertFalse(CashSafeMovement.objects.filter(cash_session=closed).exists())
+
+    def test_close_does_not_assign_unallocated_cash_to_safe(self):
+        session = self._session(opening="100.00")
+        with self.assertRaises(PosDomainError) as error:
+            close_cash_session(
+                cash_session_id=session.pk, closed_by=self.user,
+                counted_cash_total="100.00", next_opening_total="40.00",
+            )
+        self.assertEqual(error.exception.code, "CASH_ALLOCATION_MISMATCH")
+        self.assertFalse(CashSafeMovement.objects.filter(cash_session=session).exists())
 
     def test_close_requires_complete_cash_custody_allocation(self):
         session = self._session(opening="100.00")

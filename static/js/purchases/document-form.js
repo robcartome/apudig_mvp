@@ -22,12 +22,6 @@
   const currency = document.getElementById('id_currency');
   const exchangeRate = document.getElementById('id_exchange_rate');
   const exchangeRateField = document.getElementById('exchange-rate-field');
-  const paymentMethod = document.getElementById('id_payment_method');
-  const issueDate = document.getElementById('id_issue_date');
-  const dueDate = document.getElementById('id_due_date');
-  const dueDateField = document.getElementById('due-date-field');
-  const paymentWorkflowHelp = document.getElementById('payment-workflow-help');
-  const paymentMethods = JSON.parse(document.getElementById('purchase-payment-methods')?.textContent || '[]');
   const receiptMovementsUrl = config.dataset.receiptMovementsUrl;
   let availableReceiptMovements = [];
 
@@ -37,7 +31,14 @@
       if (hasReceiptSource) registerInventoryMovement.checked = false;
       registerInventoryMovement.disabled = hasReceiptSource;
     }
-    if (warehouse) warehouse.disabled = hasReceiptSource || !registerInventoryMovement?.checked;
+    const enabled = !hasReceiptSource && registerInventoryMovement?.checked;
+    if (warehouse) warehouse.disabled = !enabled;
+    const receiptDate = document.getElementById("id_inventory_receipt_date");
+    if (receiptDate) receiptDate.disabled = !enabled;
+    ["purchase-warehouse-field", "purchase-receipt-date-field"].forEach(id => {
+      const field = document.getElementById(id);
+      if (field) field.hidden = !enabled;
+    });
   }
 
   function updateReceiptLinkSummary(receiptMovements = []) {
@@ -57,24 +58,8 @@
     }
   }
 
-  function updatePaymentTerms() {
-    const selected = paymentMethods.find(item => String(item.id) === String(paymentMethod?.value));
-    const isCash = selected?.is_cash === true;
-    if (isCash && dueDate && issueDate?.value) dueDate.value = issueDate.value;
-    if (dueDate) dueDate.readOnly = isCash;
-    if (dueDateField) dueDateField.classList.toggle('opacity-75', isCash);
-    if (paymentWorkflowHelp) {
-      paymentWorkflowHelp.textContent = isCash
-        ? 'Compra al contado: al registrar el documento se habilitara Registrar pago. El estado cambiara a Pagado cuando se confirme el pago.'
-        : 'Compra a credito: al registrar el documento se generara el saldo por pagar. Puedes aplicar uno o varios adelantos desde el listado.';
-    }
-  }
-
   currency?.addEventListener('change', updateCurrencyFields);
-  paymentMethod?.addEventListener('change', updatePaymentTerms);
-  issueDate?.addEventListener('change', updatePaymentTerms);
   updateCurrencyFields();
-  updatePaymentTerms();
   registerInventoryMovement?.addEventListener('change', () => updateInventoryReceptionControls());
   updateInventoryReceptionControls();
 

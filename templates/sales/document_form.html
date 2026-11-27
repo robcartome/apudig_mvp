@@ -143,16 +143,22 @@
         <div class="col-12 col-md-4">
           <label class="form-label">Forma de pago</label>
           {{ header_form.payment_method }}
+          <div class="form-hint">Indica cuándo debe pagar el cliente. Es obligatoria para emitir.</div>
+          {% for error in header_form.payment_method.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label">Medio de pago</label>
-          {{ header_form.means_of_payment }}
+          <label class="form-label" id="due-date-label" for="{{ header_form.due_date.id_for_label }}">Fecha de vencimiento</label>
+          {{ header_form.due_date }}
+          <div class="form-hint">Para crédito, indica la fecha acordada. Al contado vence en la fecha de emisión.</div>
+          <div id="due-date-client-error" class="text-danger small" role="alert" hidden>Indica la fecha de vencimiento para la venta a crédito.</div>
+          {% for error in header_form.due_date.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label">Vendedor</label>
           {{ header_form.seller }}
         </div>
       </div>
+      <div class="form-hint mb-3">El medio de pago se selecciona al registrar la cobranza desde la lista de ventas.</div>
 
       <div class="row g-3 mb-3 align-items-end">
         <div class="col-12 col-md-4">
@@ -183,7 +189,7 @@
     <div class="card-header">
       <h3 class="card-title">Detalle del documento</h3>
     </div>
-    <div class="table-responsive">
+    <div class="px-3 py-2"><label class="form-label" for="barcode-search">Escanear código de barras</label><div class="input-group" style="max-width: 420px"><input id="barcode-search" class="form-control" autocomplete="off" placeholder="Escanea o escribe el código"><button id="barcode-btn" type="button" class="btn btn-outline-secondary">Agregar</button></div><div id="barcode-message" class="form-hint" role="status" aria-live="polite"></div></div><div class="table-responsive">
       {{ line_formset.management_form }}
       <table class="table table-sm table-vcenter mb-0" id="lines-table">
         <thead class="table-light">
@@ -427,6 +433,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ credit_payment_ids|json_script:"sales-credit-payment-ids" }}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -436,5 +443,6 @@
 <script src="{% static 'js/components/partner-picker.js' %}?v=20260812-1"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}?v=20260819-1"></script>
-<script src="{% static 'js/sales/document-lines.js' %}?v=20261105-1"></script>
-{% endblock %}
+<script src="{% static 'js/sales/document-lines.js' %}?v=20261122-1"></script>
+<script src="{% static 'js/sales/document-validation.js' %}?v=20261126-1"></script>
+<script src="{% static 'js/components/barcode-entry.js' %}?v=20261122-2"></script>{% endblock %}

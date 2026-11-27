@@ -1,7 +1,8 @@
 from decimal import Decimal
 
 from django import forms
-from django.db.models import Q
+from django.db.models import F, Q, Sum
+from django.utils import timezone
 
 from apps.core.currency import currency_choices
 
@@ -11,8 +12,9 @@ from apps.sales.models import MeansOfPayment, PaymentMethod
 
 from .models import (
     LandedCostAllocationMethod, PurchaseCategory, PurchaseDocument,
-    PurchaseDocumentLine, PurchaseOrder, PurchaseOrderLine, PurchaseTaxType,
+    PurchaseDocumentLine, PurchaseOrder, PurchaseOrderLine, PurchaseTaxType, SupplierPayment,
 )
+from .payment_terms import requires_purchase_due_date
 
 
 _text = {"class": "form-control"}
@@ -50,7 +52,7 @@ class PurchaseDocumentForm(forms.ModelForm):
         model = PurchaseDocument
         fields = (
             "supplier", "purchase_order", "document_type", "series", "number", "payment_method", "issue_date", "due_date",
-            "currency", "exchange_rate", "register_inventory_movement", "warehouse",
+            "currency", "exchange_rate", "register_inventory_movement", "warehouse", "inventory_receipt_date",
             "global_discount_amount", "global_discount_before_tax", "notes", "internal_reference",
         )
         widgets = {
@@ -68,6 +70,7 @@ class PurchaseDocumentForm(forms.ModelForm):
             "exchange_rate": forms.NumberInput(attrs={**_text, "step": "0.000001", "min": "0.000001"}),
             "register_inventory_movement": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "warehouse": forms.Select(attrs=_select),
+            "inventory_receipt_date": forms.DateInput(format="%Y-%m-%d", attrs={**_text, "type": "date"}),
             "global_discount_amount": forms.NumberInput(attrs={**_text, "min": "0", "step": "0.01"}),
             "global_discount_before_tax": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "notes": forms.Textarea(attrs={**_text, "rows": 3}),
@@ -76,6 +79,7 @@ class PurchaseDocumentForm(forms.ModelForm):
 
     def __init__(self, *args, company_id=None, store_id=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["inventory_receipt_date"].initial = timezone.localdate
         self.fields["issue_date"].input_formats = ["%Y-%m-%d"]
         self.fields["due_date"].input_formats = ["%Y-%m-%d"]
         self.fields["global_discount_amount"].required = False
@@ -143,13 +147,20 @@ class PurchaseDocumentForm(forms.ModelForm):
             self.instance.exchange_rate = Decimal("1")
         payment_method = cleaned.get("payment_method")
         issue_date = cleaned.get("issue_date")
-        if payment_method and payment_method.is_cash and issue_date:
+        if not payment_method and cleaned.get("due_date"):
+            self.add_error("payment_method", "Selecciona una condición de pago para indicar un vencimiento.")
+        elif payment_method and not requires_purchase_due_date(payment_method) and issue_date:
             cleaned["due_date"] = issue_date
             self.instance.due_date = issue_date
-        elif payment_method and not payment_method.is_cash and not cleaned.get("due_date"):
+        elif requires_purchase_due_date(payment_method) and not cleaned.get("due_date"):
             self.add_error("due_date", "Indica la fecha de vencimiento para una compra a credito.")
         if cleaned.get("receipt_movements"):
             cleaned["register_inventory_movement"] = False
+        if cleaned.get("register_inventory_movement"):
+            if not cleaned.get("warehouse"):
+                self.add_error("warehouse", "Selecciona un almacén para la recepción.")
+            if not cleaned.get("inventory_receipt_date"):
+                self.add_error("inventory_receipt_date", "Indica la fecha de ingreso.")
         return cleaned
 
 
@@ -365,17 +376,79 @@ class SupplierPaymentForm(forms.Form):
     means_of_payment = forms.ModelChoiceField(
         queryset=MeansOfPayment.objects.none(), widget=forms.Select(attrs=_select)
     )
+    source_type = forms.ChoiceField(
+        label="Origen del dinero", choices=(("", "Seleccionar"), ("CASH", "Fondo de efectivo"), ("BANK", "Cuenta bancaria")),
+        widget=forms.Select(attrs=_select),
+    )
+    cash_fund = forms.ModelChoiceField(queryset=None, required=False, label="Fondo de efectivo", widget=forms.Select(attrs=_select))
+    bank_account = forms.ModelChoiceField(queryset=None, required=False, label="Cuenta bancaria de origen", widget=forms.Select(attrs=_select))
     reference = forms.CharField(max_length=100, required=False, widget=forms.TextInput(attrs=_text))
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={**_text, "rows": 2}))
 
-    def __init__(self, *args, company_id=None, **kwargs):
+    def __init__(self, *args, company_id=None, store_id=None, currency=None, **kwargs):
+        from apps.treasury.models import BankAccount, TreasuryFund
         super().__init__(*args, **kwargs)
         self.fields["means_of_payment"].queryset = MeansOfPayment.objects.filter(
             company_id=company_id, active=True
         ).order_by("name") if company_id else MeansOfPayment.objects.none()
+        self.fields["cash_fund"].queryset = TreasuryFund.objects.filter(
+            company_id=company_id, store_id=store_id, active=True
+        ).order_by("name")
+        accounts = BankAccount.objects.filter(company_id=company_id, active=True, use_for_payments=True)
+        self.fields["bank_account"].queryset = (accounts.filter(currency=currency) if currency else accounts).select_related("bank")
+
+    def clean(self):
+        cleaned = super().clean()
+        source = cleaned.get("source_type")
+        if source == "CASH" and not cleaned.get("cash_fund"):
+            self.add_error("cash_fund", "Selecciona el fondo de efectivo.")
+        if source == "BANK" and not cleaned.get("bank_account"):
+            self.add_error("bank_account", "Selecciona la cuenta bancaria de origen.")
+        if source == "CASH":
+            cleaned["bank_account"] = None
+        elif source == "BANK":
+            cleaned["cash_fund"] = None
+        return cleaned
 
     def clean_payment_number(self):
         return (self.cleaned_data.get("payment_number") or "").strip().upper()
+
+
+class SupplierAdvanceForm(SupplierPaymentForm):
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none(), label="Proveedor", widget=forms.Select(attrs=_select))
+    currency = forms.ChoiceField(choices=currency_choices(), label="Moneda", widget=forms.Select(attrs=_select))
+    exchange_rate = forms.DecimalField(min_value=Decimal("0.000001"), max_digits=14, decimal_places=6,
+                                       initial=1, label="Tipo de cambio", widget=forms.NumberInput(attrs={**_text, "step": "0.000001"}))
+
+    def __init__(self, *args, company_id=None, **kwargs):
+        super().__init__(*args, company_id=company_id, **kwargs)
+        self.fields["supplier"].queryset = Supplier.objects.filter(company_id=company_id, active=True).order_by("name")
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("currency") == "PEN":
+            cleaned["exchange_rate"] = Decimal("1")
+        return cleaned
+
+
+class SupplierAdvanceChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, payment):
+        available = payment.amount - (payment.allocated or Decimal("0"))
+        return f"{payment.payment_number} · {payment.payment_date:%d/%m/%Y} · disponible {payment.currency} {available:.2f}"
+
+
+class SupplierAdvanceAllocationForm(forms.Form):
+    payment = SupplierAdvanceChoiceField(queryset=SupplierPayment.objects.none(), label="Anticipo", widget=forms.Select(attrs=_select))
+    amount = forms.DecimalField(min_value=Decimal("0.01"), max_digits=14, decimal_places=2,
+                                label="Importe a aplicar", widget=forms.NumberInput(attrs={**_text, "step": "0.01"}))
+
+    def __init__(self, *args, document=None, **kwargs):
+        from .models import SupplierPaymentStatus
+        super().__init__(*args, **kwargs)
+        self.fields["payment"].queryset = SupplierPayment.objects.filter(
+            company_id=document.company_id, store_id=document.store_id, supplier_id=document.supplier_id,
+            currency=document.currency, status=SupplierPaymentStatus.REGISTERED,
+        ).annotate(allocated=Sum("allocations__amount")).filter(Q(allocated__lt=F("amount")) | Q(allocated__isnull=True))
 
 
 class SupplierPaymentEditForm(forms.Form):
