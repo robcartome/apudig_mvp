@@ -2,6 +2,7 @@
    interaction feedback and the SVG chart without changing other pages. */
 .dashboard {
   --dashboard-space: clamp(12px, .75rem + .3vw, 22px);
+  --dashboard-caption-size: clamp(11px, .7rem + .025vw, 12px);
   --dashboard-border: color-mix(in srgb, var(--tblr-body-color, #182433) 7%, transparent);
   --dashboard-tint: color-mix(in srgb, var(--company-primary) 5%, var(--tblr-bg-surface, #fff));
   --dashboard-shadow: 0 2px 4px rgb(24 36 51 / 2%), 0 8px 28px rgb(24 36 51 / 4%);
@@ -13,6 +14,12 @@
 .dashboard .small {
   font-size: clamp(12px, .82em, 13px);
   line-height: 1.5;
+}
+
+/* Keep supporting copy quieter than labels and monetary values. */
+.dashboard .text-secondary:not(.ti):not(.avatar):not(td) {
+  font-size: var(--dashboard-caption-size);
+  line-height: 1.4;
 }
 
 .dashboard .card-body,
@@ -41,7 +48,19 @@
 }
 
 .dashboard .dashboard-shortcut .card-body {
-  min-height: 76px;
+  min-height: 64px;
+  padding: 10px 12px;
+}
+
+.dashboard-shortcut-title {
+  display: block;
+  font-size: clamp(12px, .78rem + .025vw, 13px);
+  line-height: 1.35;
+}
+
+.dashboard .dashboard-shortcut-description {
+  margin-top: 2px;
+  line-height: 1.35;
 }
 
 .dashboard .table {
@@ -62,7 +81,7 @@
 }
 
 .dashboard .table .small {
-  font-size: .94em;
+  font-size: .9em;
   margin-top: .2rem;
 }
 
