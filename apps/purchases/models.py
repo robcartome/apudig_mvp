@@ -8,6 +8,8 @@ from django.db import models
 from apps.core.managers import CompanyScopedManager
 from apps.core.models import TimeStampedModel
 
+from .payment_terms import requires_purchase_due_date
+
 
 class PurchaseDocumentStatus(models.TextChoices):
     DRAFT = "DRAFT", "Borrador"
@@ -379,9 +381,9 @@ class PurchaseDocument(TimeStampedModel):
         if self.payment_method_id:
             if str(self.payment_method.company_id) != str(self.company_id):
                 errors["payment_method"] = "La condicion de pago no pertenece a la empresa."
-            elif self.payment_method.is_cash and self.issue_date:
+            elif not requires_purchase_due_date(self.payment_method) and self.issue_date:
                 self.due_date = self.issue_date
-            elif not self.payment_method.is_cash and not self.due_date:
+            elif requires_purchase_due_date(self.payment_method) and not self.due_date:
                 errors["due_date"] = "Indica la fecha de vencimiento para una compra a credito."
         if errors:
             raise ValidationError(errors)

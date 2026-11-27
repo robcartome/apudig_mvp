@@ -1,7 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import DecimalField, ExpressionWrapper, F, OuterRef, Subquery, Sum, Value
+from django.db.models import DecimalField, ExpressionWrapper, F, OuterRef, Q, Subquery, Sum, Value
 from django.db import transaction
 from django.db.models.functions import Coalesce
 from django.urls import reverse
@@ -34,7 +34,13 @@ def _outstanding_installments(*, company_id, store_id, document_id=None):
         purchase_document__company_id=company_id,
         purchase_document__store_id=store_id,
         purchase_document__document_status=PurchaseDocumentStatus.REGISTERED,
-        purchase_document__payment_method__is_cash=False,
+    ).filter(
+        Q(purchase_document__payment_method__is_credit=True)
+        | Q(purchase_document__payment_method__immediate_payment=False)
+        # Existing bills can have an explicit maturity date without a condition.
+        # Their actual outstanding balance must still produce a due alert.
+        | Q(purchase_document__payment_method__isnull=True,
+            purchase_document__due_date__isnull=False)
     )
     if document_id is not None:
         queryset = queryset.filter(purchase_document_id=document_id)

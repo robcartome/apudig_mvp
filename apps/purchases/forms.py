@@ -14,6 +14,7 @@ from .models import (
     LandedCostAllocationMethod, PurchaseCategory, PurchaseDocument,
     PurchaseDocumentLine, PurchaseOrder, PurchaseOrderLine, PurchaseTaxType, SupplierPayment,
 )
+from .payment_terms import requires_purchase_due_date
 
 
 _text = {"class": "form-control"}
@@ -146,10 +147,12 @@ class PurchaseDocumentForm(forms.ModelForm):
             self.instance.exchange_rate = Decimal("1")
         payment_method = cleaned.get("payment_method")
         issue_date = cleaned.get("issue_date")
-        if payment_method and payment_method.is_cash and issue_date:
+        if not payment_method and cleaned.get("due_date"):
+            self.add_error("payment_method", "Selecciona una condición de pago para indicar un vencimiento.")
+        elif payment_method and not requires_purchase_due_date(payment_method) and issue_date:
             cleaned["due_date"] = issue_date
             self.instance.due_date = issue_date
-        elif payment_method and not payment_method.is_cash and not cleaned.get("due_date"):
+        elif requires_purchase_due_date(payment_method) and not cleaned.get("due_date"):
             self.add_error("due_date", "Indica la fecha de vencimiento para una compra a credito.")
         if cleaned.get("receipt_movements"):
             cleaned["register_inventory_movement"] = False

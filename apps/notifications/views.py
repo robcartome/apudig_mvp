@@ -17,6 +17,16 @@ def _scope(request):
     store_id = getattr(request, "active_store_id", None)
     if not company_id or not store_id:
         raise Http404("Selecciona una empresa y sucursal.")
+    # A company switch in another tab changes the shared session. Never serve
+    # or mutate notifications under the old tab's user/company/store context.
+    for header, current in (
+        ("X-Notification-User", request.user.pk),
+        ("X-Notification-Company", company_id),
+        ("X-Notification-Store", store_id),
+    ):
+        expected = request.headers.get(header)
+        if expected and expected != str(current):
+            raise Http404("El contexto activo cambió. Recarga la página.")
     if not user_has_company_permission(
         request.user, company_id, "read.purchases.documents", store_id
     ):

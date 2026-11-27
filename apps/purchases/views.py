@@ -41,6 +41,7 @@ from .order_services import (
     approve_purchase_order, cancel_purchase_order, create_purchase_order, update_purchase_order,
 )
 from .receipt_services import cancel_purchase_receipt, received_quantities, register_purchase_receipt
+from .payment_terms import purchase_payment_terms_config
 from .payment_services import (
     cancel_supplier_payment, document_payment_summary, installment_paid_amount,
     register_supplier_payment, replace_installment_schedule, apply_supplier_advance,
@@ -251,7 +252,7 @@ def _form_context(form, formset, company_id, title, document=None):
             company_id=company_id, active=True
         ).order_by("name"),
         "operational_settings": operational_settings or CompanyOperationalSettings(company_id=company_id),
-        "payment_methods": list(form.fields["payment_method"].queryset.values("id", "is_cash")),
+        "payment_methods": purchase_payment_terms_config(form),
         "price_decimal_places": operational_settings.price_decimal_places if operational_settings else 2,
         "default_igv_rate": tax_rate_for_company(company_id),
     }
@@ -578,6 +579,7 @@ def _expense_context(form, formset, company_id, title, document=None):
         "formset": formset,
         "title": title,
         "purchase_document": document,
+        "payment_methods": purchase_payment_terms_config(form),
         "selected_supplier": Supplier.objects.filter(
             pk=supplier_id, company_id=company_id
         ).first() if supplier_id else None,
