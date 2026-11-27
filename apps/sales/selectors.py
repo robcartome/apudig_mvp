@@ -7,6 +7,45 @@ from apps.partners.models import DocumentType
 from .models import DocumentSeries, SalesQuotation, SaleOrder, SalesDocument
 
 
+def get_dashboard_sales(company_id, store_id, start, end, previous_start, currency):
+    """Daily net sales; consolidated POS invoices must not count tickets twice."""
+    from decimal import Decimal
+    from django.db.models import Case, Count, DecimalField, F, Sum, When
+    from django.db.models.functions import TruncDate
+
+    documents = SalesDocument.objects.filter(
+        store_id=store_id, store__company_id=company_id, currency=currency,
+    )
+    issued = documents.filter(
+        status__in=("ISSUED", "SUNAT_PENDING", "SUNAT_ACCEPTED", "SUNAT_OBSERVED"),
+        document_type__code__in=("NV", "01", "03", "07", "08"),
+        source_document_links__isnull=True,
+    ).annotate(net_amount=Case(
+        When(document_type__code="07", then=-F("total")),
+        default=F("total"), output_field=DecimalField(max_digits=18, decimal_places=2),
+    ))
+    current = issued.filter(issue_date__gte=start, issue_date__lt=end)
+    totals = current.aggregate(total=Sum("net_amount"), count=Count("pk"))
+    previous = issued.filter(issue_date__gte=previous_start, issue_date__lt=start).aggregate(
+        total=Sum("net_amount")
+    )["total"] or Decimal("0")
+    daily = list(current.order_by().annotate(day=TruncDate("issue_date")).values("day").annotate(
+        total=Sum("net_amount")
+    ).order_by("day"))
+    return {
+        "total": totals["total"] or Decimal("0"), "count": totals["count"],
+        "previous": previous, "daily": daily,
+        "recent": list(current.select_related("document_type").order_by("-issue_date", "-created_at")[:5]),
+        "drafts": documents.filter(status="DRAFT").count(),
+        "quotations": SalesQuotation.objects.filter(
+            store_id=store_id, store__company_id=company_id, status="SENT",
+        ).count(),
+        "orders": SaleOrder.objects.filter(
+            store_id=store_id, store__company_id=company_id, status="CONFIRMED",
+        ).count(),
+    }
+
+
 def with_document_payments(queryset):
     from apps.pos.models import SalesPayment
 

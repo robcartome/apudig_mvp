@@ -1,0 +1,288 @@
+/* Tabler provides the components; this scoped layer adds dashboard surfaces,
+   interaction feedback and the SVG chart without changing other pages. */
+.dashboard {
+  --dashboard-space: clamp(12px, .75rem + .3vw, 22px);
+  --dashboard-border: color-mix(in srgb, var(--tblr-body-color, #182433) 7%, transparent);
+  --dashboard-tint: color-mix(in srgb, var(--company-primary) 5%, var(--tblr-bg-surface, #fff));
+  --dashboard-shadow: 0 2px 4px rgb(24 36 51 / 2%), 0 8px 28px rgb(24 36 51 / 4%);
+  --dashboard-shadow-raised: 0 6px 12px rgb(24 36 51 / 5%), 0 16px 32px rgb(24 36 51 / 9%);
+  font-size: clamp(14px, .85rem + .1vw, 16px);
+  line-height: 1.5;
+}
+
+.dashboard .small {
+  font-size: clamp(12px, .82em, 13px);
+  line-height: 1.5;
+}
+
+.dashboard .card-body,
+.dashboard .card-header,
+.dashboard .card-footer {
+  padding: var(--dashboard-space);
+}
+
+.dashboard .card-header {
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.dashboard .card-header > div,
+.dashboard .flex-fill,
+.dashboard form .col {
+  min-width: 0;
+}
+
+.dashboard .card-footer {
+  padding-block: calc(var(--dashboard-space) * .7);
+}
+
+.dashboard .list-group-item {
+  padding: .875rem var(--dashboard-space);
+}
+
+.dashboard .dashboard-shortcut .card-body {
+  min-height: 76px;
+}
+
+.dashboard .table {
+  font-size: clamp(13px, .75rem + .08vw, 14px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+
+.dashboard .table > :not(caption) > * > * {
+  padding: .7rem var(--dashboard-space);
+}
+
+.dashboard .table thead th {
+  font-size: .9em;
+  font-weight: 600;
+  letter-spacing: .035em;
+  white-space: nowrap;
+}
+
+.dashboard .table .small {
+  font-size: .94em;
+  margin-top: .2rem;
+}
+
+.dashboard .table .badge {
+  font-size: .85em;
+  letter-spacing: normal;
+}
+
+.dashboard .card-table td:first-child {
+  min-width: 11rem;
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+}
+
+.dashboard .table-responsive:focus-visible {
+  outline: 2px solid var(--company-primary);
+  outline-offset: -2px;
+}
+
+.dashboard .card {
+  border-color: var(--dashboard-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--dashboard-shadow);
+  overflow: hidden;
+}
+
+.dashboard .card-link,
+.dashboard .btn,
+.dashboard .form-select,
+.dashboard .list-group-item-action {
+  transition: box-shadow .18s ease, border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+
+.dashboard .card-header .card-title {
+  font-size: clamp(14px, .9rem + .04vw, 16px);
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.dashboard h1.page-title {
+  font-size: clamp(20px, 1.1rem + .4vw, 26px);
+  line-height: 1.25;
+  letter-spacing: -.035em;
+}
+
+.dashboard .avatar {
+  border-radius: .75rem;
+  box-shadow: none;
+}
+
+.dashboard .dashboard-kpi .avatar {
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.dashboard .dashboard-shortcut {
+  border-radius: 1rem;
+  background: var(--tblr-bg-surface-secondary, #f6f8fb);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.dashboard .btn,
+.dashboard .form-select {
+  border-radius: .75rem;
+  min-height: 36px;
+  font-size: clamp(13px, .85em, 14px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .dashboard .card-link:hover {
+    border-color: color-mix(in srgb, var(--company-primary) 24%, transparent);
+    background: var(--tblr-bg-surface, #fff);
+    box-shadow: var(--dashboard-shadow-raised);
+    transform: translateY(-3px);
+  }
+
+  .dashboard .btn:hover {
+    box-shadow: 0 5px 12px rgb(24 36 51 / 12%);
+    transform: translateY(-1px);
+  }
+
+  .dashboard .list-group-item-action:hover {
+    background: var(--dashboard-tint);
+    box-shadow: inset 3px 0 var(--company-primary);
+  }
+}
+
+.dashboard .card-link:focus-visible {
+  border-color: var(--company-primary);
+  box-shadow: var(--dashboard-shadow-raised);
+  transform: translateY(-2px);
+}
+
+.dashboard .card-link:active,
+.dashboard .card-link.active {
+  background: var(--dashboard-tint);
+  border-color: var(--company-primary);
+  box-shadow: 0 3px 8px rgb(24 36 51 / 10%);
+  transform: translateY(0);
+}
+
+.dashboard section.card:focus-within {
+  box-shadow: var(--dashboard-shadow), 0 0 0 2px color-mix(in srgb, var(--company-primary) 12%, transparent);
+}
+
+.dashboard .list-group-item-action:focus-visible,
+.dashboard .list-group-item-action:active {
+  background: var(--dashboard-tint);
+  box-shadow: inset 3px 0 var(--company-primary), inset 0 0 0 1px var(--dashboard-border);
+  outline-offset: -3px;
+}
+
+.dashboard .btn:focus-visible,
+.dashboard .form-select:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary) 18%, transparent), 0 5px 12px rgb(24 36 51 / 10%);
+}
+
+.dashboard .table tbody tr:focus-within {
+  background: var(--dashboard-tint);
+}
+
+.dashboard-metric {
+  font-size: clamp(21px, 1.1rem + .45vw, 28px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-metric small {
+  font-size: .65em;
+}
+
+.dashboard a:focus-visible,
+.dashboard summary:focus-visible {
+  outline: 3px solid var(--company-primary);
+  outline-offset: 3px;
+}
+
+.dashboard-chart {
+  position: relative;
+  padding-left: 65px;
+  color: var(--company-primary);
+}
+
+.dashboard-chart svg {
+  display: block;
+  width: 100%;
+  height: clamp(170px, 16vw, 210px);
+  overflow: visible;
+}
+
+.dashboard-chart-labels {
+  position: absolute;
+  inset: 25px auto 25px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.dashboard-chart-grid {
+  stroke: var(--tblr-border-color, #e6e7e9);
+  stroke-width: 1;
+  fill: none;
+  stroke-dasharray: 4 5;
+}
+
+.dashboard-chart-zero {
+  stroke: var(--tblr-secondary, #667382);
+  stroke-opacity: .5;
+  stroke-width: 1;
+}
+
+.dashboard-chart-dates {
+  margin: 0 12px 0 80px;
+}
+
+.dashboard-chart-total {
+  font-size: clamp(20px, 1.1rem + .5vw, 28px);
+  letter-spacing: -.03em;
+  line-height: 1.25;
+}
+
+@media (max-width: 767.98px) {
+  .dashboard .btn,
+  .dashboard .form-select {
+    min-height: 44px;
+  }
+
+  .dashboard .card {
+    border-radius: 1rem;
+  }
+
+  .dashboard-chart {
+    padding-left: 52px;
+  }
+
+  .dashboard-chart-dates {
+    margin-left: 64px;
+  }
+}
+
+@media (pointer: coarse) {
+  .dashboard .btn,
+  .dashboard .form-select {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard .card-link,
+  .dashboard .btn,
+  .dashboard .form-select,
+  .dashboard .list-group-item-action {
+    transition: none;
+  }
+
+  .dashboard .card-link:is(:hover, :focus-visible, :active, .active),
+  .dashboard .btn:hover {
+    transform: none;
+  }
+}

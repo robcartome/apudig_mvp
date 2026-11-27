@@ -2,6 +2,8 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
+from .selectors import get_dashboard_context
+
 
 @login_required
 def home(request):
@@ -12,7 +14,7 @@ def home(request):
 def dashboard(request):
     if not request.active_company_id:
         return redirect("select_company")
-    return render(request, "web/dashboard.html")
+    return render(request, "web/dashboard.html", get_dashboard_context(request))
 
 
 def logout_view(request):
