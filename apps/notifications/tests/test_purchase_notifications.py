@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -97,6 +98,71 @@ class NotificationTestBase(TestCase):
 
 
 class PurchaseNotificationProviderTest(NotificationTestBase):
+    def test_existing_unclassified_expense_with_due_date_generates_balance_alert(self):
+        from apps.purchases.models import PurchaseCategory, PurchaseDocument
+
+        document = self.document(self.today)
+        category = PurchaseCategory.objects.create(company=self.company, code="ALQ", name="Alquiler")
+        document.lines.update(product=None, purchase_category=category, unit=None)
+        PurchaseDocument.objects.filter(pk=document.pk).update(payment_method=None)
+        self.pay(document, Decimal("40"))
+        self.sync()
+        notification = Notification.objects.get(is_active=True)
+        self.assertEqual(notification.amount, Decimal("60.00"))
+        self.assertEqual(notification.due_date, self.today)
+        self.assertEqual(notification.metadata["purchase_document_id"], str(document.pk))
+        self.pay(document, Decimal("60"), "PAG-NOT-2")
+        self.sync()
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_active)
+
+    def test_unclassified_document_without_due_date_does_not_create_implicit_due_alert(self):
+        from apps.purchases.models import PurchaseDocument
+
+        document = self.document(self.today)
+        PurchaseDocument.objects.filter(pk=document.pk).update(payment_method=None, due_date=None)
+        self.sync()
+        self.assertFalse(Notification.objects.filter(is_active=True).exists())
+
+    def test_explicit_credit_flag_enables_alert_without_relying_on_condition_name(self):
+        condition = PaymentMethod.objects.create(
+            company=self.company, name="Acuerdo especial", is_credit=True,
+            immediate_payment=False, is_cash=True,
+        )
+        self.document(self.today, payment_method=condition)
+        self.sync()
+        self.assertEqual(Notification.objects.filter(is_active=True).count(), 1)
+
+    def test_deferred_noncredit_condition_generates_alert(self):
+        condition = PaymentMethod.objects.create(
+            company=self.company, name="Pago diferido", is_credit=False,
+            immediate_payment=False,
+        )
+        self.document(self.today, payment_method=condition)
+        self.sync()
+        self.assertEqual(Notification.objects.filter(is_active=True).count(), 1)
+
+    def test_immediate_noncash_condition_does_not_generate_credit_alert(self):
+        condition = PaymentMethod.objects.create(
+            company=self.company, name="Transferencia inmediata", is_cash=False,
+            is_credit=False, immediate_payment=True,
+        )
+        self.document(self.today, payment_method=condition)
+        self.sync()
+        self.assertFalse(Notification.objects.filter(is_active=True).exists())
+
+    def test_unclassified_due_alerts_respect_company_store_and_date_threshold(self):
+        from apps.purchases.models import PurchaseDocument
+
+        local = self.document(self.today)
+        future = self.document(self.today + timedelta(days=4))
+        other_store = Store.objects.create(company=self.company, name="Otra sucursal")
+        foreign = self.document(self.today, store=other_store)
+        PurchaseDocument.objects.filter(pk__in=[local.pk, future.pk, foreign.pk]).update(payment_method=None)
+        self.sync()
+        self.assertEqual(Notification.objects.get(is_active=True).store_id, self.store.pk)
+        self.assertEqual(Notification.objects.filter(is_active=True).count(), 1)
+
     def test_upcoming_invoice_uses_configurable_three_day_threshold(self):
         self.document(self.today + timedelta(days=3))
         self.document(self.today + timedelta(days=4))
@@ -218,4 +284,36 @@ class NotificationViewTest(NotificationTestBase):
         self.assertContains(response, 'data-notification-tab="unread"', html=False)
         self.assertContains(response, 'data-notification-read-all', html=False)
         self.assertContains(response, "js/components/notifications")
+        self.assertContains(response, f'data-user-id="{self.user.pk}"')
+        self.assertContains(response, f'data-company-id="{self.company.pk}"')
+        self.assertContains(response, f'data-store-id="{self.store.pk}"')
+
+    def test_requests_from_the_matching_page_scope_are_allowed(self):
+        response = self.client.get(reverse("notifications:unread_count"), headers={
+            "X-Notification-User": str(self.user.pk),
+            "X-Notification-Company": str(self.company.pk),
+            "X-Notification-Store": str(self.store.pk),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["unread_count"], 2)
+
+    def test_old_tab_scope_cannot_read_or_mark_current_notifications(self):
+        first = NotificationRecipient.objects.filter(user=self.user).first()
+        for header in ("X-Notification-User", "X-Notification-Company", "X-Notification-Store"):
+            with self.subTest(header=header):
+                headers = {header: str(uuid4())}
+                for name in ("unread_count", "dropdown"):
+                    self.assertEqual(self.client.get(
+                        reverse(f"notifications:{name}"), headers=headers,
+                    ).status_code, 404)
+                self.assertEqual(self.client.post(
+                    reverse("notifications:mark_read", args=[first.notification_id]),
+                    headers=headers,
+                ).status_code, 404)
+                self.assertEqual(self.client.post(
+                    reverse("notifications:mark_all_read"), headers=headers,
+                ).status_code, 404)
+        self.assertEqual(NotificationRecipient.objects.filter(
+            user=self.user, read_at__isnull=True,
+        ).count(), 2)
 

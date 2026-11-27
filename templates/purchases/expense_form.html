@@ -18,12 +18,13 @@
     <div class="col-md-2"><label class="form-label">Serie</label>{{ form.series }}</div>
     <div class="col-md-2"><label class="form-label">Número</label>{{ form.number }}</div>
     <div class="col-md-2"><label class="form-label required">Emisión</label>{{ form.issue_date }}</div>
-    <div class="col-md-2"><label class="form-label">Vencimiento</label>{{ form.due_date }}</div>
-    <div class="col-md-3"><label class="form-label">Condicion de pago</label>{{ form.payment_method }}</div>
+    <div class="col-md-3"><label class="form-label" for="id_payment_method">Condición de pago</label>{{ form.payment_method }}{{ form.payment_method.errors }}</div>
+    <div class="col-md-3" id="due-date-field"><label class="form-label" for="id_due_date">Vencimiento del pago</label>{{ form.due_date }}{{ form.due_date.errors }}<div class="form-hint">Fecha límite para pagar la factura, no para recibir los bienes o servicios.</div></div>
     <div class="col-md-3"><label class="form-label">Moneda</label>{{ form.currency }}</div>
     <div class="col-md-3"><label class="form-label">Tipo de cambio</label>{{ form.exchange_rate }}</div>
     <div class="col-md-3"><label class="form-label">Referencia interna</label>{{ form.internal_reference }}</div>
   </div></div></div>
+  <div class="alert alert-info py-2" id="payment-workflow-help">Selecciona una condición de pago para definir el vencimiento.</div>
   <div class="card mb-3"><div class="card-header"><h3 class="card-title">Detalle del gasto</h3></div>
     {{ formset.management_form }}<div class="table-responsive"><table class="table table-sm table-vcenter card-table" id="expense-lines-table"><thead class="table-light"><tr>
       <th>#</th><th style="min-width:180px">Categoría</th><th style="min-width:260px">Descripción</th><th>Cantidad</th><th style="min-width:150px">Tipo IGV</th><th>Valor Unit.</th><th>SubTotal</th><th>IGV</th><th>Total</th><th>OP</th>
@@ -37,7 +38,9 @@
 </form>
 {% endblock %}
 {% block extra_js %}
+{{ payment_methods|json_script:"purchase-payment-methods" }}
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/plugins/select2.js' %}"></script><script src="{% static 'js/api.js' %}"></script><script src="{% static 'js/components/partner-picker.js' %}"></script>
+<script src="{% static 'js/purchases/payment-terms.js' %}?v=20261127-1"></script>
 <script src="{% static 'js/purchases/expense-form.js' %}"></script>
 {% endblock %}

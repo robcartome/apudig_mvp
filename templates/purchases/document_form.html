@@ -65,8 +65,8 @@
                     {% include "components/partner_select.html" with field=form.supplier partner_type="supplier" search_url=supplier_search_url create_url=supplier_create_url selected_id=form.supplier.value selected_label=selected_supplier %}
                 </div>
                 <div class="col-md-6 col-xl-3">
-                    <label class="form-label">Condicion de pago</label>
-                    {{ form.payment_method }}
+                    <label class="form-label" for="id_payment_method">Condición de pago</label>
+                    {{ form.payment_method }}{{ form.payment_method.errors }}
                 </div>
                 <div class="col-md-6 col-xl-2">
                     <label class="form-label">Moneda</label>
@@ -100,9 +100,9 @@
                     {{ form.issue_date }}
                 </div>
                 <div class="col-md-4 col-xl-3" id="due-date-field">
-                    <label class="form-label">Fecha de vencimiento</label>
-                    {{ form.due_date }}
-                    <div class="form-hint">Obligatoria cuando la compra es a credito.</div>
+                    <label class="form-label" for="id_due_date">Vencimiento del pago</label>
+                    {{ form.due_date }}{{ form.due_date.errors }}
+                    <div class="form-hint">Fecha límite para pagar la factura. Obligatoria para pagos a crédito.</div>
                 </div>
                 <div class="col-md-6 col-xl-3">
                     <label class="form-label">Referencia interna</label>
@@ -425,4 +425,5 @@
 <script src="{% static 'js/components/partner-picker.js' %}"></script>
 <script src="{% static 'js/components/product-picker.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/components/stock-by-warehouse.js' %}"></script>
-<script src="{% static 'js/purchases/document-form.js' %}?v=20261122-1"></script><script src="{% static 'js/components/barcode-entry.js' %}?v=20261122-2"></script>{% endblock %}
+<script src="{% static 'js/purchases/payment-terms.js' %}?v=20261127-1"></script>
+<script src="{% static 'js/purchases/document-form.js' %}?v=20261127-1"></script><script src="{% static 'js/components/barcode-entry.js' %}?v=20261122-2"></script>{% endblock %}

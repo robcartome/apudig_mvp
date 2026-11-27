@@ -16,6 +16,20 @@ from .models import (
 )
 
 
+def get_dashboard_purchases(company_id, store_id, date_from, date_to, currency):
+    """Registered purchases in the selected currency and branch."""
+    documents = PurchaseDocument.objects.filter(company_id=company_id, store_id=store_id)
+    current = documents.filter(
+        document_status=PurchaseDocumentStatus.REGISTERED, currency=currency,
+        issue_date__range=(date_from, date_to),
+    )
+    return {
+        "total": current.aggregate(total=Sum("total"))["total"] or Decimal("0"),
+        "count": current.count(),
+        "drafts": documents.filter(document_status=PurchaseDocumentStatus.DRAFT).count(),
+    }
+
+
 def search_purchase_documents(
     company_id, store_id=None, query=None, status=None, *, date_from=None,
     date_to=None, created_from=None, created_to=None, number=None, series=None,

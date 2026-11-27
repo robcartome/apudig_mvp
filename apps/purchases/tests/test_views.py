@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.templatetags.static import static
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -12,6 +13,7 @@ from apps.partners.models import DocumentType, Supplier
 from apps.purchases.models import PurchaseCategory, PurchaseDocument
 from apps.purchases.selectors import search_purchase_documents
 from apps.sales.models import PaymentMethod
+from apps.users.models import Role, UserRole
 
 
 class PurchaseDocumentViewTest(TestCase):
@@ -27,6 +29,8 @@ class PurchaseDocumentViewTest(TestCase):
         self.unit = Unit.objects.create(code="UCV", name="Unidad compras vista")
         self.product = Product.objects.create(company=self.company, name="Producto vista", sku="PCV-1", unit=self.unit)
         self.user = get_user_model().objects.create_user(email="compras@example.com", password="testpass")
+        admin, _ = Role.objects.get_or_create(name="ADMIN")
+        UserRole.objects.create(user=self.user, role=admin, company=self.company)
         self.client.login(username="compras@example.com", password="testpass")
         session = self.client.session
         session["active_company_id"] = str(self.company.pk)
@@ -94,7 +98,9 @@ class PurchaseDocumentViewTest(TestCase):
         self.assertEqual(document.payment_status, "UNPAID")
 
     def test_credit_condition_requires_due_date_and_preserves_foreign_currency_rate(self):
-        credit = PaymentMethod.objects.create(company=self.company, name="Credito 30 dias", is_cash=False)
+        credit = PaymentMethod.objects.create(
+            company=self.company, name="Credito 30 dias", is_credit=True, immediate_payment=False,
+        )
         payload = self.payload()
         payload.update({
             "number": "103", "payment_method": str(credit.pk), "due_date": "",
@@ -110,6 +116,56 @@ class PurchaseDocumentViewTest(TestCase):
         document = PurchaseDocument.objects.get(number="103")
         self.assertEqual(document.currency, "USD")
         self.assertEqual(document.exchange_rate, Decimal("3.750000"))
+
+    def test_due_date_without_condition_is_rejected_for_purchases_and_expenses(self):
+        for route in ("document_create", "expense_create"):
+            with self.subTest(route=route):
+                payload = self.payload()
+                payload["due_date"] = "2026-10-01"
+                response = self.client.post(reverse(f"purchases:{route}"), payload)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("payment_method", response.context["form"].errors)
+        self.assertFalse(PurchaseDocument.objects.exists())
+
+    def test_expense_credit_requires_due_date_and_cash_remains_unpaid(self):
+        category = PurchaseCategory.objects.create(company=self.company, code="SERV", name="Servicios")
+        credit = PaymentMethod.objects.create(
+            company=self.company, name="Pago diferido", is_credit=True, immediate_payment=False,
+        )
+        cash = PaymentMethod.objects.create(company=self.company, name="Contado", is_cash=True)
+        payload = self.payload()
+        payload.update({
+            "lines-0-product": "", "lines-0-unit": "",
+            "lines-0-purchase_category": str(category.pk),
+            "payment_method": str(credit.pk),
+        })
+        response = self.client.post(reverse("purchases:expense_create"), payload)
+        self.assertIn("due_date", response.context["form"].errors)
+        payload["due_date"] = "2026-08-31"
+        response = self.client.post(reverse("purchases:expense_create"), payload)
+        self.assertIn("due_date", response.context["form"].errors)
+        payload["due_date"] = "2026-10-01"
+        response = self.client.post(reverse("purchases:expense_create"), payload)
+        self.assertEqual(response.status_code, 302)
+        document = PurchaseDocument.objects.get()
+        self.assertEqual(document.due_date.isoformat(), "2026-10-01")
+        self.assertEqual(document.payment_status, "UNPAID")
+        payload.update(payment_method=str(cash.pk), number="100")
+        response = self.client.post(reverse("purchases:expense_create"), payload)
+        self.assertEqual(response.status_code, 302)
+        document = PurchaseDocument.objects.get(number="100")
+        self.assertEqual(document.due_date, document.issue_date)
+        self.assertEqual(document.payment_status, "UNPAID")
+
+    def test_expense_form_shares_scoped_payment_term_controls(self):
+        local = PaymentMethod.objects.create(company=self.company, name="Condición local", is_credit=True)
+        other_company = Company.objects.create(name="Otra empresa", ruc="20611111999")
+        other = PaymentMethod.objects.create(company=other_company, name="Condición ajena", is_credit=True)
+        response = self.client.get(reverse("purchases:expense_create"))
+        self.assertContains(response, 'id="due-date-field"')
+        self.assertContains(response, static("js/purchases/payment-terms.js"))
+        self.assertEqual(response.context["payment_methods"], [{"id": str(local.pk), "requires_due_date": True}])
+        self.assertNotContains(response, str(other.pk))
 
     def test_detail_is_isolated_by_active_store(self):
         response = self.client.post(reverse("purchases:document_create"), self.payload())
@@ -142,6 +198,8 @@ class PurchaseDocumentViewTest(TestCase):
             response.context["date_from"], today.replace(day=1).isoformat()
         )
         self.assertEqual(response.context["date_to"][:7], today.strftime("%Y-%m"))
+        # The fixture bill has a fixed issue date, outside the default month.
+        response = self.client.get(reverse("purchases:document_list"), {"show_all_dates": "1"})
         self.assertContains(response, "Fecha de creación")
         self.assertContains(response, "Fecha de emisión")
         self.assertContains(response, "Fecha de vencimiento")
@@ -322,6 +380,7 @@ class PurchaseDocumentViewTest(TestCase):
             "number": "101",
             "register_inventory_movement": "on",
             "warehouse": str(self.warehouse.pk),
+            "inventory_receipt_date": "2026-09-01",
         })
         response = self.client.post(reverse("purchases:document_create"), payload)
         if response.status_code == 200:

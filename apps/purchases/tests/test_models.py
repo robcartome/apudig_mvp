@@ -8,6 +8,7 @@ from django.test import TestCase
 from apps.companies.models import Company, Store
 from apps.inventory.models import Product, Unit
 from apps.partners.models import DocumentType, Supplier
+from apps.sales.models import PaymentMethod
 from apps.purchases.models import (
     PurchaseDocument,
     PurchaseDocumentLine,
@@ -57,6 +58,33 @@ class PurchaseDocumentModelTest(TestCase):
         document.save(update_fields=["document_status"])
         document.refresh_from_db()
         self.assertEqual(document.payment_status, PurchasePaymentStatus.UNPAID)
+
+    def test_immediate_noncash_condition_uses_issue_date_without_marking_paid(self):
+        condition = PaymentMethod.objects.create(
+            company=self.company, name="Transferencia inmediata", is_cash=False,
+            is_credit=False, immediate_payment=True,
+        )
+        document = self.make_document(payment_method=condition)
+        document.clean()
+        self.assertEqual(document.due_date, document.issue_date)
+        self.assertEqual(document.payment_status, PurchasePaymentStatus.UNPAID)
+
+    def test_credit_or_deferred_flags_require_maturity_independent_of_cash_flag(self):
+        for index, flags in enumerate((
+            {"is_credit": True, "immediate_payment": False, "is_cash": True},
+            {"is_credit": False, "immediate_payment": False, "is_cash": False},
+        )):
+            with self.subTest(flags=flags):
+                condition = PaymentMethod.objects.create(
+                    company=self.company, name=f"Acuerdo {index}", **flags,
+                )
+                document = self.make_document(payment_method=condition, number=str(index))
+                with self.assertRaises(ValidationError) as error:
+                    document.clean()
+                self.assertIn("due_date", error.exception.message_dict)
+                document.due_date = date(2026, 9, 30)
+                document.clean()
+                self.assertEqual(document.due_date, date(2026, 9, 30))
 
     def test_document_does_not_require_order_or_inventory_movement(self):
         document = self.make_document(register_inventory_movement=False)
