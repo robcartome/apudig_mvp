@@ -58,6 +58,7 @@ from .documents import (
     document_issue,
     document_list,
     document_preview,
+    document_payment_create,
     document_pdf,
     document_print,
     document_void,
@@ -83,6 +84,6 @@ __all__ = [
     "order_confirm", "order_cancel", "order_copy", "order_pdf", "order_print",
     # Sales documents
     "document_list", "document_create", "document_copy", "document_delete", "document_edit", "document_from_order", "document_from_quotation", "document_detail", "document_preview",
-    "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf", "document_print",
+    "document_issue", "document_void", "document_cancel", "document_credit", "document_pdf", "document_print", "document_payment_create",
 ]
 

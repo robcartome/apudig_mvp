@@ -234,8 +234,17 @@
       number(byId('counted-cash').value) - number(state.cashSummary.expected_cash_total),
     );
     const preview = byId('cash-difference-preview');
-    preview.textContent = `Diferencia estimada: ${currencySymbol()} ${fixed(difference)}`;
+    preview.textContent = difference === 0 ? 'El efectivo contado coincide con el esperado'
+      : `${difference < 0 ? 'Faltante' : 'Sobrante'}: ${currencySymbol()} ${fixed(Math.abs(difference))}`;
     preview.classList.toggle('is-difference', difference !== 0);
+    preview.classList.toggle('is-shortage', difference < 0);
+    byId('close-tender-counts').querySelectorAll('[data-tender-id]').forEach((input) => {
+      const delta = roundMoney(number(input.value) - number(input.dataset.expectedAmount));
+      const output = input.closest('.pos-close-tender').querySelector('[data-tender-difference]');
+      output.textContent = delta === 0 ? 'Sin diferencia' : `${delta < 0 ? 'Faltante' : 'Sobrante'}: ${currencySymbol()} ${fixed(Math.abs(delta))}`;
+      output.classList.toggle('is-difference', delta !== 0);
+      output.classList.toggle('is-shortage', delta < 0);
+    });
     const tenderDifference = [
       ...byId('close-tender-counts').querySelectorAll('[data-tender-id]'),
     ].some((input) => roundMoney(number(input.value) - number(input.dataset.expectedAmount)) !== 0);
@@ -246,13 +255,13 @@
       : '(opcional)';
   }
 
-  function updateCashAllocation(autoFillSafe = false) {
+  function updateCashAllocation(autoFillDrawer = false) {
     const counted = number(byId('counted-cash').value);
-    const drawer = number(byId('next-opening-total').value);
     const bank = number(byId('bank-deposit-total').value);
-    if (autoFillSafe)
-      byId('safe-deposit-total').value = fixed(Math.max(counted - drawer - bank, 0));
     const safe = number(byId('safe-deposit-total').value);
+    if (autoFillDrawer)
+      byId('next-opening-total').value = fixed(Math.max(counted - safe - bank, 0));
+    const drawer = number(byId('next-opening-total').value);
     const difference = roundMoney(counted - drawer - safe - bank);
     const preview = byId('cash-allocation-preview');
     preview.textContent =
@@ -2303,10 +2312,11 @@
       byId('cash-movement-form').reset();
       updateMovementMeans();
       closeDialog(byId('cash-movement-dialog'));
-      showAlert(
-        `Movimiento registrado. Efectivo disponible en gaveta: ${currencySymbol()} ${result.drawer_cash_after}.`,
-        'success',
-      );
+      const negative = number(result.drawer_cash_after) < 0;
+      showAlert(negative
+        ? `Movimiento registrado. Atención: el saldo de efectivo en caja quedó negativo: ${currencySymbol()} ${fixed(result.drawer_cash_after)}. Revisa los vales de salida y los ingresos registrados.`
+        : `Movimiento registrado. Efectivo disponible en gaveta: ${currencySymbol()} ${result.drawer_cash_after}.`,
+        negative ? 'error' : 'success');
     } catch (error) {
       showAlert(error.message);
     } finally {
@@ -2354,17 +2364,31 @@
   function renderCashCloseDetails(summary) {
     const payments = summary.payments || [];
     const sales = summary.sales || [];
+    const collections = summary.collections || [];
+    const daily = summary.document_payment_summary || [];
     const movements = summary.movement_details || [];
     byId('cash-close-details').innerHTML = `
-      <section><h3>Resumen por medio de pago</h3><div class="pos-cash-detail-table">
-        ${payments.length ? payments.map((item) => `<div><span>${escapeHtml(item.name)} <small>${item.operations} operación(es)</small></span><strong>${currencySymbol()} ${escapeHtml(item.expected_amount)}</strong></div>`).join('') : `<div><span>Sin pagos registrados</span><strong>${currencySymbol()} 0.00</strong></div>`}
-      </div></section>
-      <section><h3>Ventas de la sesión</h3><div class="pos-cash-detail-list">
+      <section class="pos-close-section--full"><div class="pos-close-heading"><i class="ti ti-report-analytics"></i><div><h3>Resumen del día</h3><p>Documentos completados durante esta sesión</p></div></div><div class="pos-close-table-wrap"><table class="pos-close-table">
+        <thead><tr><th>Tipo de Documento</th><th>Medio de Pago</th><th>Forma de Pago</th><th>Monto Total</th></tr></thead><tbody>
+        <tr class="pos-close-table__opening"><td data-label="Tipo de documento">Apertura de Caja</td><td data-label="Medio de pago">Efectivo</td><td data-label="Forma de pago">—</td><td data-label="Monto total">${currencySymbol()} ${escapeHtml(fixed(summary.opening_total))}</td></tr>
+        ${daily.length ? daily.map((item) => `<tr><td data-label="Tipo de documento">${escapeHtml(item.document_type)}</td><td data-label="Medio de pago">${escapeHtml(item.means)}</td><td data-label="Forma de pago">${escapeHtml(item.condition)}</td><td data-label="Monto total">${currencySymbol()} ${escapeHtml(fixed(item.amount))}</td></tr>`).join('') : '<tr><td colspan="4" class="pos-close-empty">Sin ventas completadas en esta sesión.</td></tr>'}
+        <tr class="pos-close-table__total"><td colspan="3">Total vendido · incluye crédito</td><td>${currencySymbol()} ${escapeHtml(fixed(summary.sales_total))}</td></tr>
+        <tr class="pos-close-table__total"><td colspan="3">TOTAL EN CAJA · efectivo</td><td>${currencySymbol()} ${escapeHtml(fixed(summary.expected_cash_total))}</td></tr>
+        <tr class="pos-close-table__total"><td colspan="3">TOTAL EN VENTA A CRÉDITO</td><td>${currencySymbol()} ${escapeHtml(fixed(summary.credit_sales_total))}</td></tr>
+        </tbody></table></div></section>
+      <section class="pos-close-section--full"><div class="pos-close-heading"><i class="ti ti-credit-card-pay"></i><div><h3>Resumen por medio de pago</h3><p>Importes registrados durante esta sesión</p></div></div><div class="pos-close-table-wrap"><table class="pos-close-table">
+        <thead><tr><th>Medio</th><th>Operaciones</th><th>Recibido</th><th>Devuelto</th><th>Movimientos</th><th>Por sistema</th></tr></thead><tbody>
+        ${payments.length ? payments.map((item) => `<tr><td data-label="Medio">${escapeHtml(item.name)}</td><td data-label="Operaciones">${escapeHtml(item.operations)}</td><td data-label="Recibido">${currencySymbol()} ${escapeHtml(fixed(item.gross_amount))}</td><td data-label="Devuelto">${currencySymbol()} ${escapeHtml(fixed(item.refund_amount))}</td><td data-label="Movimientos">${currencySymbol()} ${escapeHtml(fixed(item.movement_amount))}</td><td data-label="Por sistema"><strong>${currencySymbol()} ${escapeHtml(fixed(item.expected_amount))}</strong></td></tr>`).join('') : '<tr><td colspan="6" class="pos-close-empty">Sin pagos ni movimientos por medio de pago.</td></tr>'}
+        </tbody></table></div></section>
+      <section><details class="pos-close-disclosure"><summary>Ventas de la sesión</summary><div class="pos-cash-detail-list">
         ${sales.length ? sales.map((item) => `<div><span><strong>${escapeHtml(item.document)}</strong><small>${item.completed_at ? new Date(item.completed_at).toLocaleString('es-PE') : 'Pendiente'} · ${escapeHtml(item.customer)}</small></span><strong>${escapeHtml(currencySymbol(item.currency))} ${escapeHtml(item.total)}</strong></div>`).join('') : '<div class="pos-no-results">Sin ventas en la sesión.</div>'}
-      </div></section>
-      <section><h3>Vales y movimientos de caja</h3><div class="pos-cash-detail-list">
+      </div></details></section>
+      <section><details class="pos-close-disclosure"><summary>Vales y movimientos de caja</summary><div class="pos-cash-detail-list">
         ${movements.length ? movements.map((item) => `<div><span><strong>${escapeHtml(item.movement_type === 'PAY_IN' ? 'Vale de ingreso' : item.movement_type === 'PAY_OUT' ? 'Vale de salida' : item.movement_type_label)}</strong><small>${new Date(item.created_at).toLocaleString('es-PE')} · ${escapeHtml(item.description)}</small></span><strong>${['PAY_OUT', 'WITHDRAWAL', 'DEPOSIT'].includes(item.movement_type) ? '-' : '+'} ${currencySymbol()} ${escapeHtml(item.amount)}</strong></div>`).join('') : '<div class="pos-no-results">Sin vales ni movimientos manuales.</div>'}
-      </div></section>`;
+      </div></details></section>
+      <section><details class="pos-close-disclosure"><summary>Cobranzas de crédito <span>${currencySymbol()} ${escapeHtml(summary.collection_total)}</span></summary><div class="pos-cash-detail-list">
+        ${collections.length ? collections.map((item) => `<div><span><strong>${escapeHtml(item.document)}</strong><small>${item.paid_at ? new Date(item.paid_at).toLocaleString('es-PE') : '—'} · ${escapeHtml(item.customer)} · ${escapeHtml(item.means)}${item.reference ? ` · ${escapeHtml(item.reference)}` : ''}</small></span><strong>${escapeHtml(currencySymbol(item.currency))} ${escapeHtml(item.amount)}</strong></div>`).join('') : '<div class="pos-no-results">Sin cobranzas de crédito en esta sesión.</div>'}
+      </div></details></section>`;
   }
 
   function renderCashSummary(summary) {
@@ -2373,41 +2397,54 @@
     const openedAt = session.opened_at ? new Date(session.opened_at).toLocaleString('es-PE') : '—';
     const closedAt = session.closed_at
       ? new Date(session.closed_at).toLocaleString('es-PE')
-      : 'Caja activa';
+      : `${new Date().toLocaleString('es-PE')} (actual)`;
     const warning = summary.can_close
       ? ''
       : `<div class="pos-cash-warning">Hay ${transactions.pending || 0} venta(s) o ${transactions.pending_invoices || 0} factura(s) pendientes.</div>`;
     byId('cash-close-summary').innerHTML = `
-      <div class="pos-cash-summary__range"><span>Rango del cierre</span><strong>${escapeHtml(openedAt)} — ${escapeHtml(closedAt)}</strong></div>
-      <div class="pos-cash-summary__metric"><span>Total cobrado</span><strong>${currencySymbol()} ${escapeHtml(summary.payment_total)}</strong><small>${transactions.completed || 0} venta(s)</small></div>
+      <div class="pos-cash-summary__range"><span><i class="ti ti-calendar-event"></i> Rango del cierre</span><strong>Inicio: ${escapeHtml(openedAt)} &nbsp; · &nbsp; Término: ${escapeHtml(closedAt)}</strong></div>
+      <div class="pos-cash-summary__metric"><span>Ventas de la sesión</span><strong>${currencySymbol()} ${escapeHtml(summary.sales_total)}</strong><small>${transactions.completed || 0} venta(s) · incluye crédito</small></div>
+      <div class="pos-cash-summary__metric"><span>Cobranzas de crédito</span><strong>${currencySymbol()} ${escapeHtml(summary.collection_total)}</strong><small>Recibidas en esta sesión</small></div>
       <div class="pos-cash-summary__metric"><span>Vales de ingreso</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_in)}</strong><small>Entradas manuales</small></div>
-      <div class="pos-cash-summary__metric"><span>Vales de salida / retiros</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_out)}</strong><small>Salidas de gaveta</small></div>
-      <div class="pos-cash-summary__metric is-total"><span>Efectivo esperado</span><strong>${currencySymbol()} ${escapeHtml(summary.expected_cash_total)}</strong><small>Incluye fondo ${currencySymbol()} ${escapeHtml(summary.opening_total)}</small></div>
-      <div><span>Ventas en efectivo</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_sales)}</strong></div>
-      <div><span>Otros medios</span><strong>${currencySymbol()} ${escapeHtml(summary.non_cash_sales)}</strong></div>
-      <div><span>Devoluciones</span><strong>- ${currencySymbol()} ${escapeHtml(summary.refund_total)}</strong></div>
+      <div class="pos-cash-summary__metric"><span>Vales de salida / retiros</span><strong>${currencySymbol()} ${escapeHtml(summary.cash_out)}</strong><small>Salidas registradas</small></div>
       ${warning}`;
     renderCashCloseDetails(summary);
+    const negativeCash = number(summary.expected_cash_total) < 0;
+    byId('cash-expected-preview').textContent = `${currencySymbol()} ${fixed(summary.expected_cash_total)}`;
+    byId('cash-expected-preview').classList.toggle('is-difference', negativeCash);
+    const cashWarning = byId('cash-negative-warning');
+    cashWarning.hidden = !negativeCash;
+    cashWarning.textContent = negativeCash ? `Saldo de efectivo negativo: ${currencySymbol()} ${fixed(summary.expected_cash_total)}. Las salidas superan los fondos registrados. Revisa los vales e ingresos antes de conciliar.` : '';
+    if (negativeCash) byId('cash-close-summary').insertAdjacentHTML('beforeend', `<div class="pos-cash-warning" role="alert"><i class="ti ti-alert-triangle"></i> El saldo de efectivo en caja es negativo: ${currencySymbol()} ${escapeHtml(fixed(summary.expected_cash_total))}. Revisa la conciliación y los movimientos.</div>`);
 
     const nonCashPayments = (summary.payments || []).filter((item) => item.kind !== 'CASH');
     byId('close-tender-counts').innerHTML = nonCashPayments.length
-      ? `<h3>Conciliación de otros medios</h3>${nonCashPayments
+      ? `${nonCashPayments
           .map(
             (item) => `
-          <label class="pos-tender-row">
-            <span><strong>${escapeHtml(item.name)}</strong><small>Esperado: ${currencySymbol()} ${escapeHtml(item.expected_amount)} · ${item.operations} operación(es)</small></span>
-            <input type="number" step="0.01" value="${escapeHtml(item.counted_amount ?? item.expected_amount)}" data-tender-id="${item.means_of_payment_id}" data-expected-amount="${escapeHtml(item.expected_amount)}">
-          </label>`,
+          <div class="pos-close-tender">
+            <h4>${escapeHtml(item.name)}</h4>
+            <div class="pos-close-count__grid">
+              <div class="pos-close-expected"><span>Esperado</span><strong class="pos-close-amount">${currencySymbol()} ${escapeHtml(fixed(item.expected_amount))}</strong></div>
+              <div class="pos-close-counted"><label for="close-tender-${item.means_of_payment_id}">Contado / declarado</label><div class="pos-money-input"><span>${currencySymbol()}</span><input id="close-tender-${item.means_of_payment_id}" aria-label="Declarado ${escapeHtml(item.name)}" aria-describedby="close-tender-difference-${item.means_of_payment_id}" type="number" step="0.01" value="${escapeHtml(item.counted_amount ?? item.expected_amount)}" data-tender-id="${item.means_of_payment_id}" data-expected-amount="${escapeHtml(item.expected_amount)}"></div><small id="close-tender-difference-${item.means_of_payment_id}" class="pos-close-count__result" data-tender-difference role="status" aria-live="polite">—</small></div>
+            </div>
+          </div>`,
           )
           .join('')}`
       : '';
     byId('close-session-submit').disabled = !summary.can_close;
-    updateCashDifferencePreview();
-    byId('counted-cash').value = fixed(summary.expected_cash_total);
+    renderDenominations('closing-denominations');
+    byId('counted-cash').value = '0.00';
     byId('next-opening-total').value = '0.00';
+    byId('safe-deposit-total').value = '0.00';
     byId('bank-deposit-total').value = '0.00';
     byId('bank-deposit-account').value = '';
+    byId('closing-note').value = '';
+    byId('close-session-dialog').querySelectorAll('.pos-money-input > span').forEach((symbol) => {
+      symbol.textContent = currencySymbol(session.currency);
+    });
     updateCashAllocation(true);
+    updateCashDifferencePreview();
   }
 
   async function prepareCashClose() {
@@ -2474,6 +2511,7 @@
         body: JSON.stringify(payload),
       });
       renderCashCloseReport(state.cashSummary, closed);
+      state.suggestedOpeningTotals[closed.currency] = closed.next_opening_total;
       state.session = null;
       state.cashSummary = null;
       closeDialog(byId('close-session-dialog'));
@@ -3228,9 +3266,9 @@
     updateCashDifferencePreview();
     updateCashAllocation(true);
   });
-  byId('next-opening-total').addEventListener('input', () => updateCashAllocation(true));
+  byId('next-opening-total').addEventListener('input', () => updateCashAllocation(false));
   byId('bank-deposit-total').addEventListener('input', () => updateCashAllocation(true));
-  byId('safe-deposit-total').addEventListener('input', () => updateCashAllocation(false));
+  byId('safe-deposit-total').addEventListener('input', () => updateCashAllocation(true));
   byId('close-tender-counts').addEventListener('input', updateCashDifferencePreview);
   byId('opening-denominations').addEventListener('input', () => {
     const total = denominationTotal('opening-denominations');
@@ -3238,7 +3276,7 @@
   });
   byId('closing-denominations').addEventListener('input', () => {
     const total = denominationTotal('closing-denominations');
-    if (total > 0) byId('counted-cash').value = fixed(total);
+    byId('counted-cash').value = fixed(total);
     updateCashDifferencePreview();
     updateCashAllocation(true);
   });

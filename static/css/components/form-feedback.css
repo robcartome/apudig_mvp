@@ -1,0 +1,20 @@
+.form-hint {
+  font-size: .75rem;
+  line-height: 1.4;
+  color: #667589;
+}
+
+.form-hint .form-hint-icon {
+  color: #667589;
+  font-size: .875rem;
+  margin-right: .3rem;
+  vertical-align: -.05em;
+}
+
+input[aria-invalid="true"]:not([type="hidden"]),
+select[aria-invalid="true"], textarea[aria-invalid="true"],
+.form-control.is-invalid, .form-select.is-invalid,
+.select2-container.is-invalid .select2-selection {
+  border-color: #d63939 !important;
+  box-shadow: 0 0 0 2px rgba(214, 57, 57, .13);
+}

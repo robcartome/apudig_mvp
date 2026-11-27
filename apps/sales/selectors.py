@@ -1,10 +1,21 @@
 """
 sales/selectors.py — Consultas de lectura del módulo de ventas.
 """
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 
 from apps.partners.models import DocumentType
 from .models import DocumentSeries, SalesQuotation, SaleOrder, SalesDocument
+
+
+def with_document_payments(queryset):
+    from apps.pos.models import SalesPayment
+
+    return queryset.select_related("payment_method", "pos_transaction", "document_type").prefetch_related(
+        Prefetch("pos_payments", queryset=SalesPayment.objects.select_related(
+            "means_of_payment", "cash_session__register", "created_by"
+        ).order_by("paid_at", "created_at", "pk"), to_attr="payment_history")
+    )
+
 
 def get_quotations_for_store(store_id: str, status: str | None = None):
     qs = (
@@ -218,4 +229,4 @@ def get_document_detail(pk, store_id=None):
     )
     if store_id is not None:
         queryset = queryset.filter(store_id=store_id)
-    return queryset.get(pk=pk)
+    return with_document_payments(queryset).get(pk=pk)

@@ -1871,7 +1871,7 @@ def _expected_cash(session: CashSession) -> Decimal:
 @transaction.atomic
 def close_cash_session(
     *, cash_session_id, closed_by, counted_cash_total, denominations=None,
-    next_opening_total=0, safe_deposit_total=None, bank_deposit_total=0,
+    next_opening_total=None, safe_deposit_total=None, bank_deposit_total=0,
     bank_deposit_destination="", bank_deposit_account_id=None,
     note="", tender_counts=None,
     difference_authorized_by=None,
@@ -1901,12 +1901,11 @@ def close_cash_session(
         )
 
     counted = _money(counted_cash_total, "efectivo contado")
-    next_opening = _money(next_opening_total, "fondo siguiente")
     bank_deposit = _money(bank_deposit_total, "depósito bancario")
-    safe_deposit = (
-        counted - next_opening - bank_deposit
-        if safe_deposit_total is None
-        else _money(safe_deposit_total, "importe para caja fuerte")
+    safe_deposit = _money(safe_deposit_total or 0, "importe para caja fuerte")
+    next_opening = (
+        counted - safe_deposit - bank_deposit if next_opening_total is None
+        else _money(next_opening_total, "fondo siguiente")
     )
     if any(value < 0 for value in (counted, next_opening, safe_deposit, bank_deposit)):
         raise PosDomainError("INVALID_CLOSING_COUNT", "Los importes del cierre no son validos.")

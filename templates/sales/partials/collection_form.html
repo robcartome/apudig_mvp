@@ -1,0 +1,17 @@
+<div class="mb-3"><strong>{{ sales_document.series_code }}-{{ sales_document.number }}</strong> · {{ sales_document.customer_legal_name }}</div>
+{% include "sales/partials/payment_summary.html" %}
+{% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+{% if payment_summary.can_collect %}
+  {% if form.fields.cash_session.queryset.exists %}
+  <form method="post" action="{% url 'sales:payment_create' sales_document.pk %}" class="js-sales-collection-form">
+    {% csrf_token %}{{ form.idempotency_key }}{{ form.idempotency_key.errors }}
+    <p class="text-muted small">La fecha y hora se registran al confirmar. El cobro se incluye en el cierre de la sesión de caja seleccionada.</p>
+    <div class="row g-3">
+      {% for field in form.visible_fields %}
+      <div class="col-md-6"><label class="form-label{% if field.field.required %} required{% endif %}" for="{{ field.id_for_label }}">{{ field.label }}{% if field.name == 'amount' %} ({{ sales_document.currency }}){% endif %}</label>{{ field }}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+      {% endfor %}
+    </div>
+    <div class="mt-3 text-end"><button type="submit" class="btn btn-primary"><i class="ti ti-cash me-1"></i>Registrar cobranza</button></div>
+  </form>
+  {% else %}<div class="alert alert-warning">Abre una sesión de caja en {{ sales_document.currency }} en esta sucursal para registrar la cobranza.</div>{% endif %}
+{% else %}<div class="alert alert-info">Este documento no tiene una cobranza pendiente disponible.</div>{% endif %}

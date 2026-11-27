@@ -601,3 +601,11 @@
 .sortable-header .ti {
   font-size: 0.8rem;
 }
+.status-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  padding: 0.25em 0.6em;
+  border-radius: 999px;
+}

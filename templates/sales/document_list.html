@@ -36,10 +36,17 @@
         <tr>
           {% sortable_header "created" "Fecha de creación" %}
           {% sortable_header "issue_date" "Fecha de emisión" %}
+          <th>Vencimiento</th>
           {% sortable_header "series" "Serie" %}
           {% sortable_header "number" "Número" %}
           {% sortable_header "customer" "Cliente" %}
           {% sortable_header "total" "Total" "text-end" %}
+          <th>Condición</th>
+          <th>Estado de pago</th>
+          <th class="text-end">Pagado</th>
+          <th class="text-end">Saldo por cobrar</th>
+          <th>Último pago</th>
+          <th>Medios de pago</th>
           {% sortable_header "status" "Estado" %}
           <th>Origen</th>
           <th class="text-center">Operaciones</th>
@@ -50,6 +57,7 @@
         <tr>
           <td class="text-muted small">{{ v.created_at|date:"d/m/Y H:i" }}</td>
           <td class="text-muted small">{{ v.issue_date|date:"d/m/Y" }}</td>
+          <td class="text-muted small">{{ v.due_date|date:"d/m/Y"|default:"—" }}</td>
           <td>{{ v.series_code|default:"—" }}</td>
           <td class="fw-semibold"><a href="{% url 'sales:document_detail' v.pk %}">{{ v.number|default:"(borrador)" }}</a></td>
           <td>
@@ -57,6 +65,12 @@
             <div class="text-muted small">{{ v.customer_document_number }}</div>
           </td>
           <td class="text-end">{{ v.currency|currency_symbol }} {{ v.total|floatformat:2 }}</td>
+          <td>{% if v.payment_summary.is_credit %}Crédito{% else %}{{ v.payment_method|default:"—" }}{% endif %}</td>
+          <td>{% include "components/status_badge.html" with status=v.payment_summary.status label=v.payment_summary.status_label %}</td>
+          <td class="text-end">{{ v.currency|currency_symbol }} {{ v.payment_summary.paid|floatformat:2 }}</td>
+          <td class="text-end fw-semibold {% if v.payment_summary.balance > 0 %}text-warning{% endif %}">{% if v.payment_summary.balance != None %}{{ v.currency|currency_symbol }} {{ v.payment_summary.balance|floatformat:2 }}{% else %}—{% endif %}</td>
+          <td>{{ v.payment_summary.last_payment.paid_at|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td>{{ v.payment_summary.means|join:", "|default:"—" }}</td>
           <td>{% include "components/status_badge.html" with status=v.status label=v.get_status_display %}</td>
           <td>
             {% if v.pos_transaction %}
@@ -67,6 +81,10 @@
           </td>
           <td class="text-center">
             <div class="d-inline-flex gap-1 align-items-center">
+            {% if v.payment_summary.can_collect and can_collect_sales_documents %}
+            <a href="{% url 'sales:payment_create' v.pk %}" data-payment-url="{% url 'sales:payment_create' v.pk %}"
+               class="btn btn-sm btn-outline-primary js-sales-payment" title="Registrar cobranza" aria-label="Registrar cobranza"><i class="ti ti-cash"></i></a>
+            {% endif %}
             <a href="{% url 'sales:document_detail' v.pk %}"
                data-preview-url="{% url 'sales:document_preview' v.pk %}"
                class="btn btn-sm btn-outline-secondary js-document-preview" title="Detalle del documento" aria-label="Detalle del documento">
@@ -112,11 +130,11 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="9" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
+          <td colspan="16" class="text-center text-muted py-4">No se encontraron documentos de venta.</td>
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot class="table-light"><tr><th colspan="9" class="text-end py-3">Total filtrado (no incluye anulados, cancelados ni rechazados):
+      <tfoot class="table-light"><tr><th colspan="16" class="text-end py-3">Total filtrado (no incluye anulados, cancelados ni rechazados):
         {% for item in filtered_totals %}<span class="ms-3">{{ item.currency|currency_symbol }} {{ item.amount|floatformat:2 }}</span>{% empty %}<span class="ms-2">0.00</span>{% endfor %}
       </th></tr></tfoot>
     </table>
@@ -134,6 +152,13 @@
       {% else %}<li class="page-item disabled"><span class="page-link">Siguiente</span></li>{% endif %}
     </ul>
   </div>
+</div>
+
+<div class="modal fade" id="salesPaymentModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Registrar cobranza</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+    <div class="modal-body" id="sales-payment-body"></div>
+  </div></div>
 </div>
 
 <div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
@@ -157,6 +182,7 @@
 <script src="{% static 'js/plugins/select2.js' %}"></script>
 <script src="{% static 'js/components/partner-filter.js' %}?v=20261021-1"></script>
 <script src="{% static 'js/components/table-scroll-sync.js' %}"></script>
+<script src="{% static 'js/sales/document-payments.js' %}"></script>
 <script>
   (function () {
     'use strict';

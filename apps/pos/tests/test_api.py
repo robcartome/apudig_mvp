@@ -562,6 +562,56 @@ class PosApiTest(TestCase):
         self.assertEqual(data["transactions"]["completed"], 1)
         self.assertTrue(data["can_close"])
 
+    def test_close_defaults_cash_to_next_opening_without_safe_transfer(self):
+        session_id = self._open_session(opening="10.00")
+        response = self._post(f"/api/v1/pos/sessions/{session_id}/close/", {
+            "counted_cash_total": "10.00",
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["next_opening_total"], "10.00")
+        self.assertEqual(response.json()["safe_deposit_total"], "0.00")
+
+    def test_payment_summary_exposes_net_movement_separately(self):
+        wallet = MeansOfPayment.objects.create(
+            company=self.company, name="Yape", kind=MeansOfPayment.Kind.DIGITAL_WALLET,
+        )
+        session_id = self._open_session(opening="10.00")
+        response = self._post(f"/api/v1/pos/sessions/{session_id}/movements/", {
+            "movement_type": "PAY_IN", "amount": "25.00",
+            "means_of_payment_id": str(wallet.pk), "operation_reference": "Y-123",
+            "reason_code": "OTHER", "description": "Ingreso adicional",
+        })
+        self.assertEqual(response.status_code, 201, response.content)
+        summary = self.client.get(f"/api/v1/pos/sessions/{session_id}/summary/").json()
+        entry = next(item for item in summary["payments"] if item["name"] == "Yape")
+        self.assertEqual(Decimal(entry["gross_amount"]), Decimal("0"))
+        self.assertEqual(Decimal(entry["movement_amount"]), Decimal("25"))
+        self.assertEqual(Decimal(entry["expected_amount"]), Decimal("25"))
+        self.assertEqual(Decimal(summary["expected_cash_total"]), Decimal("10"))
+
+    def test_cash_out_warns_when_drawer_balance_becomes_negative(self):
+        session_id = self._open_session(opening="10.00")
+        url = f"/api/v1/pos/sessions/{session_id}/movements/"
+        response = self._post(url, {
+            "movement_type": "PAY_OUT", "amount": "25.00",
+            "means_of_payment_id": str(self.cash.pk),
+            "description": "Pago a proveedor", "reason_code": "OTHER",
+        })
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Decimal(response.json()["drawer_cash_after"]), Decimal("-15"))
+        self.assertTrue(response.json()["negative_cash_balance"])
+        summary = self.client.get(f"/api/v1/pos/sessions/{session_id}/summary/").json()
+        self.assertTrue(summary["negative_cash_balance"])
+        self.assertEqual(Decimal(summary["expected_cash_total"]), Decimal("-15"))
+        recovery = self._post(url, {
+            "movement_type": "PAY_IN", "amount": "15.00",
+            "description": "Reposición de efectivo", "reason_code": "OTHER",
+        })
+        self.assertEqual(recovery.status_code, 201, recovery.content)
+        self.assertFalse(recovery.json()["negative_cash_balance"])
+        summary = self.client.get(f"/api/v1/pos/sessions/{session_id}/summary/").json()
+        self.assertFalse(summary["negative_cash_balance"])
+
     def test_cash_session_summary_includes_sales_and_movement_detail(self):
         session_id = self._open_session(opening="10.00")
         checkout = self._post(
@@ -584,6 +634,11 @@ class PosApiTest(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         data = response.json()
         self.assertEqual(data["expected_cash_total"], "115.00")
+        self.assertEqual(data["daily_summary"][0]["document_type"], "Nota de Venta")
+        self.assertEqual(data["daily_summary"][0]["condition"], "CASH")
+        self.assertEqual(Decimal(data["daily_summary"][0]["amount"]), Decimal("100.00"))
+        self.assertEqual(Decimal(data["payments"][0]["gross_amount"]), Decimal("100.00"))
+        self.assertEqual(Decimal(data["payments"][0]["movement_amount"]), Decimal("0.00"))
         self.assertEqual(data["sales"][0]["document"], "NV01-00000001")
         self.assertEqual(data["movement_details"][0]["description"], "Fondo adicional")
         self.assertEqual(data["movement_details"][0]["movement_type_label"], "Ingreso")
@@ -633,6 +688,7 @@ class PosApiTest(TestCase):
         self.assertEqual(summary["drawer_cash_out"], "0.00")
         yape_summary = next(item for item in summary["payments"] if item["name"] == "Yape")
         self.assertEqual(yape_summary["expected_amount"], "20.00")
+        self.assertEqual(Decimal(yape_summary["movement_amount"]), Decimal("20.00"))
         self.assertEqual(yape_summary["operations"], 2)
 
         closed = self._post(

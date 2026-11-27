@@ -1,6 +1,7 @@
 {{ field }}
 <select id="{{ field.id_for_label }}-picker"
         class="partner-select w-100"
+        {% if field.errors %}aria-invalid="true"{% endif %}
         data-partner-type="{{ partner_type }}"
         data-partner-url="{{ search_url }}"
         data-create-url="{{ create_url }}"

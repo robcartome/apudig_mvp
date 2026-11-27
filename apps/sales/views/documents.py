@@ -15,14 +15,15 @@ Rutas:
 from decimal import Decimal
 
 from django.contrib import messages
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from apps.sales.forms import (
     CreditNoteReasonForm,
@@ -41,7 +42,12 @@ from apps.sales.printing import (
     commercial_pdf_response,
     render_commercial_print,
 )
-from apps.sales.selectors import get_document_detail, search_sales_documents, get_series_for_store
+from apps.sales.selectors import (
+    get_document_detail, get_series_for_store, search_sales_documents, with_document_payments,
+)
+from apps.sales.payment_forms import SalesCollectionForm
+from apps.sales.payment_services import document_payment_summary, register_document_collection
+from apps.pos.services import PosDomainError
 from apps.sales.services import (
     cancel_sales_document,
     copy_sales_document,
@@ -60,7 +66,7 @@ from apps.partners.models import Customer, DocumentType
 from apps.core.models import AuditLog
 from apps.core.list_filters import read_list_filters, sort_queryset
 from apps.companies.models import CompanyOperationalSettings
-from apps.users.permissions import user_has_company_permission
+from apps.users.permissions import user_can_access_context, user_has_company_permission
 
 
 SALES_DOCUMENT_SORTS = {
@@ -104,6 +110,7 @@ def _require_document_permission(request, action):
 def _document_permissions_context(request):
     company_id, store_id = _get_ids(request)
     return {
+        "can_collect_sales_documents": _can_collect_documents(request),
         "can_manage_sales_documents": user_has_company_permission(
             request.user, company_id, "manage.sales.documents", store_id
         ),
@@ -111,6 +118,15 @@ def _document_permissions_context(request):
             request.user, company_id, "authorize.sales.documents", store_id
         ),
     }
+
+
+def _can_collect_documents(request):
+    company_id, store_id = _get_ids(request)
+    return (
+        user_can_access_context(request.user, company_id, store_id)
+        and user_has_company_permission(request.user, company_id, "manage.sales.documents", store_id)
+        and user_has_company_permission(request.user, company_id, "manage.pos.collections", store_id)
+    )
 
 
 def _lines_from_formset(formset) -> list[dict]:
@@ -129,7 +145,15 @@ def _document_form_context(company_id, header_form, line_formset, title, documen
     _restore_posted_line_metadata(line_formset, company_id)
     for form in line_formset.forms:
         form.fields["igv_rate"].initial = settings.default_igv_rate
+    if header_form.is_bound:
+        for form in [header_form, *line_formset.forms]:
+            for name in form.errors:
+                if name in form.fields:
+                    field = form[name]
+                    field.field.widget.attrs["aria-invalid"] = "true"
+                    field.field.widget.attrs["class"] = (field.field.widget.attrs.get("class", "") + " is-invalid").strip()
     return {
+        "credit_payment_ids": [str(pk) for pk in header_form.fields["payment_method"].queryset.filter(is_credit=True).values_list("pk", flat=True)],
         "header_form": header_form,
         "line_formset": line_formset,
         "title": title,
@@ -205,7 +229,7 @@ def _document_service_fields(cleaned_data):
         "currency": cleaned_data.get("currency", "PEN"),
         "exchange_rate": cleaned_data.get("exchange_rate") or 1,
         "payment_method": cleaned_data.get("payment_method"),
-        "means_of_payment": cleaned_data.get("means_of_payment"),
+        "due_date": cleaned_data.get("due_date"),
         "seller": cleaned_data.get("seller"),
         "price_list": cleaned_data.get("price_list"),
         "register_inventory_movement": cleaned_data.get("register_inventory_movement", False),
@@ -283,6 +307,9 @@ def document_list(request):
     )
     paginator = Paginator(qs, 80)
     page = paginator.get_page(request.GET.get("page"))
+    page.object_list = list(with_document_payments(page.object_list))
+    for document in page.object_list:
+        document.payment_summary = document_payment_summary(document)
     selected_filter_customer = Customer.objects.filter(
         pk=filters["customer_id_value"], company_id=company_id
     ).first() if filters["customer_id_value"] else None
@@ -610,6 +637,7 @@ def document_detail(request, pk):
 
     return render(request, "sales/document_detail.html", {
         "sales_document": sales_document,
+        "payment_summary": document_payment_summary(sales_document),
         "cn_series": cn_series,
         "audit_logs": AuditLog.objects.filter(
             entity="SalesDocument", entity_id=str(sales_document.pk)
@@ -631,8 +659,52 @@ def document_preview(request, pk):
     return render(
         request,
         "sales/partials/document_preview_content.html",
-        {"sales_document": sales_document},
+        {"sales_document": sales_document, "payment_summary": document_payment_summary(sales_document)},
     )
+
+
+@require_http_methods(["GET", "POST"])
+def document_payment_create(request, pk):
+    denied = _require_document_permission(request, "read")
+    if denied:
+        return denied
+    if not _can_collect_documents(request):
+        return HttpResponseForbidden("No tienes permiso para registrar cobranzas en esta sucursal.")
+    company_id, store_id = _get_ids(request)
+    document = get_object_or_404(
+        SalesDocument.objects.select_related("payment_method", "pos_transaction", "document_type"),
+        pk=pk, store_id=store_id, store__company_id=company_id,
+    )
+    summary = document_payment_summary(document)
+    form = SalesCollectionForm(
+        request.POST if request.method == "POST" else None,
+        company_id=company_id, store_id=store_id, currency=document.currency,
+        balance=summary["balance"] or Decimal("0.00"),
+    )
+    ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if request.method == "POST" and form.is_valid():
+        try:
+            data = form.cleaned_data
+            register_document_collection(
+                document_id=document.pk, company_id=company_id, store_id=store_id,
+                cash_session_id=data["cash_session"].pk,
+                means_of_payment_id=data["means_of_payment"].pk,
+                amount=data["amount"], operation_reference=data["operation_reference"],
+                idempotency_key=data["idempotency_key"], created_by=request.user,
+            )
+        except (ValueError, PosDomainError, ValidationError, ObjectDoesNotExist) as exc:
+            form.add_error(None, str(exc) or "La venta o la sesión de caja ya no está disponible.")
+            document.refresh_from_db()
+            summary = document_payment_summary(document)
+            form.fields["amount"].widget.attrs["max"] = summary["balance"] or Decimal("0.00")
+        else:
+            messages.success(request, "Cobranza registrada correctamente.")
+            if ajax:
+                return JsonResponse({"success": True})
+            return redirect("sales:document_list")
+    return render(request, "sales/partials/collection_form.html" if ajax else "sales/collection_form.html", {
+        "form": form, "sales_document": document, "payment_summary": summary,
+    }, status=400 if request.method == "POST" else 200)
 
 
 @require_POST
@@ -680,6 +752,16 @@ def document_issue(request, pk):
     if hasattr(document, "pos_transaction"):
         messages.error(request, "El borrador POS debe cobrarse y emitirse desde el punto de venta.")
         return redirect(f"{reverse('pos:sale')}?draft={document.pos_transaction.pk}")
+    if document.document_type.code in ("NV", "01", "03", "08"):
+        if not document.payment_method_id:
+            messages.error(request, "Selecciona una forma de pago antes de emitir el documento.")
+            return redirect("sales:document_edit", pk=pk)
+        if document.payment_method.is_credit and not document.due_date:
+            messages.error(request, "Indica la fecha de vencimiento para la venta a crédito.")
+            return redirect("sales:document_edit", pk=pk)
+        if document.payment_method.is_credit and document.due_date < timezone.localtime(document.issue_date).date():
+            messages.error(request, "El vencimiento no puede ser anterior a la emisión.")
+            return redirect("sales:document_edit", pk=pk)
     try:
         v = issue_sales_document(pk, issued_by=request.user)
         messages.success(request, format_html("Documento emitido: {}.", _document_reference(v)))
