@@ -17,10 +17,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet">
-  <link href="{% static 'css/layout.css' %}?v=20261121-4" rel="stylesheet"/>
+  <link href="{% static 'css/layout.css' %}?v=20261126-1" rel="stylesheet"/>
   <link href="{% static 'css/components/sidebar.css' %}?v=20261121-1" rel="stylesheet"/>
   <link href="{% static 'css/components/select2.css' %}?v=20260819-1" rel="stylesheet"/>
   <link href="{% static 'css/components/list-filters.css' %}?v=20261121-2" rel="stylesheet"/>
+  <link href="{% static 'css/components/form-feedback.css' %}?v=20261126-3" rel="stylesheet"/>
   <style>
     :root {
       --company-primary: {% if active_branding and active_branding.primary_color %}{{ active_branding.primary_color }}{% else %}#066fd1{% endif %};
@@ -183,5 +184,6 @@
 <script src="{% static 'js/components/notifications.js' %}?v=20261028-1"></script>
 <script src="{% static 'js/currency.js' %}?v=20260930-1"></script>
 {% block extra_js %}{% endblock %}
+<script src="{% static 'js/components/form-feedback.js' %}?v=20261126-3"></script>
 </body>
 </html>

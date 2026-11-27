@@ -90,6 +90,8 @@
   </div>
 </div>
 
+{% include "sales/partials/payment_summary.html" %}
+
 {% if sales_document.inventory_movements.exists %}
 <div class="card mt-3">
   <div class="card-header"><h3 class="card-title">Movimientos de inventario relacionados</h3></div>

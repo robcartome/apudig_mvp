@@ -632,9 +632,6 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         self.fields["payment_method"].queryset = PaymentMethod.objects.filter(
             company_id=company_id, active=True
         ) if company_id else PaymentMethod.objects.none()
-        self.fields["means_of_payment"].queryset = MeansOfPayment.objects.filter(
-            company_id=company_id, active=True
-        ) if company_id else MeansOfPayment.objects.none()
         self.fields["seller"].queryset = Employee.objects.filter(
             company_id=company_id, is_active=True
         ) if company_id else Employee.objects.none()
@@ -648,9 +645,10 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         self.fields["store"].widget.attrs.update(_select)
         self.fields["currency"].widget.attrs.update(_select)
         for field_name in (
-            "payment_method", "means_of_payment", "seller", "price_list", "warehouse"
+            "payment_method", "seller", "price_list", "warehouse"
         ):
             self.fields[field_name].widget.attrs.update(_select)
+        self.fields["due_date"].widget = forms.DateInput(attrs={"class": "form-control", "type": "date"})
         self.fields["notes"].widget.attrs.update(_textarea)
         self.fields["issue_date"].widget = forms.DateTimeInput(
             format="%Y-%m-%dT%H:%M",
@@ -686,6 +684,15 @@ class SalesDocumentHeaderForm(forms.ModelForm):
         warehouse = cleaned_data.get("warehouse")
         number = (cleaned_data.get("number") or "").strip()
         manual_number = cleaned_data.get("manual_number", False)
+        payment_method = cleaned_data.get("payment_method")
+        issue_date = cleaned_data.get("issue_date")
+        due_date = cleaned_data.get("due_date")
+        if payment_method and payment_method.is_credit and not due_date and "due_date" not in self.errors:
+            self.add_error("due_date", "Indica la fecha de vencimiento para la venta a crédito.")
+        if payment_method and payment_method.is_credit and issue_date and due_date and due_date < issue_date.date():
+            self.add_error("due_date", "El vencimiento no puede ser anterior a la emisión.")
+        if payment_method and not payment_method.is_credit and issue_date:
+            cleaned_data["due_date"] = issue_date.date()
 
         if series and store and document_type and (
             series.store_id != store.id or series.document_type_id != document_type.id
@@ -722,7 +729,7 @@ class SalesDocumentHeaderForm(forms.ModelForm):
             "currency",
             "exchange_rate",
             "payment_method",
-            "means_of_payment",
+            "due_date",
             "seller",
             "price_list",
             "register_inventory_movement",

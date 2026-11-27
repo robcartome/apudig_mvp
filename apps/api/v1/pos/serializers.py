@@ -323,7 +323,7 @@ class CashSessionCloseRequestSerializer(serializers.Serializer):
     )
     denominations = DenominationInputSerializer(many=True, required=False)
     next_opening_total = serializers.DecimalField(
-        max_digits=14, decimal_places=2, min_value=Decimal("0.00"), default=Decimal("0.00")
+        max_digits=14, decimal_places=2, min_value=Decimal("0.00"), required=False
     )
     safe_deposit_total = serializers.DecimalField(
         max_digits=14, decimal_places=2, min_value=Decimal("0.00"),

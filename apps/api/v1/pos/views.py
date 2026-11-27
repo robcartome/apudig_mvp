@@ -609,6 +609,7 @@ class CashMovementAPIView(PosAPIView):
             "description": movement.description,
             "created_at": movement.created_at,
             "drawer_cash_after": str(movement.drawer_cash_after),
+            "negative_cash_balance": movement.drawer_cash_after < 0,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -630,9 +631,41 @@ class CashSessionSummaryAPIView(PosAPIView):
         session_sales = cash_session.transactions.select_related(
             "sales_document__customer", "sales_document__document_type"
         ).order_by("-completed_at", "-created_at")
+        collections = cash_session.sales_payments.filter(
+            status="REGISTERED", purpose="CREDIT_COLLECTION"
+        ).select_related("sales_document__document_type", "means_of_payment").order_by("-paid_at", "-created_at")
         return Response({
             "session": CashSessionSerializer(cash_session).data,
             "opening_total": str(summary["opening_total"]),
+            "document_payment_summary": [{**row, "amount": str(row["amount"])}
+                                         for row in summary["document_payment_summary"]],
+            "daily_summary": [{
+                "document_type": row["sales_document__document_type__name"],
+                "document_code": row["sales_document__document_type__code"],
+                "condition": row["payment_condition"],
+                "operations": row["operations"],
+                "amount": str(row["total"]),
+            } for row in summary["daily_summary"]],
+            "sales_total": str(summary["sales_total"]),
+            "credit_sales_total": str(summary["credit_sales_total"]),
+            "collection_total": str(summary["collection_total"]),
+            "payment_breakdown": [{
+                "purpose": row["purpose"],
+                "document_type": row["sales_document__document_type__name"],
+                "means": row["means_of_payment__name"],
+                "condition": row["sales_document__payment_method__name"] or (
+                    "Crédito" if row["sales_document__pos_transaction__payment_condition"] == "CREDIT" else "Contado"
+                ),
+                "amount": str(row["total"]), "operations": row["operations"],
+            } for row in summary["payment_breakdown"]],
+            "collections": [{
+                "id": str(item.pk),
+                "document": f"{item.sales_document.series_code}-{item.sales_document.number}",
+                "customer": item.sales_document.customer_legal_name,
+                "means": item.means_of_payment.name,
+                "amount": str(item.amount), "currency": item.currency,
+                "reference": item.operation_reference, "paid_at": item.paid_at,
+            } for item in collections],
             "payment_total": str(summary["payment_total"]),
             "refund_total": str(summary["refund_total"]),
             "cash_sales": str(summary["cash_sales"]),
@@ -642,6 +675,7 @@ class CashSessionSummaryAPIView(PosAPIView):
             "drawer_cash_in": str(summary["drawer_cash_in"]),
             "drawer_cash_out": str(summary["drawer_cash_out"]),
             "expected_cash_total": str(summary["expected_cash_total"]),
+            "negative_cash_balance": summary["expected_cash_total"] < 0,
             "payments": [
                 {
                     "means_of_payment_id": str(row["means_of_payment_id"]),
@@ -650,6 +684,7 @@ class CashSessionSummaryAPIView(PosAPIView):
                     "expected_amount": str(row["total"]),
                     "gross_amount": str(row["gross_total"]),
                     "refund_amount": str(row["refund_total"]),
+                    "movement_amount": str(row["total"] - row["gross_total"] + row["refund_total"]),
                     "counted_amount": (
                         str(row["counted_amount"])
                         if row["counted_amount"] is not None else None
@@ -733,7 +768,7 @@ class CashSessionCloseAPIView(PosAPIView):
             closed_by=request.user,
             counted_cash_total=data["counted_cash_total"],
             denominations=data.get("denominations"),
-            next_opening_total=data["next_opening_total"],
+            next_opening_total=data.get("next_opening_total"),
             safe_deposit_total=data.get("safe_deposit_total"),
             bank_deposit_total=data.get("bank_deposit_total", 0),
             bank_deposit_destination=data.get("bank_deposit_destination", ""),
